@@ -7,17 +7,24 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     var transcriber: Transcriber!
     var inserter: TextInserter!
     var config: Config!
-    var isPressed = false
+    var recordingLifecycle = RecordingLifecycle()
+    var currentRecordingURL: URL?
+    private var sleepWakeObservers: [NSObjectProtocol] = []
     var isReady = false
     public var lastTranscription: String?
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         statusBar = StatusBarController()
         recorder = AudioRecorder()
+        registerSleepWakeObservers()
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             self?.setup()
         }
+    }
+
+    public func applicationWillTerminate(_ notification: Notification) {
+        unregisterSleepWakeObservers()
     }
 
     private func setup() {
@@ -244,28 +251,27 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
         let isToggle = config.toggleMode?.value ?? false
 
-        if isToggle {
-            if isPressed {
-                handleRecordingStop()
-            } else {
-                handleRecordingStart()
-            }
-        } else {
-            guard !isPressed else { return }
+        switch recordingLifecycle.keyDown(toggleMode: isToggle) {
+        case .startRecording:
             handleRecordingStart()
+        case .stopRecording:
+            handleRecordingStop()
+        case .none, .cancelRecording, .prepareRecorder:
+            break
         }
     }
 
     private func handleKeyUp() {
-        let isToggle = config.toggleMode?.value ?? false
-        if isToggle { return }
+        guard isReady else { return }
 
-        handleRecordingStop()
+        let isToggle = config.toggleMode?.value ?? false
+
+        if recordingLifecycle.keyUp(toggleMode: isToggle) == .stopRecording {
+            handleRecordingStop()
+        }
     }
 
     private func handleRecordingStart() {
-        guard !isPressed else { return }
-        isPressed = true
         statusBar.state = .recording
         do {
             let outputURL: URL
@@ -275,22 +281,23 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 outputURL = RecordingStore.newRecordingURL()
             }
             try recorder.startRecording(to: outputURL)
+            currentRecordingURL = outputURL
         } catch {
             print("Error: \(error.localizedDescription)")
-            isPressed = false
+            recordingLifecycle.recordingStartFailed()
+            currentRecordingURL = nil
             statusBar.state = .idle
         }
     }
 
     private func handleRecordingStop() {
-        guard isPressed else { return }
-        isPressed = false
-
         guard let audioURL = recorder.stopRecording() else {
+            RecordingCancellation.discardTrackedPartialRecording(&currentRecordingURL)
             statusBar.state = .idle
             return
         }
 
+        currentRecordingURL = nil
         statusBar.state = .transcribing
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -332,6 +339,60 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+    }
+
+    func handleSystemWillSleep() {
+        guard recordingLifecycle.systemWillSleep() == .cancelRecording else { return }
+
+        recorder.teardown()
+        RecordingCancellation.discardTrackedPartialRecording(&currentRecordingURL)
+        resetRecordingStatusToIdleIfNeeded()
+    }
+
+    func handleSystemDidWake() {
+        guard recordingLifecycle.systemDidWake(isReady: isReady) == .prepareRecorder else { return }
+
+        recorder.preferredDeviceID = AudioDeviceManager.resolveConfiguredDeviceID(
+            uid: config.audioInputDeviceUID,
+            legacyID: config.audioInputDeviceID
+        )
+        recorder.reload()
+    }
+
+    private func registerSleepWakeObservers() {
+        guard sleepWakeObservers.isEmpty else { return }
+
+        let center = NSWorkspace.shared.notificationCenter
+        sleepWakeObservers = [
+            center.addObserver(
+                forName: NSWorkspace.willSleepNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                self?.handleSystemWillSleep()
+            },
+            center.addObserver(
+                forName: NSWorkspace.didWakeNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                self?.handleSystemDidWake()
+            },
+        ]
+    }
+
+    private func unregisterSleepWakeObservers() {
+        let center = NSWorkspace.shared.notificationCenter
+        for observer in sleepWakeObservers {
+            center.removeObserver(observer)
+        }
+        sleepWakeObservers = []
+    }
+
+    private func resetRecordingStatusToIdleIfNeeded() {
+        guard case .recording = statusBar.state else { return }
+        statusBar.state = .idle
+        statusBar.buildMenu()
     }
 
     public func reprocess(audioURL: URL) {
