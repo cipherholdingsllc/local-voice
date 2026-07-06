@@ -10,6 +10,7 @@ public struct Config: Codable {
     public var modelPath: String?
     public var modelSize: String
     public var language: String
+    public var whisperPrompt: String?
     public var spokenPunctuation: FlexBool?
     public var maxRecordings: Int?
     public var toggleMode: FlexBool?
@@ -41,6 +42,7 @@ public struct Config: Codable {
         case modelPath
         case modelSize
         case language
+        case whisperPrompt
         case spokenPunctuation
         case maxRecordings
         case toggleMode
@@ -62,6 +64,7 @@ public struct Config: Codable {
         self.modelPath = try c.decodeIfPresent(String.self, forKey: .modelPath)
         self.modelSize = try c.decode(String.self, forKey: .modelSize)
         self.language = try c.decode(String.self, forKey: .language)
+        self.whisperPrompt = try c.decodeIfPresent(String.self, forKey: .whisperPrompt)
         self.spokenPunctuation = try c.decodeIfPresent(FlexBool.self, forKey: .spokenPunctuation)
         self.maxRecordings = try c.decodeIfPresent(Int.self, forKey: .maxRecordings)
         self.toggleMode = try c.decodeIfPresent(FlexBool.self, forKey: .toggleMode)
@@ -76,6 +79,7 @@ public struct Config: Codable {
         try c.encodeIfPresent(modelPath, forKey: .modelPath)
         try c.encode(modelSize, forKey: .modelSize)
         try c.encode(language, forKey: .language)
+        try c.encodeIfPresent(whisperPrompt, forKey: .whisperPrompt)
         try c.encodeIfPresent(spokenPunctuation, forKey: .spokenPunctuation)
         try c.encodeIfPresent(maxRecordings, forKey: .maxRecordings)
         try c.encodeIfPresent(toggleMode, forKey: .toggleMode)
@@ -88,6 +92,7 @@ public struct Config: Codable {
         modelPath: String?,
         modelSize: String,
         language: String,
+        whisperPrompt: String? = nil,
         spokenPunctuation: FlexBool?,
         maxRecordings: Int?,
         toggleMode: FlexBool?,
@@ -100,6 +105,7 @@ public struct Config: Codable {
         self.modelPath = modelPath
         self.modelSize = modelSize
         self.language = language
+        self.whisperPrompt = whisperPrompt
         self.spokenPunctuation = spokenPunctuation
         self.maxRecordings = maxRecordings
         self.toggleMode = toggleMode
@@ -248,6 +254,7 @@ public struct Config: Codable {
         modelPath: nil,
         modelSize: "base.en",
         language: "en",
+        whisperPrompt: nil,
         spokenPunctuation: FlexBool(false),
         maxRecordings: nil,
         toggleMode: FlexBool(false)

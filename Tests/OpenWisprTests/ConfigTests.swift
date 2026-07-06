@@ -88,6 +88,33 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(Config.effectiveMaxRecordings(config.maxRecordings), 0)
     }
 
+    func testConfigDecodesWhisperPrompt() throws {
+        let json = """
+        {
+            "hotkey": {"keyCode": 63, "modifiers": []},
+            "modelSize": "base",
+            "language": "auto",
+            "whisperPrompt": "Use punctuation and capitalization."
+        }
+        """.data(using: .utf8)!
+        let config = try Config.decode(from: json)
+        XCTAssertEqual(config.whisperPrompt, "Use punctuation and capitalization.")
+    }
+
+    func testConfigEncodesWhisperPromptRoundTrip() throws {
+        var config = Config.defaultConfig
+        config.whisperPrompt = "Prefer concise sentences."
+        let data = try JSONEncoder().encode(config)
+        let decoded = try Config.decode(from: data)
+        XCTAssertEqual(decoded.whisperPrompt, "Prefer concise sentences.")
+    }
+
+    func testConfigOmitsWhisperPromptWhenNil() throws {
+        let data = try JSONEncoder().encode(Config.defaultConfig)
+        let json = String(data: data, encoding: .utf8)!
+        XCTAssertFalse(json.contains("whisperPrompt"))
+    }
+
     // MARK: - toggleMode decoding
 
     func testConfigDecodesToggleModeTrue() throws {

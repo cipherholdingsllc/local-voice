@@ -46,6 +46,7 @@ Edit `~/.config/open-wispr/config.json`:
   "modelSize": "base.en",
   "language": "en",
   "spokenPunctuation": false,
+  "whisperPrompt": "Use punctuation and capitalization.",
   "maxRecordings": 0,
   "toggleMode": false
 }
@@ -74,6 +75,7 @@ Both `hotkey` (single) and `hotkeys` (array) are supported. If both are present,
 | **modelSize** | `"base.en"` | See model table below |
 | **language** | `"en"` | `"auto"` for auto-detect, or any [ISO 639-1 code](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes) — e.g. `it`, `fr`, `de`, `es` |
 | **spokenPunctuation** | `false` | Say "comma", "period", etc. to insert punctuation instead of auto-punctuation |
+| **whisperPrompt** | — | Optional prompt text passed to Whisper to guide style, vocabulary, or punctuation. Omit it or leave it blank to use Whisper's default behavior. |
 | **maxRecordings** | `0` | Optionally store past recordings locally as `.wav` files for re-transcribing from the tray menu. `0` = nothing stored (default). Set 1-100 to keep that many recent recordings. |
 | **toggleMode** | `false` | Press hotkey once to start recording, press again to stop. Default is hold-to-talk. |
 

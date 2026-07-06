@@ -3,6 +3,68 @@ import XCTest
 
 final class TranscriberTests: XCTestCase {
 
+    func testArgumentsIncludeWhisperPromptAsSingleFollowingArgument() throws {
+        let prompt = "  Use punctuation, keep product names like OpenWispr.  "
+        let transcriber = Transcriber(
+            modelSize: "base.en",
+            language: "en",
+            whisperPrompt: prompt
+        )
+        let args = transcriber.arguments(
+            modelPath: "/models/ggml-base.en.bin",
+            audioURL: URL(fileURLWithPath: "/tmp/input.wav")
+        )
+
+        let promptFlagIndex = try XCTUnwrap(args.firstIndex(of: "--prompt"))
+        XCTAssertEqual(args[promptFlagIndex + 1], prompt)
+        XCTAssertEqual(args.filter { $0 == prompt }.count, 1)
+    }
+
+    func testArgumentsOmitNilWhisperPrompt() {
+        let transcriber = Transcriber(modelSize: "base.en", language: "en")
+        let args = transcriber.arguments(
+            modelPath: "/models/ggml-base.en.bin",
+            audioURL: URL(fileURLWithPath: "/tmp/input.wav")
+        )
+
+        XCTAssertFalse(args.contains("--prompt"))
+    }
+
+    func testArgumentsOmitWhitespaceOnlyWhisperPrompt() {
+        let transcriber = Transcriber(
+            modelSize: "base.en",
+            language: "en",
+            whisperPrompt: " \n\t "
+        )
+        let args = transcriber.arguments(
+            modelPath: "/models/ggml-base.en.bin",
+            audioURL: URL(fileURLWithPath: "/tmp/input.wav")
+        )
+
+        XCTAssertFalse(args.contains("--prompt"))
+    }
+
+    func testArgumentsKeepSuppressRegexWhenSpokenPunctuationUsesPrompt() throws {
+        let prompt = "Use punctuation and short sentences."
+        let transcriber = Transcriber(
+            modelSize: "base.en",
+            language: "en",
+            whisperPrompt: prompt
+        )
+        transcriber.spokenPunctuation = true
+
+        let args = transcriber.arguments(
+            modelPath: "/models/ggml-base.en.bin",
+            audioURL: URL(fileURLWithPath: "/tmp/input.wav")
+        )
+
+        let promptFlagIndex = try XCTUnwrap(args.firstIndex(of: "--prompt"))
+        XCTAssertEqual(args[promptFlagIndex + 1], prompt)
+
+        let suppressFlagIndex = try XCTUnwrap(args.firstIndex(of: "--suppress-regex"))
+        XCTAssertEqual(args[suppressFlagIndex + 1], "[,\\.\\?!;:\\-—]")
+    }
+
     func testBlankAudioMarker() {
         XCTAssertEqual(Transcriber.stripWhisperMarkers("[BLANK_AUDIO]"), "")
     }

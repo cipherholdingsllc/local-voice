@@ -3,11 +3,13 @@ import Foundation
 public class Transcriber {
     private let modelSize: String
     private let language: String
+    private let whisperPrompt: String?
     public var spokenPunctuation: Bool = false
 
-    public init(modelSize: String = "base.en", language: String = "en") {
+    public init(modelSize: String = "base.en", language: String = "en", whisperPrompt: String? = nil) {
         self.modelSize = modelSize
         self.language = language
+        self.whisperPrompt = whisperPrompt
     }
 
     public func transcribe(audioURL: URL) throws -> String {
@@ -21,17 +23,7 @@ public class Transcriber {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: whisperPath)
-        var args = [
-            "-m", modelPath,
-            "-f", audioURL.path,
-            "-l", language,
-            "--no-timestamps",
-            "-nt",
-        ]
-        if spokenPunctuation {
-            args += ["--suppress-regex", "[,\\.\\?!;:\\-—]"]
-        }
-        process.arguments = args
+        process.arguments = arguments(modelPath: modelPath, audioURL: audioURL)
 
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
@@ -61,6 +53,29 @@ public class Transcriber {
         }
 
         return output
+    }
+
+    func arguments(modelPath: String, audioURL: URL) -> [String] {
+        var args = [
+            "-m", modelPath,
+            "-f", audioURL.path,
+            "-l", language,
+            "--no-timestamps",
+            "-nt",
+        ]
+        if let prompt = effectiveWhisperPrompt {
+            args += ["--prompt", prompt]
+        }
+        if spokenPunctuation {
+            args += ["--suppress-regex", "[,\\.\\?!;:\\-—]"]
+        }
+
+        return args
+    }
+
+    private var effectiveWhisperPrompt: String? {
+        guard let whisperPrompt else { return nil }
+        return whisperPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : whisperPrompt
     }
 
     private static let knownMarkers: Set<String> = [

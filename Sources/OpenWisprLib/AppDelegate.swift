@@ -39,8 +39,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         if Config.effectiveMaxRecordings(config.maxRecordings) == 0 {
             RecordingStore.deleteAllRecordings()
         }
-        transcriber = Transcriber(modelSize: config.modelSize, language: config.language)
-        transcriber.spokenPunctuation = config.spokenPunctuation?.value ?? false
+        transcriber = makeTranscriber(for: config)
 
         DispatchQueue.main.async {
             self.statusBar.reprocessHandler = { [weak self] url in
@@ -182,8 +181,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         if deviceChanged {
             recorder.reload()
         }
-        transcriber = Transcriber(modelSize: config.modelSize, language: config.language)
-        transcriber.spokenPunctuation = config.spokenPunctuation?.value ?? false
+        transcriber = makeTranscriber(for: config)
         inserter = TextInserter()
 
         for m in hotkeyManagers { m.stop() }
@@ -229,6 +227,16 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
         let hotkeyDesc = config.hotkeySummary()
         print("Config updated: lang=\(config.language) model=\(config.modelSize) hotkey=\(hotkeyDesc)")
+    }
+
+    private func makeTranscriber(for config: Config) -> Transcriber {
+        let transcriber = Transcriber(
+            modelSize: config.modelSize,
+            language: config.language,
+            whisperPrompt: config.whisperPrompt
+        )
+        transcriber.spokenPunctuation = config.spokenPunctuation?.value ?? false
+        return transcriber
     }
 
     private func handleKeyDown() {
