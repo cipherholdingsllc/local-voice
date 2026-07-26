@@ -11,6 +11,16 @@ class TextInserter {
     }
 
     func insert(text: String) {
+        let guardResult = SecureFieldGuard.canInjectHere()
+        guard guardResult.allowed else {
+            if let reason = guardResult.reason {
+                fputs("TextInserter: \(reason)\n", stderr)
+            }
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            return
+        }
+
         let pasteboard = NSPasteboard.general
         let savedItems = savePasteboard(pasteboard)
 
@@ -18,11 +28,11 @@ class TextInserter {
         pasteboard.setString(text, forType: .string)
         let writeChangeCount = pasteboard.changeCount
 
-        simulatePaste()
+        if !simulatePaste() {
+            insertViaUnicode(text)
+        }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            // If something else has written to the pasteboard since our write
-            // (user copied something, another tool wrote), do not clobber it.
             guard pasteboard.changeCount == writeChangeCount else { return }
             self.restorePasteboard(pasteboard, items: savedItems)
         }
@@ -95,13 +105,14 @@ class TextInserter {
         return nil
     }
 
-    private func simulatePaste() {
+    @discardableResult
+    private func simulatePaste() -> Bool {
         let keyCode = pasteKeyCode
 
         guard let source = CGEventSource(stateID: .hidSystemState),
             let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
             let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) else {
-            return
+            return false
         }
 
         keyDown.flags = .maskCommand
@@ -109,5 +120,21 @@ class TextInserter {
 
         keyDown.post(tap: .cghidEventTap)
         keyUp.post(tap: .cghidEventTap)
+        return true
+    }
+
+    /// Fallback for paste-blocking apps (#11) — CGEvent unicode keystroke synthesis.
+    private func insertViaUnicode(_ text: String) {
+        guard let source = CGEventSource(stateID: .hidSystemState) else { return }
+        for scalar in text.unicodeScalars {
+            var chars = [UniChar(scalar.value)]
+            if let down = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
+               let up = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) {
+                down.keyboardSetUnicodeString(stringLength: 1, unicodeString: &chars)
+                up.keyboardSetUnicodeString(stringLength: 1, unicodeString: &chars)
+                down.post(tap: .cghidEventTap)
+                up.post(tap: .cghidEventTap)
+            }
+        }
     }
 }

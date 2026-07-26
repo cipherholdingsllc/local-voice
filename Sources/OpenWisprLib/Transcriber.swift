@@ -1,9 +1,10 @@
 import Foundation
 
 public class Transcriber {
-    private let modelSize: String
+    public let modelSize: String
     private let language: String
     public var spokenPunctuation: Bool = false
+    public var initialPrompt: String?
 
     public init(modelSize: String = "base.en", language: String = "en") {
         self.modelSize = modelSize
@@ -30,6 +31,9 @@ public class Transcriber {
         ]
         if spokenPunctuation {
             args += ["--suppress-regex", "[,\\.\\?!;:\\-—]"]
+        }
+        if let prompt = initialPrompt, !prompt.isEmpty {
+            args += ["--prompt", prompt]
         }
         process.arguments = args
 

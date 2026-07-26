@@ -19,6 +19,11 @@ class StatusBarController: NSObject {
 
     var reprocessHandler: ((URL) -> Void)?
     var onConfigChange: ((Config) -> Void)?
+    var onPrivacyTest: (() -> Void)?
+    var onShowLatency: (() -> Void)?
+    var onToggleRawPolished: (() -> Void)?
+    var sttEngineName: String?
+    var privacyStatus: String?
 
     enum State {
         case idle
@@ -90,9 +95,22 @@ class StatusBarController: NSObject {
 
         let menu = NSMenu()
 
-        let titleItem = NSMenuItem(title: "OpenWispr v\(OpenWispr.version)", action: nil, keyEquivalent: "")
+        let titleItem = NSMenuItem(title: "Local Flow v\(OpenWispr.version)", action: nil, keyEquivalent: "")
         titleItem.isEnabled = false
         menu.addItem(titleItem)
+
+        if config.showPrivacyBadge?.value ?? true {
+            let badge = privacyStatus ?? "100% on-device"
+            let privacyItem = NSMenuItem(title: "Privacy: \(badge)", action: nil, keyEquivalent: "")
+            privacyItem.isEnabled = false
+            menu.addItem(privacyItem)
+        }
+
+        if let engine = sttEngineName {
+            let engineItem = NSMenuItem(title: "STT Engine: \(engine)", action: nil, keyEquivalent: "")
+            engineItem.isEnabled = false
+            menu.addItem(engineItem)
+        }
 
         menu.addItem(NSMenuItem.separator())
 
@@ -282,6 +300,32 @@ class StatusBarController: NSObject {
         toggleItem.target = toggleTarget
         toggleItem.state = (config.toggleMode?.value ?? false) ? .on : .off
         menu.addItem(toggleItem)
+
+        let rawToggleTarget = MenuItemTarget { [weak self] in
+            self?.onToggleRawPolished?()
+        }
+        menuItemTargets.append(rawToggleTarget)
+        let rawItem = NSMenuItem(title: "Toggle Raw ↔ Polished", action: #selector(MenuItemTarget.invoke), keyEquivalent: "t")
+        rawItem.target = rawToggleTarget
+        menu.addItem(rawItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        let latencyTarget = MenuItemTarget { [weak self] in
+            self?.onShowLatency?()
+        }
+        menuItemTargets.append(latencyTarget)
+        let latencyItem = NSMenuItem(title: "Latency Debug…", action: #selector(MenuItemTarget.invoke), keyEquivalent: "")
+        latencyItem.target = latencyTarget
+        menu.addItem(latencyItem)
+
+        let privacyTarget = MenuItemTarget { [weak self] in
+            self?.onPrivacyTest?()
+        }
+        menuItemTargets.append(privacyTarget)
+        let privacyTestItem = NSMenuItem(title: "Run Privacy Self-Test", action: #selector(MenuItemTarget.invoke), keyEquivalent: "")
+        privacyTestItem.target = privacyTarget
+        menu.addItem(privacyTestItem)
 
         menu.addItem(NSMenuItem.separator())
 

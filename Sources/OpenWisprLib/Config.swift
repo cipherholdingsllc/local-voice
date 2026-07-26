@@ -15,6 +15,17 @@ public struct Config: Codable {
     public var toggleMode: FlexBool?
     public var audioInputDeviceID: UInt32?
     public var audioInputDeviceUID: String?
+    public var showCursorHUD: FlexBool?
+    public var keepModelWarm: FlexBool?
+    public var streamingEnabled: FlexBool?
+    public var streamingChunkSeconds: Double?
+    public var ollamaEnabled: FlexBool?
+    public var ollamaModel: String?
+    public var customVocabulary: [String]?
+    public var showPrivacyBadge: FlexBool?
+    public var sessionCapSeconds: Double?
+    public var silenceTimeoutSeconds: Double?
+    public var sttEngine: STTEngineKind?
 
     public var hotkey: HotkeyConfig {
         get { hotkeys[0] }
@@ -46,6 +57,17 @@ public struct Config: Codable {
         case toggleMode
         case audioInputDeviceID
         case audioInputDeviceUID
+        case showCursorHUD
+        case keepModelWarm
+        case streamingEnabled
+        case streamingChunkSeconds
+        case ollamaEnabled
+        case ollamaModel
+        case customVocabulary
+        case showPrivacyBadge
+        case sessionCapSeconds
+        case silenceTimeoutSeconds
+        case sttEngine
     }
 
     public init(from decoder: Decoder) throws {
@@ -67,6 +89,17 @@ public struct Config: Codable {
         self.toggleMode = try c.decodeIfPresent(FlexBool.self, forKey: .toggleMode)
         self.audioInputDeviceID = try c.decodeIfPresent(UInt32.self, forKey: .audioInputDeviceID)
         self.audioInputDeviceUID = try c.decodeIfPresent(String.self, forKey: .audioInputDeviceUID)
+        self.showCursorHUD = try c.decodeIfPresent(FlexBool.self, forKey: .showCursorHUD)
+        self.keepModelWarm = try c.decodeIfPresent(FlexBool.self, forKey: .keepModelWarm)
+        self.streamingEnabled = try c.decodeIfPresent(FlexBool.self, forKey: .streamingEnabled)
+        self.streamingChunkSeconds = try c.decodeIfPresent(Double.self, forKey: .streamingChunkSeconds)
+        self.ollamaEnabled = try c.decodeIfPresent(FlexBool.self, forKey: .ollamaEnabled)
+        self.ollamaModel = try c.decodeIfPresent(String.self, forKey: .ollamaModel)
+        self.customVocabulary = try c.decodeIfPresent([String].self, forKey: .customVocabulary)
+        self.showPrivacyBadge = try c.decodeIfPresent(FlexBool.self, forKey: .showPrivacyBadge)
+        self.sessionCapSeconds = try c.decodeIfPresent(Double.self, forKey: .sessionCapSeconds)
+        self.silenceTimeoutSeconds = try c.decodeIfPresent(Double.self, forKey: .silenceTimeoutSeconds)
+        self.sttEngine = try c.decodeIfPresent(STTEngineKind.self, forKey: .sttEngine)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -81,6 +114,17 @@ public struct Config: Codable {
         try c.encodeIfPresent(toggleMode, forKey: .toggleMode)
         try c.encodeIfPresent(audioInputDeviceID, forKey: .audioInputDeviceID)
         try c.encodeIfPresent(audioInputDeviceUID, forKey: .audioInputDeviceUID)
+        try c.encodeIfPresent(showCursorHUD, forKey: .showCursorHUD)
+        try c.encodeIfPresent(keepModelWarm, forKey: .keepModelWarm)
+        try c.encodeIfPresent(streamingEnabled, forKey: .streamingEnabled)
+        try c.encodeIfPresent(streamingChunkSeconds, forKey: .streamingChunkSeconds)
+        try c.encodeIfPresent(ollamaEnabled, forKey: .ollamaEnabled)
+        try c.encodeIfPresent(ollamaModel, forKey: .ollamaModel)
+        try c.encodeIfPresent(customVocabulary, forKey: .customVocabulary)
+        try c.encodeIfPresent(showPrivacyBadge, forKey: .showPrivacyBadge)
+        try c.encodeIfPresent(sessionCapSeconds, forKey: .sessionCapSeconds)
+        try c.encodeIfPresent(silenceTimeoutSeconds, forKey: .silenceTimeoutSeconds)
+        try c.encodeIfPresent(sttEngine, forKey: .sttEngine)
     }
 
     public init(
@@ -92,7 +136,18 @@ public struct Config: Codable {
         maxRecordings: Int?,
         toggleMode: FlexBool?,
         audioInputDeviceID: UInt32? = nil,
-        audioInputDeviceUID: String? = nil
+        audioInputDeviceUID: String? = nil,
+        showCursorHUD: FlexBool? = FlexBool(true),
+        keepModelWarm: FlexBool? = FlexBool(true),
+        streamingEnabled: FlexBool? = FlexBool(true),
+        streamingChunkSeconds: Double? = 2.0,
+        ollamaEnabled: FlexBool? = FlexBool(true),
+        ollamaModel: String? = "llama3.2:latest",
+        customVocabulary: [String]? = ["OGrE", "2OPMD", "CipherOS"],
+        showPrivacyBadge: FlexBool? = FlexBool(true),
+        sessionCapSeconds: Double? = 600,
+        silenceTimeoutSeconds: Double? = nil,
+        sttEngine: STTEngineKind? = .auto
     ) {
         self.hotkeys = hotkeys.isEmpty
             ? [HotkeyConfig(keyCode: 63, modifiers: [])]
@@ -105,6 +160,17 @@ public struct Config: Codable {
         self.toggleMode = toggleMode
         self.audioInputDeviceID = audioInputDeviceID
         self.audioInputDeviceUID = audioInputDeviceUID
+        self.showCursorHUD = showCursorHUD
+        self.keepModelWarm = keepModelWarm
+        self.streamingEnabled = streamingEnabled
+        self.streamingChunkSeconds = streamingChunkSeconds
+        self.ollamaEnabled = ollamaEnabled
+        self.ollamaModel = ollamaModel
+        self.customVocabulary = customVocabulary
+        self.showPrivacyBadge = showPrivacyBadge
+        self.sessionCapSeconds = sessionCapSeconds
+        self.silenceTimeoutSeconds = silenceTimeoutSeconds
+        self.sttEngine = sttEngine
     }
 
     public static let supportedLanguages: [LanguageOption] = [
@@ -325,10 +391,19 @@ public struct FlexBool: Codable {
 public struct HotkeyConfig: Codable, Equatable {
     public var keyCode: UInt16
     public var modifiers: [String]
+    public var activationMode: HotkeyActivationMode?
 
-    public init(keyCode: UInt16, modifiers: [String]) {
+    public init(keyCode: UInt16, modifiers: [String], activationMode: HotkeyActivationMode? = nil) {
         self.keyCode = keyCode
         self.modifiers = modifiers
+        self.activationMode = activationMode
+    }
+
+    public func resolvedActivationMode(globalToggle: Bool) -> HotkeyActivationMode {
+        if globalToggle { return .toggle }
+        if let mode = activationMode { return mode }
+        if keyCode == 63 { return .holdAndDoubleTapLock }
+        return .hold
     }
 
     public var modifierFlags: UInt64 {

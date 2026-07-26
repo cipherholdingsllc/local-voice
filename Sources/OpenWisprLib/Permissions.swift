@@ -61,4 +61,19 @@ struct Permissions {
             NSWorkspace.shared.open(url)
         }
     }
+
+    static func ensureInputMonitoring() {
+        if CGPreflightListenEventAccess() {
+            print("Input Monitoring: granted")
+            return
+        }
+        print("Input Monitoring: requesting...")
+        CGRequestListenEventAccess()
+        if !CGPreflightListenEventAccess() {
+            print("Input Monitoring: denied — grant in System Settings → Privacy → Input Monitoring")
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
+                NSWorkspace.shared.open(url)
+            }
+        }
+    }
 }
