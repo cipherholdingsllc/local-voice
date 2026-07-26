@@ -21,6 +21,7 @@ Private, system-wide dictation for macOS with a native iPhone companion. Local V
 - First-run permissions and model onboarding
 - Native iOS app with Apple on-device speech recognition
 - iOS keyboard extension that inserts transcripts completed in the main app
+- Reproducible Local Voice app icon and an explicit Personal Team install path
 
 No GPL or AGPL source was copied into this repository. Copyleft projects in the research set were used only as product and UX signal.
 

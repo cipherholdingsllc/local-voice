@@ -60,6 +60,20 @@ The simulator proves compilation and layout. It does not prove live on-device re
 
 The full app-plus-keyboard build uses App Groups, so plan on the paid Apple Developer Program for the clean production path even if a stripped containing-app build is first installed from a Personal Team.
 
+### Fast Personal Team install
+
+The paired iPhone appears in Xcode's destinations list. To install the standalone
+recorder before App Group access is available:
+
+```bash
+./scripts/install-personal-team.sh APPLE_TEAM_ID IPHONE_DEVICE_ID
+```
+
+This explicitly removes App Group entitlements from the signed development
+build. Recording, on-device transcription, copy, and share work; keyboard
+transcript sharing does not. The script intentionally requires the signing team
+and device ID as explicit arguments and never reads credentials.
+
 ## Project layout
 
 ```text

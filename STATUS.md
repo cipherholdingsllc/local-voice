@@ -9,8 +9,9 @@ Verified snapshot: 2026-07-25
 | macOS product features | Implemented | History, app modes, dictionary, model controls, privacy, settings |
 | macOS automated checks | Passing | 108 Swift tests, including live model URL availability |
 | macOS release artifact | Passing | Release build and strict local code-signature verification |
-| iPhone app | Implemented, simulator-verified | Native UI and Apple on-device Speech path; simulator build passes |
+| iPhone app | Implemented, simulator and arm64 build verified | Native UI, branded app icon, Apple on-device Speech path |
 | iPhone keyboard | Implemented, simulator-verified | Inserts the most recent App Group transcript; no microphone claim |
+| Personal Team path | Prepared | Explicit installer disables App Groups and requires caller-supplied team/device IDs |
 | Physical iPhone capture | Not yet verified | Requires signing team, device install, permissions, and live speech test |
 | Exploit Poker UI integration | Deliberately deferred | Kimi's active Poker redesign remains isolated |
 
