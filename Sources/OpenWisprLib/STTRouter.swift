@@ -15,7 +15,9 @@ public enum STTExecutionRoute: String, Sendable {
 /// STT engine abstraction for dual-engine routing (#4).
 public protocol STTEngine: AnyObject {
     var name: String { get }
+    var modelName: String? { get }
     var executionRoute: STTExecutionRoute { get }
+    var isPersistent: Bool { get }
     func isAvailable() -> Bool
     func warmup() throws
     func transcribe(audioURL: URL) throws -> String
@@ -23,6 +25,8 @@ public protocol STTEngine: AnyObject {
 }
 
 public extension STTEngine {
+    var modelName: String? { nil }
+    var isPersistent: Bool { false }
     func shutdown() {}
 }
 
@@ -144,6 +148,14 @@ public final class STTRouter {
 
     public func activeExecutionRoute() -> STTExecutionRoute {
         activeEngine().executionRoute
+    }
+
+    public func activeEngineModelName() -> String? {
+        activeEngine().modelName
+    }
+
+    public func activeEngineIsPersistent() -> Bool {
+        activeEngine().isPersistent
     }
 
     public func hasAvailableLocalEngine() -> Bool {

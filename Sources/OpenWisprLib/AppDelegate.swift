@@ -20,6 +20,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     private var captureApplicationName = "Unknown app"
     private var captureBundleIdentifier: String?
     private var captureModeName = "Default"
+    private var captureRequestID = UUID()
+    private var captureProfileID = VoiceContractProfileID.generalDefault
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         statusBar = StatusBarController()
@@ -421,6 +423,11 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             ? "com.cipherholdings.localvoice"
             : frontmost?.bundleIdentifier
         captureModeName = AppPromptProfiles.profile(for: captureBundleIdentifier).name
+        captureRequestID = UUID()
+        captureProfileID = VoiceContractProfileID.localVoiceProfile(
+            bundleIdentifier: captureBundleIdentifier,
+            modeName: captureModeName
+        )
         streamingPartial = ""
         LatencyInstrumentation.shared.reset()
         LatencyInstrumentation.shared.mark("record")
@@ -464,7 +471,11 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             try recorder.startRecording(
                 to: outputURL,
                 streamingChunkSeconds: streamingOn ? (config.streamingChunkSeconds ?? 2.0) : nil,
-                sessionCapSeconds: config.sessionCapSeconds,
+                sessionCapSeconds: Double(
+                    effectiveMaximumDurationMilliseconds(
+                        for: captureProfileID
+                    )
+                ) / 1_000,
                 silenceTimeoutSeconds: silenceTimeout
             )
         } catch {
@@ -518,9 +529,20 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             pillOverlay.show(state: .transcribing, partialText: streamingPartial.isEmpty ? nil : streamingPartial)
         }
 
+        let requestID = captureRequestID
+        let profileID = captureProfileID
+        let applicationName = captureApplicationName
+        let bundleIdentifier = captureBundleIdentifier
+        let modeName = captureModeName
+        let maximumDurationMilliseconds =
+            effectiveMaximumDurationMilliseconds(for: profileID)
+
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             let maxRecordings = Config.effectiveMaxRecordings(self.config.maxRecordings)
+            let contractAudio = try? LocalVoiceContract.audioDescriptor(
+                for: audioURL
+            )
             defer {
                 if maxRecordings == 0 {
                     try? FileManager.default.removeItem(at: audioURL)
@@ -550,6 +572,15 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 LatencyInstrumentation.shared.end("llm")
 
                 TranscriptStore.shared.store(raw: raw, polished: text)
+                let inferenceMs =
+                    LatencyInstrumentation.shared.lastSession["stt"] ?? 0
+                let cleanupMs =
+                    LatencyInstrumentation.shared.lastSession["llm"] ?? 0
+                let engineName = self.sttRouter.activeEngineName()
+                let engineModel = self.sttRouter.activeEngineModelName()
+                let engineRoute = self.sttRouter.activeExecutionRoute()
+                let enginePersistent =
+                    self.sttRouter.activeEngineIsPersistent()
 
                 if maxRecordings > 0 {
                     RecordingStore.prune(maxCount: maxRecordings)
@@ -578,21 +609,55 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     if !text.isEmpty {
                         VocabularyLearner.shared.observeCorrection(inserted: raw, polished: text)
                         let recordMs = LatencyInstrumentation.shared.lastSession["record"] ?? 0
-                        let finishMs = (LatencyInstrumentation.shared.lastSession["stt"] ?? 0)
-                            + (LatencyInstrumentation.shared.lastSession["llm"] ?? 0)
-                            + (LatencyInstrumentation.shared.lastSession["inject"] ?? 0)
+                        let injectionMs =
+                            LatencyInstrumentation.shared.lastSession["inject"] ?? 0
+                        let finishMs = inferenceMs + cleanupMs + injectionMs
+                        var contractPair: VoiceContractPair?
+                        if maxRecordings == 0, let contractAudio {
+                            do {
+                                contractPair = try LocalVoiceContract.makePair(
+                                    requestId: requestID,
+                                    profileId: profileID,
+                                    audio: contractAudio,
+                                    requestedLanguage: self.config.language,
+                                    detectedLanguage: nil,
+                                    enginePreference: self.config.sttEngine ?? .auto,
+                                    configuredModel: self.config.modelSize,
+                                    keepWarm: self.config.keepModelWarm?.value ?? true,
+                                    promptVocabulary: vocab,
+                                    maximumDurationMilliseconds:
+                                        maximumDurationMilliseconds,
+                                    rawTranscript: raw,
+                                    normalizedTranscript: text,
+                                    engineName: engineName,
+                                    engineModel: engineModel,
+                                    engineRoute: engineRoute,
+                                    enginePersistent: enginePersistent,
+                                    inferenceMilliseconds: inferenceMs,
+                                    finishMilliseconds: cleanupMs + injectionMs,
+                                    transcriptRetention: .localHistory
+                                )
+                            } catch {
+                                fputs(
+                                    "Voice contract receipt unavailable: \(error.localizedDescription)\n",
+                                    stderr
+                                )
+                            }
+                        }
                         if self.config.saveTranscriptHistory?.value ?? true {
                             LocalVoiceStore.shared.append(
                                 LocalVoiceRecord(
+                                    id: requestID,
                                     rawText: raw,
                                     polishedText: text,
-                                    applicationName: self.captureApplicationName,
-                                    bundleIdentifier: self.captureBundleIdentifier,
-                                    modeName: self.captureModeName,
-                                    engineName: self.sttRouter.activeEngineName(),
+                                    applicationName: applicationName,
+                                    bundleIdentifier: bundleIdentifier,
+                                    modeName: modeName,
+                                    engineName: engineName,
                                     language: self.config.language,
                                     recordingMilliseconds: recordMs,
-                                    finishMilliseconds: finishMs
+                                    finishMilliseconds: finishMs,
+                                    contractPair: contractPair
                                 )
                             )
                         }
@@ -632,6 +697,18 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+    }
+
+    private func effectiveMaximumDurationMilliseconds(
+        for profile: VoiceContractProfileID
+    ) -> Int {
+        let profileLimit = profile.maximumDurationMilliseconds
+        guard let configuredSeconds = config.sessionCapSeconds,
+              configuredSeconds > 0 else {
+            return profileLimit
+        }
+        let configured = Int((configuredSeconds * 1_000).rounded())
+        return min(profileLimit, max(1_000, configured))
     }
 
     public func reprocess(audioURL: URL) {

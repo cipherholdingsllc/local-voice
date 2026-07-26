@@ -43,6 +43,34 @@ final class LocalVoiceStoreTests: XCTestCase {
         XCTAssertEqual(reader.records, [original])
     }
 
+    func testCanonicalContractPairPersistsWithHistoryRecord() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("local-voice-contract-\(UUID().uuidString)")
+        let file = directory.appendingPathComponent("history.json")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let pair = try LocalVoiceContract.samplePair()
+        let record = makeRecord(
+            text: pair.response.transcript.normalized,
+            contractPair: pair
+        )
+        let writer = LocalVoiceStore(
+            storageURL: file,
+            records: [],
+            retentionDays: 30,
+            persistenceEnabled: true
+        )
+        writer.append(record)
+
+        let reader = LocalVoiceStore(
+            storageURL: file,
+            retentionDays: 30,
+            persistenceEnabled: true
+        )
+        XCTAssertEqual(reader.records.first?.contractPair, pair)
+        XCTAssertNotNil(reader.records.first?.contractJSON)
+    }
+
     func testMaximumRecordCountDropsOldest() {
         let store = LocalVoiceStore(
             storageURL: nil,
@@ -73,7 +101,8 @@ final class LocalVoiceStoreTests: XCTestCase {
     private func makeRecord(
         text: String,
         recordingMs: Double = 1_000,
-        finishMs: Double = 500
+        finishMs: Double = 500,
+        contractPair: VoiceContractPair? = nil
     ) -> LocalVoiceRecord {
         LocalVoiceRecord(
             createdAt: Date(timeIntervalSince1970: floor(Date().timeIntervalSince1970)),
@@ -85,7 +114,8 @@ final class LocalVoiceStoreTests: XCTestCase {
             engineName: "Test engine",
             language: "en",
             recordingMilliseconds: recordingMs,
-            finishMilliseconds: finishMs
+            finishMilliseconds: finishMs,
+            contractPair: contractPair
         )
     }
 }

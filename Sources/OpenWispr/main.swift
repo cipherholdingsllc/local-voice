@@ -20,6 +20,7 @@ func printUsage() {
         local-voice set-language <code> Set the language (e.g. en, fr, auto)
         local-voice download-model [size] Download a Whisper model
         local-voice benchmark [engine] [model] Run the local synthetic quality gate
+        local-voice contract-fixture    Emit a canonical request/response pair
         local-voice status              Show configuration and status
         local-voice --help              Show this help message
 
@@ -187,6 +188,15 @@ func cmdBenchmark(engine: String?, model: String?) {
     }
 }
 
+func cmdContractFixture() {
+    do {
+        print(try LocalVoiceContract.samplePair().jsonString())
+    } catch {
+        print("Contract fixture failed: \(error.localizedDescription)")
+        exit(1)
+    }
+}
+
 let args = CommandLine.arguments
 let rawCommand = args.count > 1 ? args[1] : nil
 let command: String? = {
@@ -231,6 +241,8 @@ case "benchmark":
         engine: args.count > 2 ? args[2] : nil,
         model: args.count > 3 ? args[3] : nil
     )
+case "contract-fixture":
+    cmdContractFixture()
 case "status":
     cmdStatus()
 case "--help", "-h", "help":

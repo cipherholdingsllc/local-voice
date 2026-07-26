@@ -18,6 +18,8 @@ Private, system-wide dictation for macOS with a native iPhone companion. Local V
 - App-aware prompt profiles and secure-field blocking
 - Raw/polished output, voice commands, and local vocabulary learning
 - Local-only transcript history with explicit retention controls
+- Canonical `voice-request.v1` / `voice-response.v1` receipts on default-private
+  history records, with one-click JSON copy from the History interface
 - Latency breakdown, repeatable local benchmark, and truthful local-route
   privacy self-test
 - First-run permissions and model onboarding
@@ -48,11 +50,25 @@ Useful commands:
 .build/release/local-voice set-language auto
 .build/release/local-voice set-model large-v3-turbo-q5_0
 .build/release/local-voice benchmark auto base.en
+.build/release/local-voice contract-fixture
 ```
 
 Configuration lives at `~/.config/local-voice/config.json`. On first launch, Local Voice migrates a legacy `~/.config/open-wispr/config.json` if present.
 Model discovery also preserves the legacy OpenWispr cache and supports the
 standard `~/.cache/whisper-cpp` cache.
+
+### Shared voice contract
+
+Every successfully saved default-private history record carries a canonical
+request/response receipt with the selected general-use profile, actual engine
+and route, timing, retention, and network-egress facts. Use the braces button
+on a History card to copy it, or run `local-voice contract-fixture` to emit a
+deterministic pair for cross-repository validation.
+
+Local Voice fails closed if asked to emit the isolated `poker.exploit` profile.
+When the operator explicitly enables retained audio, the v1 receipt is
+intentionally omitted because that contract version requires
+`audioRetained: false`; the app never emits a privacy claim it cannot support.
 
 ### Optional Parakeet fast path
 

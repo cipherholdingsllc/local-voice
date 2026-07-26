@@ -4,7 +4,9 @@ import Foundation
 /// Persistent whisper-server process (#6b) — model stays resident between dictations.
 public final class WhisperServerPool: STTEngine {
     public var name: String { "whisper-server (\(modelSize))" }
+    public var modelName: String? { modelSize }
     public let executionRoute = STTExecutionRoute.localLoopback
+    public let isPersistent = true
     public let modelSize: String
     private let language: String
     private var process: Process?

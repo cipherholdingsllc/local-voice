@@ -883,6 +883,7 @@ private struct RecordRow: View {
 private struct HistoryCard: View {
     let record: LocalVoiceRecord
     @State private var copied = false
+    @State private var copiedContract = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 13) {
@@ -899,6 +900,37 @@ private struct HistoryCard: View {
                 }
                 Spacer()
                 SmallTag(text: record.modeName)
+                if let contractJSON = record.contractJSON {
+                    Button {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(
+                            contractJSON,
+                            forType: .string
+                        )
+                        copiedContract = true
+                        DispatchQueue.main.asyncAfter(
+                            deadline: .now() + 1.5
+                        ) {
+                            copiedContract = false
+                        }
+                    } label: {
+                        Image(
+                            systemName: copiedContract
+                                ? "checkmark"
+                                : "curlybraces"
+                        )
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(
+                            copiedContract
+                                ? LocalVoiceTheme.accent
+                                : LocalVoiceTheme.secondary
+                        )
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(LocalVoiceTheme.raised))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Copy canonical voice contract receipt")
+                }
                 Button {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(record.text, forType: .string)
@@ -912,6 +944,7 @@ private struct HistoryCard: View {
                         .background(Circle().fill(LocalVoiceTheme.raised))
                 }
                 .buttonStyle(.plain)
+                .help("Copy transcript")
             }
 
             Text(record.text)
@@ -923,6 +956,10 @@ private struct HistoryCard: View {
             HStack(spacing: 8) {
                 Text(record.engineName)
                 Text("•")
+                if record.contractPair != nil {
+                    Text("Contract v1")
+                    Text("•")
+                }
                 Text("\(record.wordCount) words")
                 Text("•")
                 Text(formatLatency(record.finishMilliseconds))

@@ -95,6 +95,8 @@ final class STTRouterTests: XCTestCase {
         let whisper = EngineStub(
             name: "whisper-server",
             route: .localLoopback,
+            modelName: "base.en",
+            persistent: true,
             transcript: "persistent whisper"
         )
         let cli = EngineStub(
@@ -116,6 +118,8 @@ final class STTRouterTests: XCTestCase {
         XCTAssertEqual(whisper.transcribeCount, 1)
         XCTAssertEqual(cli.transcribeCount, 0)
         XCTAssertEqual(router.activeEngineName(), "whisper-server")
+        XCTAssertEqual(router.activeEngineModelName(), "base.en")
+        XCTAssertTrue(router.activeEngineIsPersistent())
         XCTAssertEqual(router.activeExecutionRoute(), .localLoopback)
     }
 
@@ -279,7 +283,9 @@ private enum TestError: Error {
 
 private final class EngineStub: STTEngine {
     let name: String
+    let modelName: String?
     let executionRoute: STTExecutionRoute
+    let isPersistent: Bool
     private let available: Bool
     private let transcript: String
     private let warmupError: Error?
@@ -292,13 +298,17 @@ private final class EngineStub: STTEngine {
     init(
         name: String,
         route: STTExecutionRoute,
+        modelName: String? = nil,
+        persistent: Bool = false,
         available: Bool = true,
         transcript: String = "",
         warmupError: Error? = nil,
         transcribeError: Error? = nil
     ) {
         self.name = name
+        self.modelName = modelName
         self.executionRoute = route
+        self.isPersistent = persistent
         self.available = available
         self.transcript = transcript
         self.warmupError = warmupError

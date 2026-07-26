@@ -19,6 +19,7 @@ Local Voice is a desktop voice workspace and push-to-talk dictation app. Speech 
 - Push-to-talk system-wide cursor insertion on macOS.
 - Automatic Parakeet-to-persistent-Whisper routing with circuit-breaker fallbacks.
 - App-specific modes, custom dictionary, local transcript history, and retention controls.
+- Canonical v1 voice request/response receipts on default-private history records, with GUI JSON copy and a deterministic `contract-fixture` command.
 - Repeatable command-line performance benchmark with a machine-readable JSON receipt.
 - Repeatable external-egress gate that preserves private loopback and emits a machine-readable receipt.
 - Native iPhone companion project and Personal Team installation script.
@@ -30,3 +31,8 @@ See `BENCHMARK.md` for the measured macOS synthetic speech fixture, latency gate
 ## Current release boundary
 
 Local Voice has not yet been published to a Cipher-owned remote or distributed through TestFlight or the App Store. A physical-iPhone signing team, real-device validation, human-speech testing, cursor-insertion testing, and independent packet capture remain explicit release gates.
+
+The Local Voice surface is limited to `general.*` contract profiles and cannot
+emit `poker.exploit`. The v1 receipt requires no retained audio, so explicitly
+enabling local audio retention suppresses that receipt rather than weakening
+the privacy assertion.

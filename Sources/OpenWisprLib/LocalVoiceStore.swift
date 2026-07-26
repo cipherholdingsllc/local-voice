@@ -34,6 +34,7 @@ public struct LocalVoiceRecord: Codable, Identifiable, Equatable, Sendable {
     public let language: String
     public let recordingMilliseconds: Double
     public let finishMilliseconds: Double
+    public let contractPair: VoiceContractPair?
 
     public init(
         id: UUID = UUID(),
@@ -46,7 +47,8 @@ public struct LocalVoiceRecord: Codable, Identifiable, Equatable, Sendable {
         engineName: String,
         language: String,
         recordingMilliseconds: Double,
-        finishMilliseconds: Double
+        finishMilliseconds: Double,
+        contractPair: VoiceContractPair? = nil
     ) {
         self.id = id
         self.createdAt = createdAt
@@ -59,6 +61,7 @@ public struct LocalVoiceRecord: Codable, Identifiable, Equatable, Sendable {
         self.language = language
         self.recordingMilliseconds = recordingMilliseconds
         self.finishMilliseconds = finishMilliseconds
+        self.contractPair = contractPair
     }
 
     public var text: String {
@@ -67,6 +70,11 @@ public struct LocalVoiceRecord: Codable, Identifiable, Equatable, Sendable {
 
     public var wordCount: Int {
         text.split(whereSeparator: \.isWhitespace).count
+    }
+
+    public var contractJSON: String? {
+        guard let contractPair else { return nil }
+        return try? contractPair.jsonString()
     }
 }
 
@@ -232,6 +240,7 @@ public final class LocalVoiceStore: ObservableObject {
 
     public static func preview() -> LocalVoiceStore {
         let now = Date()
+        let sampleContract = try? LocalVoiceContract.samplePair()
         let sampleRecords = [
             LocalVoiceRecord(
                 createdAt: now.addingTimeInterval(-8 * 60),
@@ -243,7 +252,8 @@ public final class LocalVoiceStore: ObservableObject {
                 engineName: "Parakeet TDT v3",
                 language: "English",
                 recordingMilliseconds: 5_800,
-                finishMilliseconds: 438
+                finishMilliseconds: 438,
+                contractPair: sampleContract
             ),
             LocalVoiceRecord(
                 createdAt: now.addingTimeInterval(-42 * 60),

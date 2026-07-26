@@ -31,6 +31,11 @@ public enum AppPromptProfiles {
             systemPrompt: "Code-aware cleanup. Preserve identifiers, paths, and technical terms. Do not auto-capitalize code tokens."
         ),
         Profile(
+            bundleID: "com.openai.codex",
+            name: "Technical",
+            systemPrompt: "Technical cleanup. Preserve identifiers, paths, commands, model names, and code terms."
+        ),
+        Profile(
             bundleID: "com.apple.Terminal",
             name: "Terminal",
             systemPrompt: "Command-aware cleanup. Preserve flags, paths, and shell syntax. No auto-capitalization."

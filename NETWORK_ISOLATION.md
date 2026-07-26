@@ -1,6 +1,6 @@
 # Local Voice remote-network isolation receipt
 
-Measured 2026-07-25 PDT against the installed, ad-hoc-signed v0.50.2 bundle:
+Measured 2026-07-25 PDT against the installed, ad-hoc-signed v0.51.0 bundle:
 
 `/Users/ciphercowork/Applications/Local Voice.app`
 
@@ -36,8 +36,8 @@ enforcement.
 
 | Preference | Actual engine | Route | Warmup | Median | p95 | Realtime factor | WER | Gate |
 |---|---|---|---:|---:|---:|---:|---:|---|
-| `auto` | Parakeet TDT 0.6b v3 | local process | 1,684.3 ms | 106.3 ms | 119.3 ms | 0.035x | 6.25% | PASS |
-| `whisper base.en` | persistent whisper-server | private loopback | 354.6 ms | 58.9 ms | 66.1 ms | 0.020x | 9.38% | PASS |
+| `auto` | Parakeet TDT 0.6b v3 | local process | 2,879.3 ms | 108.9 ms | 157.0 ms | 0.039x | 6.25% | PASS |
+| `whisper base.en` | persistent whisper-server | private loopback | 339.8 ms | 60.9 ms | 67.6 ms | 0.020x | 9.38% | PASS |
 
 The gate also verified eight samples per route, a single expected route and
 engine for every sample, the existing p95/WER limits, and clean child-process

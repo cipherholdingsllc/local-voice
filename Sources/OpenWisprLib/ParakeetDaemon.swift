@@ -4,7 +4,9 @@ import Foundation
 public final class ParakeetDaemon: STTEngine {
     public static let shared = ParakeetDaemon()
     public let name = "parakeet-tdt-0.6b"
+    public let modelName: String? = "parakeet-tdt-0.6b-v3"
     public let executionRoute = STTExecutionRoute.localProcess
+    public let isPersistent = true
 
     private var process: Process?
     private var stdinHandle: FileHandle?

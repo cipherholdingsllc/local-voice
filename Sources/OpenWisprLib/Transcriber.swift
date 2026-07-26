@@ -2,6 +2,7 @@ import Foundation
 
 public class Transcriber {
     public var name: String { "whisper-cli (\(modelSize))" }
+    public var modelName: String? { modelSize }
     public let executionRoute = STTExecutionRoute.localProcess
     public let modelSize: String
     private let language: String
