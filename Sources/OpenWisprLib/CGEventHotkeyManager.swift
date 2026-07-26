@@ -15,13 +15,12 @@ final class CGEventHotkeyManager {
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
+    private var retainedSelf: Unmanaged<CGEventHotkeyManager>?
     private var modifierPhysicallyDown = false
     private var keyHeld = false
     private var holdConfirmed = false
     private var holdPendingWork: DispatchWorkItem?
     private var lastShortReleaseTime: TimeInterval = 0
-
-    private static var instances: [Unmanaged<CGEventHotkeyManager>] = []
 
     private static let holdThreshold: TimeInterval = 0.22
     private static let doubleTapWindow: TimeInterval = 0.55
@@ -32,29 +31,39 @@ final class CGEventHotkeyManager {
         self.activationMode = activationMode
     }
 
-    func start(onKeyDown: @escaping () -> Void, onKeyUp: @escaping () -> Void) {
+    @discardableResult
+    func start(onKeyDown: @escaping () -> Void, onKeyUp: @escaping () -> Void) -> Bool {
+        stop()
         self.onKeyDown = onKeyDown
         self.onKeyUp = onKeyUp
 
-        Permissions.ensureInputMonitoring()
+        guard CGPreflightListenEventAccess() else {
+            fputs(
+                "CGEventHotkeyManager: Input Monitoring is not granted\n",
+                stderr
+            )
+            return false
+        }
 
         let mask = (1 << CGEventType.keyDown.rawValue)
             | (1 << CGEventType.keyUp.rawValue)
             | (1 << CGEventType.flagsChanged.rawValue)
 
         let selfPtr = Unmanaged.passRetained(self)
-        CGEventHotkeyManager.instances.append(selfPtr)
+        retainedSelf = selfPtr
 
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
-            options: .defaultTap,
+            options: .listenOnly,
             eventsOfInterest: CGEventMask(mask),
             callback: CGEventHotkeyManager.eventCallback,
             userInfo: selfPtr.toOpaque()
         ) else {
             fputs("CGEventHotkeyManager: failed to create event tap — grant Input Monitoring\n", stderr)
-            return
+            retainedSelf?.release()
+            retainedSelf = nil
+            return false
         }
 
         eventTap = tap
@@ -63,6 +72,7 @@ final class CGEventHotkeyManager {
             CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         }
         CGEvent.tapEnable(tap: tap, enable: true)
+        return true
     }
 
     func resetLockState() {
@@ -81,6 +91,8 @@ final class CGEventHotkeyManager {
         }
         runLoopSource = nil
         eventTap = nil
+        retainedSelf?.release()
+        retainedSelf = nil
         modifierPhysicallyDown = false
         keyHeld = false
         holdConfirmed = false

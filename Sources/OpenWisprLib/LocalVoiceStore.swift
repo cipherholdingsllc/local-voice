@@ -88,6 +88,8 @@ public struct LocalVoiceRuntimeSnapshot: Equatable, Sendable {
     public var whisperReady: Bool
     public var accessibilityReady: Bool
     public var microphoneReady: Bool
+    public var inputMonitoringReady: Bool
+    public var hotkeyReady: Bool
 
     public static let preparing = LocalVoiceRuntimeSnapshot(
         state: .preparing,
@@ -98,7 +100,9 @@ public struct LocalVoiceRuntimeSnapshot: Equatable, Sendable {
         privacyVerified: false,
         whisperReady: Transcriber.findWhisperBinary() != nil,
         accessibilityReady: AXIsProcessTrusted(),
-        microphoneReady: AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        microphoneReady: AVCaptureDevice.authorizationStatus(for: .audio) == .authorized,
+        inputMonitoringReady: CGPreflightListenEventAccess(),
+        hotkeyReady: false
     )
 }
 
@@ -299,7 +303,9 @@ public final class LocalVoiceStore: ObservableObject {
             privacyVerified: true,
             whisperReady: true,
             accessibilityReady: true,
-            microphoneReady: true
+            microphoneReady: true,
+            inputMonitoringReady: true,
+            hotkeyReady: true
         )
         return LocalVoiceStore(
             storageURL: nil,

@@ -3,7 +3,8 @@ set -euo pipefail
 
 BINARY="${1:-.build/release/local-voice}"
 APP_DIR="${2:-Local Voice.app}"
-VERSION="${3:-0.52.0}"
+VERSION="${3:-0.53.0}"
+CODESIGN_IDENTITY="${LOCAL_VOICE_CODESIGN_IDENTITY:--}"
 
 rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS"
@@ -47,6 +48,10 @@ cat > "$APP_DIR/Contents/Info.plist" << PLIST
 </plist>
 PLIST
 
-codesign --force --sign - --identifier com.cipherholdings.localvoice "$APP_DIR"
+codesign \
+    --force \
+    --sign "$CODESIGN_IDENTITY" \
+    --identifier com.cipherholdings.localvoice \
+    "$APP_DIR"
 
-echo "Built $APP_DIR"
+echo "Built $APP_DIR (signing identity: $CODESIGN_IDENTITY)"

@@ -23,8 +23,10 @@ class StatusBarController: NSObject {
     var onShowLatency: (() -> Void)?
     var onToggleRawPolished: (() -> Void)?
     var onOpenDashboard: (() -> Void)?
+    var onRepairPermissions: (() -> Void)?
     var sttEngineName: String?
     var privacyStatus: String?
+    var permissionDetail = "Permissions required"
 
     enum State {
         case idle
@@ -136,17 +138,21 @@ class StatusBarController: NSObject {
             case .recording: stateLabel = "Recording..."
             case .transcribing: stateLabel = "Transcribing..."
             case .downloading: stateLabel = "Downloading model..."
-            case .waitingForPermission: stateLabel = "Waiting for Accessibility permission..."
+            case .waitingForPermission: stateLabel = permissionDetail
             case .copiedToClipboard: stateLabel = "Copied to clipboard"
             case .error(let message): stateLabel = "Error: \(message)"
             }
         }
         if case .waitingForPermission = state {
-            let target = MenuItemTarget {
-                Permissions.openAccessibilitySettings()
+            let target = MenuItemTarget { [weak self] in
+                self?.onRepairPermissions?()
             }
             menuItemTargets.append(target)
-            let stateItem = NSMenuItem(title: "Grant Accessibility Permission...", action: #selector(MenuItemTarget.invoke), keyEquivalent: "")
+            let stateItem = NSMenuItem(
+                title: "Repair Permissions…",
+                action: #selector(MenuItemTarget.invoke),
+                keyEquivalent: ""
+            )
             stateItem.target = target
             menu.addItem(stateItem)
             stateMenuItem = stateItem

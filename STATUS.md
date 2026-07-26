@@ -8,11 +8,14 @@ Verified snapshot: 2026-07-25
 | macOS local speech runtime | Implemented | Persistent Whisper server, Parakeet routing, fallback, latency telemetry |
 | macOS product features | Implemented | History, file workspace, app modes, dictionary, model controls, privacy, settings |
 | macOS file transcription | Passing | Local audio/video queue, timestamped 30-second chunks, cancellation, bounded retention, and TXT/MD/JSON/SRT/VTT exports |
-| macOS automated checks | Passing | 140 Swift tests, including file normalization/export, routing failover, canonical voice contracts, bounded subprocesses, benchmark math, cache migration, and live model URL availability |
-| macOS release artifact | Passing | Installed v0.52.0, strict local code-signature verification, installed/artifact SHA-256 match |
+| macOS Fn hotkey | Passing | Installed v0.53.0 stays alive after a normal app open; the microphone-free `local-voice-hotkey-diagnostic.v1` probe observed exactly one Fn down and one Fn up through the real event tap |
+| macOS permission recovery | Passing | Upgrades no longer reset Accessibility, startup no longer blocks silently, Input Monitoring/Accessibility/Microphone are reported separately, and permission changes rebuild the hotkey monitor without restart |
+| macOS automated checks | Passing | 148 Swift tests, including app-launch resolution, permission readiness, diagnostic receipt stability, file normalization/export, routing failover, canonical voice contracts, bounded subprocesses, benchmark math, cache migration, and live model URL availability |
+| macOS release artifact | Passing | Installed v0.53.0, strict local code-signature verification, installed/artifact SHA-256 match (`483eef68dd4400d6899265904a61c5bc9be2431b474c78c4425125fde4124005`) |
 | macOS shared contract | Passing | Installed runtime pair passes 4 schemas, 6 profiles, 8 fixtures, and 9 negative gates |
-| macOS synthetic performance gate | Passing | Installed v0.52.0 Parakeet: 110.9 ms p95 / 6.25% WER; base Whisper: 58.6 ms p95 / 9.38% WER; large turbo baseline: 715 ms p95 / 7.81% WER |
+| macOS synthetic performance gate | Passing | Installed v0.53.0 Parakeet: 123.3 ms p95 / 6.25% WER; base Whisper: 59.3 ms p95 / 9.38% WER; large turbo baseline: 715 ms p95 / 7.81% WER |
 | macOS OS-enforced external-egress gate | Passing | Packaged Parakeet, private-loopback Whisper, and timestamped file transcription pass while external outbound IP is denied |
+| macOS Launch at Login | Implemented, operator-controlled | Native Service Management toggle is present in Settings; it is off by default and was not enabled during verification |
 | iPhone app | Implemented, simulator and arm64 build verified | Native UI, branded app icon, Apple on-device Speech path |
 | iPhone keyboard | Implemented, simulator-verified | Inserts the most recent App Group transcript; no microphone claim |
 | Personal Team path | Prepared | Explicit installer disables App Groups and requires caller-supplied team/device IDs |
@@ -29,6 +32,8 @@ Verified snapshot: 2026-07-25
    OS-enforced process-tree external-egress gate passes; the in-app self-test
    separately proves the actual local route.
 6. Complete product signing, release identity, privacy copy, and the selected distribution path.
+7. Select a stable macOS Apple signing identity for release upgrades; local
+   development bundles remain ad-hoc signed unless the operator supplies one.
 
 ## Current product boundary
 

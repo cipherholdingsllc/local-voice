@@ -20,6 +20,7 @@ func printUsage() {
         local-voice set-language <code> Set the language (e.g. en, fr, auto)
         local-voice download-model [size] Download a Whisper model
         local-voice benchmark [engine] [model] Run the local synthetic quality gate
+        local-voice hotkey-diagnose      Test the real Fn event tap without recording
         local-voice contract-fixture    Emit a canonical request/response pair
         local-voice transcribe-file <path> [txt|md|json|srt|vtt]
                                        Transcribe and export a local audio/video file
@@ -152,6 +153,11 @@ func cmdStatus() {
     print("Language:    \(langName) (\(config.language))")
     let toggleMode = config.toggleMode?.value ?? false
     print("Toggle:      \(toggleMode ? "on (press to start/stop)" : "off (hold to talk)")")
+    let permissions = Permissions.snapshot()
+    print("Microphone:  \(permissions.microphone ? "granted" : "required")")
+    print("Accessibility: \(permissions.accessibility ? "granted" : "required")")
+    print("Input monitor: \(permissions.inputMonitoring ? "granted" : "required")")
+    print("Launch login: \(LaunchAtLoginManager.statusSummary)")
 }
 
 func cmdBenchmark(engine: String?, model: String?) {
@@ -195,6 +201,24 @@ func cmdContractFixture() {
         print(try LocalVoiceContract.samplePair().jsonString())
     } catch {
         print("Contract fixture failed: \(error.localizedDescription)")
+        exit(1)
+    }
+}
+
+func cmdHotkeyDiagnose() {
+    _ = NSApplication.shared
+    let report = HotkeyDiagnostic.runFnProbe()
+    do {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(report)
+        print(String(data: data, encoding: .utf8) ?? "{}")
+        if !report.passed { exit(2) }
+    } catch {
+        fputs(
+            "Hotkey diagnostic failed: \(error.localizedDescription)\n",
+            stderr
+        )
         exit(1)
     }
 }
@@ -250,10 +274,10 @@ func cmdTranscribeFile(path: String?, formatName: String?) {
 
 let args = CommandLine.arguments
 let rawCommand = args.count > 1 ? args[1] : nil
-let command: String? = {
-    if let r = rawCommand, r.hasPrefix("-psn_") { return "start" }
-    return rawCommand
-}()
+let command = LocalVoiceCommandResolver.resolve(
+    rawCommand: rawCommand,
+    executablePath: args[0]
+)
 
 switch command {
 case "start":
@@ -292,6 +316,8 @@ case "benchmark":
         engine: args.count > 2 ? args[2] : nil,
         model: args.count > 3 ? args[3] : nil
     )
+case "hotkey-diagnose":
+    cmdHotkeyDiagnose()
 case "contract-fixture":
     cmdContractFixture()
 case "transcribe-file":

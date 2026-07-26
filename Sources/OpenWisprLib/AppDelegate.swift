@@ -22,6 +22,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     private var captureModeName = "Default"
     private var captureRequestID = UUID()
     private var captureProfileID = VoiceContractProfileID.generalDefault
+    private var permissionTimer: Timer?
+    private var lastPermissionSnapshot: LocalVoicePermissionSnapshot?
+    private var hotkeyMonitorReady = false
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         statusBar = StatusBarController()
@@ -76,6 +79,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             self.statusBar.onOpenDashboard = { [weak self] in
                 self?.showDashboard()
             }
+            self.statusBar.onRepairPermissions = { [weak self] in
+                self?.repairPermissions()
+            }
             self.statusBar.buildMenu()
         }
 
@@ -84,30 +90,11 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        if Permissions.didUpgrade() {
-            print("Accessibility: upgrade detected, resetting permissions...")
-            Permissions.resetAccessibility()
-            Thread.sleep(forTimeInterval: 1)
-        }
-
-        if !AXIsProcessTrusted() {
-            DispatchQueue.main.async {
-                self.statusBar.state = .waitingForPermission
-                self.statusBar.buildMenu()
-            }
-        }
-
         Permissions.ensureMicrophone()
 
         if !AXIsProcessTrusted() {
             print("Accessibility: not granted")
             Permissions.promptAccessibility()
-            Permissions.openAccessibilitySettings()
-            print("Waiting for Accessibility permission...")
-            while !AXIsProcessTrusted() {
-                Thread.sleep(forTimeInterval: 0.5)
-            }
-            print("Accessibility: granted")
         } else {
             print("Accessibility: granted")
         }
@@ -150,7 +137,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             sttRouter.warmup()
         }
 
-        Permissions.ensureInputMonitoring()
+        _ = Permissions.requestInputMonitoring(openSettings: false)
 
         let privacy = PrivacySelfTest.run(router: sttRouter)
         if config.showPrivacyBadge?.value ?? true {
@@ -162,11 +149,14 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 $0.whisperReady = Transcriber.findWhisperBinary() != nil
                 $0.accessibilityReady = AXIsProcessTrusted()
                 $0.microphoneReady = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+                $0.inputMonitoringReady = CGPreflightListenEventAccess()
+                $0.hotkeyReady = false
             }
         }
 
         DispatchQueue.main.async { [weak self] in
             self?.startListening()
+            self?.startPermissionMonitoring()
             OnboardingWizard.showIfNeeded()
         }
     }
@@ -212,9 +202,25 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                         try? Config.defaultConfig.save()
                     }
                     NSWorkspace.shared.open(Config.configFile)
+                },
+                repairPermissions: { [weak self] in
+                    self?.repairPermissions()
                 }
             )
         )
+    }
+
+    public func applicationDidBecomeActive(_ notification: Notification) {
+        guard isReady else { return }
+        refreshPermissionState()
+    }
+
+    public func applicationWillTerminate(_ notification: Notification) {
+        permissionTimer?.invalidate()
+        permissionTimer = nil
+        for manager in hotkeyManagers { manager.stop() }
+        hotkeyManagers = []
+        sttRouter?.shutdown(preserveParakeet: false)
     }
 
     private func toggleDashboardCapture() {
@@ -240,48 +246,54 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     private func startListening() {
         for m in hotkeyManagers { m.stop() }
         hotkeyManagers = []
+        hotkeyMonitorReady = false
+
+        let permissions = Permissions.snapshot()
         let globalToggle = config.toggleMode?.value ?? false
-        for hk in config.hotkeys {
-            let mode = hk.resolvedActivationMode(globalToggle: globalToggle)
-            let manager = CGEventHotkeyManager(
-                keyCode: hk.keyCode,
-                modifiers: hk.modifierFlags,
-                activationMode: mode
-            )
-            manager.onLockChanged = { [weak self] locked in
-                self?.isLockMode = locked
-                DispatchQueue.main.async {
-                    if locked {
-                        self?.pillOverlay.show(state: .locked)
+        if permissions.inputMonitoring {
+            for hk in config.hotkeys {
+                let mode = hk.resolvedActivationMode(globalToggle: globalToggle)
+                let manager = CGEventHotkeyManager(
+                    keyCode: hk.keyCode,
+                    modifiers: hk.modifierFlags,
+                    activationMode: mode
+                )
+                manager.onLockChanged = { [weak self] locked in
+                    self?.isLockMode = locked
+                    DispatchQueue.main.async {
+                        if locked {
+                            self?.pillOverlay.show(state: .locked)
+                        }
                     }
                 }
-            }
-            manager.start(
-                onKeyDown: { [weak self] in
-                    self?.handleKeyDown()
-                },
-                onKeyUp: { [weak self] in
-                    self?.handleKeyUp()
+                let started = manager.start(
+                    onKeyDown: { [weak self] in
+                        self?.handleKeyDown()
+                    },
+                    onKeyUp: { [weak self] in
+                        self?.handleKeyUp()
+                    }
+                )
+                if started {
+                    hotkeyManagers.append(manager)
                 }
-            )
-            hotkeyManagers.append(manager)
+            }
         }
+        hotkeyMonitorReady =
+            !config.hotkeys.isEmpty
+            && hotkeyManagers.count == config.hotkeys.count
 
         isReady = true
-        statusBar.state = .idle
         statusBar.sttEngineName = sttRouter.activeEngineName()
-        statusBar.buildMenu()
         let languageName = Config.supportedLanguages
             .first(where: { $0.code == config.language })?.name ?? config.language
         LocalVoiceStore.shared.updateRuntime {
-            $0.state = .ready
             $0.engineName = self.sttRouter.activeEngineName()
             $0.modelName = self.config.modelSize
             $0.languageName = languageName
-            $0.statusDetail = "Hold \(self.config.hotkeySummary()) to dictate anywhere"
             $0.whisperReady = Transcriber.findWhisperBinary() != nil
-            $0.accessibilityReady = AXIsProcessTrusted()
         }
+        applyPermissionSnapshot(permissions)
 
         let hotkeyDesc = config.hotkeySummary()
         print("Local Voice v\(OpenWispr.version)")
@@ -291,7 +303,90 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         print("Hotkey: \(hotkeyDesc)")
         print("STT: \(sttRouter.activeEngineName())")
         print("Model: \(config.modelSize)")
-        print("Ready.")
+        if hotkeyMonitorReady {
+            print("Hotkey monitor: active")
+        } else {
+            print("Hotkey monitor: unavailable")
+        }
+        print(permissions.dictationReady && hotkeyMonitorReady ? "Ready." : "Needs permission.")
+    }
+
+    private func startPermissionMonitoring() {
+        permissionTimer?.invalidate()
+        permissionTimer = Timer.scheduledTimer(
+            withTimeInterval: 1,
+            repeats: true
+        ) { [weak self] _ in
+            self?.refreshPermissionState()
+        }
+        if let permissionTimer {
+            RunLoop.main.add(permissionTimer, forMode: .common)
+        }
+        refreshPermissionState()
+    }
+
+    private func refreshPermissionState() {
+        guard isReady else { return }
+        let snapshot = Permissions.snapshot()
+        if snapshot.inputMonitoring != lastPermissionSnapshot?.inputMonitoring {
+            startListening()
+            return
+        }
+        if snapshot != lastPermissionSnapshot {
+            applyPermissionSnapshot(snapshot)
+        }
+    }
+
+    private func applyPermissionSnapshot(
+        _ snapshot: LocalVoicePermissionSnapshot
+    ) {
+        lastPermissionSnapshot = snapshot
+        LocalVoiceStore.shared.updateRuntime {
+            $0.accessibilityReady = snapshot.accessibility
+            $0.microphoneReady = snapshot.microphone
+            $0.inputMonitoringReady = snapshot.inputMonitoring
+            $0.hotkeyReady = self.hotkeyMonitorReady
+            if snapshot.dictationReady && self.hotkeyMonitorReady {
+                $0.state = .ready
+                $0.statusDetail =
+                    "Hold \(self.config.hotkeySummary()) to dictate anywhere"
+            } else {
+                $0.state = .error
+                $0.statusDetail =
+                    snapshot.blockingSummary
+                    ?? "The fn hotkey monitor could not start"
+            }
+        }
+
+        guard !isPressed else { return }
+        if snapshot.dictationReady && hotkeyMonitorReady {
+            statusBar.state = .idle
+        } else {
+            statusBar.permissionDetail =
+                snapshot.blockingSummary
+                ?? "The fn hotkey monitor could not start"
+            statusBar.state = .waitingForPermission
+        }
+        statusBar.buildMenu()
+    }
+
+    func repairPermissions() {
+        let snapshot = Permissions.snapshot()
+        if !snapshot.inputMonitoring {
+            _ = Permissions.requestInputMonitoring(openSettings: true)
+        } else if !snapshot.microphone {
+            Permissions.ensureMicrophone()
+            if AVCaptureDevice.authorizationStatus(for: .audio) != .authorized {
+                Permissions.openMicrophoneSettings()
+            }
+        } else if !snapshot.accessibility {
+            Permissions.promptAccessibility()
+            Permissions.openAccessibilitySettings()
+        } else {
+            startListening()
+        }
+        showDashboard()
+        refreshPermissionState()
     }
 
     public func reloadConfig() {
@@ -335,30 +430,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         )
         inserter = TextInserter()
 
-        for m in hotkeyManagers { m.stop() }
-        hotkeyManagers = []
-        let globalToggle = config.toggleMode?.value ?? false
-        for hk in config.hotkeys {
-            let mode = hk.resolvedActivationMode(globalToggle: globalToggle)
-            let manager = CGEventHotkeyManager(
-                keyCode: hk.keyCode,
-                modifiers: hk.modifierFlags,
-                activationMode: mode
-            )
-            manager.onLockChanged = { [weak self] locked in
-                self?.isLockMode = locked
-                DispatchQueue.main.async {
-                    if locked {
-                        self?.pillOverlay.show(state: .locked)
-                    }
-                }
-            }
-            manager.start(
-                onKeyDown: { [weak self] in self?.handleKeyDown() },
-                onKeyUp: { [weak self] in self?.handleKeyUp() }
-            )
-            hotkeyManagers.append(manager)
-        }
+        startListening()
 
         if !wasDownloading && !Transcriber.modelExists(modelSize: config.modelSize) {
             statusBar.state = .downloading

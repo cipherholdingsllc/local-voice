@@ -11,7 +11,8 @@ Private, system-wide dictation for macOS with a native iPhone companion. Local V
 ## What is implemented
 
 - Native SwiftUI command center with History, Files, Modes, Dictionary, Models, Privacy, and Settings
-- Menu-bar push-to-talk with configurable global hotkeys
+- Menu-bar push-to-talk with configurable global hotkeys, live Fn readiness,
+  guided permission repair, and an optional Launch at Login control
 - Persistent `whisper-server` pool on a private ephemeral loopback port to
   avoid model reloads between dictations
 - Optional Parakeet MLX English fast path with Whisper fallback
@@ -43,12 +44,27 @@ swift build -c release --product local-voice
 .build/release/local-voice start
 ```
 
-Grant Microphone, Accessibility, and Input Monitoring when macOS asks. The default hotkey is Globe/Fn.
+Grant Microphone, Accessibility, and Input Monitoring when macOS asks. The
+default hotkey is Globe/Fn. Local Voice never resets these permissions during
+an upgrade. If macOS permission state changes while the app is open, the
+hotkey monitor recovers automatically without a restart.
+
+Open the installed `.app` once to start the menu-bar service. Settings includes
+an optional **Launch at login** control so the Fn hotkey is ready after future
+sign-ins. The Command Center reports Microphone, Fn hotkey, and text-insertion
+readiness separately instead of claiming the app is ready when capture is
+unavailable.
+
+Local development bundles use ad-hoc signing by default. Release builds should
+set `LOCAL_VOICE_CODESIGN_IDENTITY` to an operator-selected stable Apple signing
+identity so macOS can preserve its trust decision across binary updates. The
+build never searches the Keychain or guesses a signing identity.
 
 Useful commands:
 
 ```bash
 .build/release/local-voice status
+.build/release/local-voice hotkey-diagnose
 .build/release/local-voice set-hotkey rightoption
 .build/release/local-voice set-language auto
 .build/release/local-voice set-model large-v3-turbo-q5_0

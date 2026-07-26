@@ -35,7 +35,7 @@ final class OnboardingWindowController: NSWindowController {
             Permissions.openAccessibilitySettings()
         }),
         ("Input Monitoring", "Required for fn/globe and custom hotkeys (CGEventTap).", {
-            Permissions.ensureInputMonitoring()
+            Permissions.requestInputMonitoring()
         }),
         ("Ready", "Hold your hotkey (default: fn/globe), speak, release.\n\nOptional: run `ollama serve` for AI cleanup.", {}),
     ]

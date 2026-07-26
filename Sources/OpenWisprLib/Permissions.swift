@@ -3,7 +3,52 @@ import AVFoundation
 import ApplicationServices
 import Foundation
 
-struct Permissions {
+public struct LocalVoicePermissionSnapshot: Equatable, Sendable {
+    public let microphone: Bool
+    public let accessibility: Bool
+    public let inputMonitoring: Bool
+
+    public init(
+        microphone: Bool,
+        accessibility: Bool,
+        inputMonitoring: Bool
+    ) {
+        self.microphone = microphone
+        self.accessibility = accessibility
+        self.inputMonitoring = inputMonitoring
+    }
+
+    public var hotkeyReady: Bool {
+        inputMonitoring
+    }
+
+    public var dictationReady: Bool {
+        microphone && accessibility && inputMonitoring
+    }
+
+    public var blockingSummary: String? {
+        if !inputMonitoring {
+            return "Input Monitoring is required for the fn hotkey"
+        }
+        if !microphone {
+            return "Microphone access is required to dictate"
+        }
+        if !accessibility {
+            return "Accessibility is required to insert text"
+        }
+        return nil
+    }
+}
+
+public struct Permissions {
+    public static func snapshot() -> LocalVoicePermissionSnapshot {
+        LocalVoicePermissionSnapshot(
+            microphone: AVCaptureDevice.authorizationStatus(for: .audio) == .authorized,
+            accessibility: AXIsProcessTrusted(),
+            inputMonitoring: CGPreflightListenEventAccess()
+        )
+    }
+
     static func ensureMicrophone() {
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
         case .authorized:
@@ -26,54 +71,37 @@ struct Permissions {
         AXIsProcessTrustedWithOptions(options)
     }
 
-    static func resetAccessibility() {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
-        process.arguments = ["reset", "Accessibility", "com.cipherholdings.localvoice"]
-        try? process.run()
-        process.waitUntilExit()
-    }
-
-    static func didUpgrade() -> Bool {
-        let configDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/local-voice")
-        let versionFile = configDir.appendingPathComponent(".last-version")
-        let current = OpenWispr.version
-        let raw = (try? String(contentsOf: versionFile, encoding: .utf8))?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let previous = raw.isEmpty ? nil : raw
-
-        try? FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
-
-        if previous == nil {
-            try? current.write(to: versionFile, atomically: true, encoding: .utf8)
-            return false
-        }
-        if previous == current {
-            return false
-        }
-        try? current.write(to: versionFile, atomically: true, encoding: .utf8)
-        return true
-    }
-
     static func openAccessibilitySettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
             NSWorkspace.shared.open(url)
         }
     }
 
-    static func ensureInputMonitoring() {
+    static func openInputMonitoringSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    static func openMicrophoneSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    @discardableResult
+    static func requestInputMonitoring(openSettings: Bool = true) -> Bool {
         if CGPreflightListenEventAccess() {
             print("Input Monitoring: granted")
-            return
+            return true
         }
         print("Input Monitoring: requesting...")
         CGRequestListenEventAccess()
-        if !CGPreflightListenEventAccess() {
+        let granted = CGPreflightListenEventAccess()
+        if !granted {
             print("Input Monitoring: denied — grant in System Settings → Privacy → Input Monitoring")
-            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
-                NSWorkspace.shared.open(url)
-            }
+            if openSettings { openInputMonitoringSettings() }
         }
+        return granted
     }
 }

@@ -15,7 +15,8 @@ Local Voice is a desktop voice workspace and push-to-talk dictation app. Speech 
 
 ## Product surfaces
 
-- Native control-room GUI with engine, model, route, permissions, and readiness state.
+- Native control-room GUI with engine, model, route, separate microphone/Fn/text-insertion readiness, guided permission repair, and optional Launch at Login.
+- Microphone-free `hotkey-diagnose` probe for the real Fn event tap.
 - Push-to-talk system-wide cursor insertion on macOS.
 - Automatic Parakeet-to-persistent-Whisper routing with circuit-breaker fallbacks.
 - App-specific modes, custom dictionary, local transcript history, and retention controls.

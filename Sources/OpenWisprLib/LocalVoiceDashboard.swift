@@ -7,19 +7,22 @@ public struct LocalVoiceDashboardActions {
     public var runPrivacyTest: () -> Void
     public var reloadConfiguration: () -> Void
     public var openConfiguration: () -> Void
+    public var repairPermissions: () -> Void
 
     public init(
         toggleRecording: @escaping () -> Void = {},
         copyLast: @escaping () -> Void = {},
         runPrivacyTest: @escaping () -> Void = {},
         reloadConfiguration: @escaping () -> Void = {},
-        openConfiguration: @escaping () -> Void = {}
+        openConfiguration: @escaping () -> Void = {},
+        repairPermissions: @escaping () -> Void = {}
     ) {
         self.toggleRecording = toggleRecording
         self.copyLast = copyLast
         self.runPrivacyTest = runPrivacyTest
         self.reloadConfiguration = reloadConfiguration
         self.openConfiguration = openConfiguration
+        self.repairPermissions = repairPermissions
     }
 }
 
@@ -227,7 +230,7 @@ private struct HomeView: View {
 
                 HStack(alignment: .top, spacing: 16) {
                     ReadyCard(store: store, actions: actions)
-                    RuntimeCard(store: store)
+                    RuntimeCard(store: store, actions: actions)
                         .frame(width: 300)
                 }
 
@@ -320,7 +323,7 @@ private struct ReadyCard: View {
                 .buttonStyle(.plain)
 
                 VStack(alignment: .leading, spacing: 7) {
-                    Text(store.runtime.state == .listening ? "Listening now" : "Hold fn to speak")
+                    Text(readyTitle)
                         .font(.system(size: 25, weight: .semibold, design: .rounded))
                         .foregroundColor(LocalVoiceTheme.primary)
                     Text(store.runtime.statusDetail)
@@ -360,10 +363,21 @@ private struct ReadyCard: View {
         case .error: return LocalVoiceTheme.danger
         }
     }
+
+    private var readyTitle: String {
+        if store.runtime.state == .listening {
+            return "Listening now"
+        }
+        if !store.runtime.hotkeyReady {
+            return "Fn hotkey needs attention"
+        }
+        return "Hold fn to speak"
+    }
 }
 
 private struct RuntimeCard: View {
     @ObservedObject var store: LocalVoiceStore
+    let actions: LocalVoiceDashboardActions
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -381,6 +395,11 @@ private struct RuntimeCard: View {
                 title: "Microphone",
                 detail: store.runtime.microphoneReady ? "Permission granted" : "Permission required",
                 ready: store.runtime.microphoneReady
+            )
+            HealthRow(
+                title: "Fn hotkey",
+                detail: hotkeyDetail,
+                ready: store.runtime.hotkeyReady
             )
             HealthRow(
                 title: "Text insertion",
@@ -402,6 +421,16 @@ private struct RuntimeCard: View {
                     .font(.system(size: 11, weight: .medium))
             }
             .foregroundColor(LocalVoiceTheme.muted)
+
+            if !store.runtime.hotkeyReady
+                || !store.runtime.accessibilityReady
+                || !store.runtime.microphoneReady {
+                Button(
+                    "Repair permissions",
+                    action: actions.repairPermissions
+                )
+                .buttonStyle(AccentButtonStyle())
+            }
         }
         .padding(22)
         .background(
@@ -412,6 +441,16 @@ private struct RuntimeCard: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(LocalVoiceTheme.line, lineWidth: 1)
         )
+    }
+
+    private var hotkeyDetail: String {
+        if store.runtime.hotkeyReady {
+            return "Listening for fn"
+        }
+        if !store.runtime.inputMonitoringReady {
+            return "Input Monitoring required"
+        }
+        return "Monitor unavailable"
     }
 }
 
@@ -687,6 +726,8 @@ private struct PrivacyView: View {
 private struct SettingsView: View {
     let actions: LocalVoiceDashboardActions
     @State private var config = Config.load()
+    @State private var launchAtLogin = LaunchAtLoginManager.isEnabled
+    @State private var launchAtLoginError: String?
 
     var body: some View {
         ScrollView {
@@ -698,6 +739,15 @@ private struct SettingsView: View {
                 )
 
                 VStack(spacing: 0) {
+                    SettingToggle(
+                        title: "Launch at login",
+                        detail: "Keep the fn hotkey available after you sign in",
+                        value: Binding(
+                            get: { launchAtLogin },
+                            set: { setLaunchAtLogin($0) }
+                        )
+                    )
+                    SettingDivider()
                     SettingToggle(
                         title: "Keep model warm",
                         detail: "Avoid model load time between dictations",
@@ -736,6 +786,18 @@ private struct SettingsView: View {
                 }
                 .cardStyle()
 
+                if let launchAtLoginError {
+                    HStack(spacing: 9) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(LocalVoiceTheme.warning)
+                        Text(launchAtLoginError)
+                            .font(.system(size: 12))
+                            .foregroundColor(LocalVoiceTheme.secondary)
+                    }
+                    .padding(14)
+                    .cardStyle()
+                }
+
                 VStack(alignment: .leading, spacing: 14) {
                     SectionHeader(title: "Current shortcut", detail: config.hotkeySummary())
                     Text("Hold to speak. Double-tap fn to lock a longer recording, then tap again to finish.")
@@ -757,6 +819,20 @@ private struct SettingsView: View {
         transform(&config)
         try? config.save()
         actions.reloadConfiguration()
+    }
+
+    private func setLaunchAtLogin(_ enabled: Bool) {
+        do {
+            try LaunchAtLoginManager.setEnabled(enabled)
+            launchAtLogin = LaunchAtLoginManager.isEnabled
+            launchAtLoginError = LaunchAtLoginManager.statusSummary == "requires approval"
+                ? "Approve Local Voice in System Settings → General → Login Items."
+                : nil
+        } catch {
+            launchAtLogin = LaunchAtLoginManager.isEnabled
+            launchAtLoginError =
+                "Launch at login could not be updated: \(error.localizedDescription)"
+        }
     }
 }
 
