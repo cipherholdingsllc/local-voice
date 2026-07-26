@@ -10,7 +10,7 @@ Private, system-wide dictation for macOS with a native iPhone companion. Local V
 
 ## What is implemented
 
-- Native SwiftUI command center with History, Modes, Dictionary, Models, Privacy, and Settings
+- Native SwiftUI command center with History, Files, Modes, Dictionary, Models, Privacy, and Settings
 - Menu-bar push-to-talk with configurable global hotkeys
 - Persistent `whisper-server` pool on a private ephemeral loopback port to
   avoid model reloads between dictations
@@ -20,6 +20,9 @@ Private, system-wide dictation for macOS with a native iPhone companion. Local V
 - Local-only transcript history with explicit retention controls
 - Canonical `voice-request.v1` / `voice-response.v1` receipts on default-private
   history records, with one-click JSON copy from the History interface
+- Local audio/video file queue with drag-and-drop, bounded four-hour
+  processing, timestamped chunks, cancellation, and TXT, Markdown, JSON, SRT,
+  and WebVTT exports
 - Latency breakdown, repeatable local benchmark, and truthful local-route
   privacy self-test
 - First-run permissions and model onboarding
@@ -51,6 +54,7 @@ Useful commands:
 .build/release/local-voice set-model large-v3-turbo-q5_0
 .build/release/local-voice benchmark auto base.en
 .build/release/local-voice contract-fixture
+.build/release/local-voice transcribe-file recording.m4a json
 ```
 
 Configuration lives at `~/.config/local-voice/config.json`. On first launch, Local Voice migrates a legacy `~/.config/open-wispr/config.json` if present.
@@ -69,6 +73,21 @@ Local Voice fails closed if asked to emit the isolated `poker.exploit` profile.
 When the operator explicitly enables retained audio, the v1 receipt is
 intentionally omitted because that contract version requires
 `audioRetained: false`; the app never emits a privacy claim it cannot support.
+
+### File transcription
+
+The Files workspace accepts WAV, AIFF, CAF, MP3, M4A, AAC, FLAC, OGG, WebM,
+MP4, MOV, and M4V recordings. FFmpeg converts the selected source into
+temporary mono 16 kHz PCM-16 chunks, the existing warm local engine router
+transcribes them, and the temporary audio is deleted when processing finishes
+or is cancelled. Local Voice does not copy or persist the source path.
+
+Jobs are processed sequentially, bounded to four hours and 8 GB, and retained
+under the same local transcript-history preference and retention period as
+dictation history. Completed transcripts export as plain text, Markdown, a
+machine-readable `local-voice-file-transcript.v1` receipt, SRT, or WebVTT.
+Every non-empty timestamped chunk includes its canonical shared voice
+request/response receipt.
 
 ### Optional Parakeet fast path
 

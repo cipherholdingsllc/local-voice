@@ -6,12 +6,13 @@ Verified snapshot: 2026-07-25
 |---|---|---|
 | macOS command center | Implemented | Native SwiftUI window rendered from the real app |
 | macOS local speech runtime | Implemented | Persistent Whisper server, Parakeet routing, fallback, latency telemetry |
-| macOS product features | Implemented | History, app modes, dictionary, model controls, privacy, settings |
-| macOS automated checks | Passing | 130 Swift tests, including routing failover, canonical voice contracts, bounded benchmark subprocesses, benchmark math, cache migration, and live model URL availability |
-| macOS release artifact | Passing | Installed v0.51.0, strict local code-signature verification, installed/artifact SHA-256 match |
+| macOS product features | Implemented | History, file workspace, app modes, dictionary, model controls, privacy, settings |
+| macOS file transcription | Passing | Local audio/video queue, timestamped 30-second chunks, cancellation, bounded retention, and TXT/MD/JSON/SRT/VTT exports |
+| macOS automated checks | Passing | 140 Swift tests, including file normalization/export, routing failover, canonical voice contracts, bounded subprocesses, benchmark math, cache migration, and live model URL availability |
+| macOS release artifact | Passing | Installed v0.52.0, strict local code-signature verification, installed/artifact SHA-256 match |
 | macOS shared contract | Passing | Installed runtime pair passes 4 schemas, 6 profiles, 8 fixtures, and 9 negative gates |
-| macOS synthetic performance gate | Passing | Installed v0.51.0 Parakeet: 157.0 ms p95 / 6.25% WER; base Whisper: 67.6 ms p95 / 9.38% WER; large turbo baseline: 715 ms p95 / 7.81% WER |
-| macOS OS-enforced external-egress gate | Passing | Packaged Parakeet and private-loopback Whisper both pass while external outbound IP is denied |
+| macOS synthetic performance gate | Passing | Installed v0.52.0 Parakeet: 110.9 ms p95 / 6.25% WER; base Whisper: 58.6 ms p95 / 9.38% WER; large turbo baseline: 715 ms p95 / 7.81% WER |
+| macOS OS-enforced external-egress gate | Passing | Packaged Parakeet, private-loopback Whisper, and timestamped file transcription pass while external outbound IP is denied |
 | iPhone app | Implemented, simulator and arm64 build verified | Native UI, branded app icon, Apple on-device Speech path |
 | iPhone keyboard | Implemented, simulator-verified | Inserts the most recent App Group transcript; no microphone claim |
 | Personal Team path | Prepared | Explicit installer disables App Groups and requires caller-supplied team/device IDs |

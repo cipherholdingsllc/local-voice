@@ -252,6 +252,33 @@ final class STTRouterTests: XCTestCase {
         XCTAssertEqual(cli.shutdownCount, 1)
     }
 
+    func testFileWorkerCanPreserveSharedParakeetOnShutdown() {
+        let parakeet = EngineStub(
+            name: "parakeet",
+            route: .localProcess
+        )
+        let whisper = EngineStub(
+            name: "whisper-server",
+            route: .localLoopback
+        )
+        let cli = EngineStub(
+            name: "whisper-cli",
+            route: .localProcess
+        )
+        let router = makeRouter(
+            preferred: .auto,
+            parakeet: parakeet,
+            whisper: whisper,
+            cli: cli
+        )
+
+        router.shutdown(preserveParakeet: true)
+
+        XCTAssertEqual(parakeet.shutdownCount, 0)
+        XCTAssertEqual(whisper.shutdownCount, 1)
+        XCTAssertEqual(cli.shutdownCount, 1)
+    }
+
     private func makeRouter(
         preferred: STTEngineKind,
         parakeet: EngineStub,

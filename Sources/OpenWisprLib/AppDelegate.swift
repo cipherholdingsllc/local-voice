@@ -320,6 +320,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         )
         let deviceChanged = recorder.preferredDeviceID != newDeviceID
         config = newConfig
+        let saveHistory =
+            config.saveTranscriptHistory?.value ?? true
+        LocalVoiceStore.shared.setPersistenceEnabled(saveHistory)
+        FileTranscriptionStore.shared.setPersistenceEnabled(saveHistory)
         recorder.preferredDeviceID = newDeviceID
         if deviceChanged {
             recorder.reload()

@@ -71,6 +71,26 @@ final class LocalVoiceStoreTests: XCTestCase {
         XCTAssertNotNil(reader.records.first?.contractJSON)
     }
 
+    func testPersistenceCanBeDisabledAtRuntime() {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "local-voice-history-toggle-\(UUID().uuidString)"
+            )
+        let file = directory.appendingPathComponent("history.json")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = LocalVoiceStore(
+            storageURL: file,
+            records: [],
+            persistenceEnabled: true
+        )
+
+        store.setPersistenceEnabled(false)
+        store.append(makeRecord(text: "Session only"))
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
+        XCTAssertEqual(store.records.first?.text, "Session only")
+    }
+
     func testMaximumRecordCountDropsOldest() {
         let store = LocalVoiceStore(
             storageURL: nil,

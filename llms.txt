@@ -20,6 +20,7 @@ Local Voice is a desktop voice workspace and push-to-talk dictation app. Speech 
 - Automatic Parakeet-to-persistent-Whisper routing with circuit-breaker fallbacks.
 - App-specific modes, custom dictionary, local transcript history, and retention controls.
 - Canonical v1 voice request/response receipts on default-private history records, with GUI JSON copy and a deterministic `contract-fixture` command.
+- Native private file-transcription workspace for bounded audio/video queues, timestamped chunks, cancellation, and TXT, Markdown, JSON, SRT, and WebVTT exports.
 - Repeatable command-line performance benchmark with a machine-readable JSON receipt.
 - Repeatable external-egress gate that preserves private loopback and emits a machine-readable receipt.
 - Native iPhone companion project and Personal Team installation script.
@@ -36,3 +37,8 @@ The Local Voice surface is limited to `general.*` contract profiles and cannot
 emit `poker.exploit`. The v1 receipt requires no retained audio, so explicitly
 enabling local audio retention suppresses that receipt rather than weakening
 the privacy assertion.
+
+File transcription uses FFmpeg only for temporary local normalization. It
+does not persist source paths or copied audio; job transcripts obey the same
+local history setting and retention policy as dictation. The CLI entry point
+is `local-voice transcribe-file <path> [txt|md|json|srt|vtt]`.

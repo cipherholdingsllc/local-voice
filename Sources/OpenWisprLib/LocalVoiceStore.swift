@@ -113,7 +113,7 @@ public final class LocalVoiceStore: ObservableObject {
     private let calendar: Calendar
     private let maximumRecords: Int
     private let retentionDays: Int
-    private let persistenceEnabled: Bool
+    private var persistenceEnabled: Bool
 
     public init(
         storageURL: URL? = Config.configDir.appendingPathComponent("history.json"),
@@ -216,6 +216,16 @@ public final class LocalVoiceStore: ObservableObject {
 
     public func replaceRecordsForTesting(_ records: [LocalVoiceRecord]) {
         self.records = records.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    public func setPersistenceEnabled(_ enabled: Bool) {
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in
+                self?.setPersistenceEnabled(enabled)
+            }
+            return
+        }
+        persistenceEnabled = enabled
     }
 
     private func pruneExpiredRecords() {

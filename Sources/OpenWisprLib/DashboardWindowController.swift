@@ -50,7 +50,17 @@ public final class DashboardWindowController: NSWindowController, NSWindowDelega
 
     public func showPreview() {
         previewMode = true
-        show(store: .preview())
+        guard let window else { return }
+        let dashboard = LocalVoiceDashboard(
+            store: .preview(),
+            actions: LocalVoiceDashboardActions(),
+            fileStore: .preview()
+        )
+        window.contentViewController = NSHostingController(rootView: dashboard)
+        NSApplication.shared.setActivationPolicy(.regular)
+        showWindow(nil)
+        window.makeKeyAndOrderFront(nil)
+        NSApplication.shared.activate(ignoringOtherApps: true)
     }
 
     public func windowWillClose(_ notification: Notification) {

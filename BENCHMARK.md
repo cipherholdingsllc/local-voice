@@ -26,10 +26,11 @@ The process-warmup figures were measured from fresh benchmark processes, but
 operating-system file caches may already have been warm. They are not
 post-reboot cold-start claims.
 
-The final installed, ad-hoc-signed v0.51.0 bundle passed the OS-enforced
-external-egress gate. Parakeet completed at 108.9 ms median / 157.0 ms p95 /
-6.25% WER, and persistent Whisper `base.en` completed at 60.9 ms median /
-67.6 ms p95 / 9.38% WER while external outbound IP connections were denied.
+The final installed, ad-hoc-signed v0.52.0 bundle passed the OS-enforced
+external-egress gate. Parakeet completed at 103.2 ms median / 110.9 ms p95 /
+6.25% WER, and persistent Whisper `base.en` completed at 52.3 ms median /
+58.6 ms p95 / 9.38% WER while external outbound IP connections were denied.
+The same v2 gate also passed the installed timestamped file-transcription path.
 See [NETWORK_ISOLATION.md](NETWORK_ISOLATION.md).
 
 ## Decision

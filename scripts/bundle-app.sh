@@ -3,7 +3,7 @@ set -euo pipefail
 
 BINARY="${1:-.build/release/local-voice}"
 APP_DIR="${2:-Local Voice.app}"
-VERSION="${3:-0.51.0}"
+VERSION="${3:-0.52.0}"
 
 rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS"

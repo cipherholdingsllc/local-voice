@@ -162,8 +162,10 @@ public final class STTRouter {
         activeEngine().isAvailable()
     }
 
-    public func shutdown() {
-        parakeet.shutdown()
+    public func shutdown(preserveParakeet: Bool = false) {
+        if !preserveParakeet {
+            parakeet.shutdown()
+        }
         whisper.shutdown()
         whisperFallback.shutdown()
     }

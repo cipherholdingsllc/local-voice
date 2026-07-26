@@ -21,6 +21,8 @@ func printUsage() {
         local-voice download-model [size] Download a Whisper model
         local-voice benchmark [engine] [model] Run the local synthetic quality gate
         local-voice contract-fixture    Emit a canonical request/response pair
+        local-voice transcribe-file <path> [txt|md|json|srt|vtt]
+                                       Transcribe and export a local audio/video file
         local-voice status              Show configuration and status
         local-voice --help              Show this help message
 
@@ -197,6 +199,55 @@ func cmdContractFixture() {
     }
 }
 
+func cmdTranscribeFile(path: String?, formatName: String?) {
+    guard let path, !path.isEmpty else {
+        fputs(
+            "Usage: local-voice transcribe-file <path> [txt|md|json|srt|vtt]\n",
+            stderr
+        )
+        exit(2)
+    }
+    let rawFormat = formatName?.lowercased() ?? "txt"
+    guard let format = FileTranscriptFormat(rawValue: rawFormat) else {
+        fputs(
+            "Unsupported export '\(rawFormat)'. Use txt, md, json, srt, or vtt.\n",
+            stderr
+        )
+        exit(2)
+    }
+    let expandedPath = (path as NSString).expandingTildeInPath
+    let url = URL(fileURLWithPath: expandedPath)
+        .standardizedFileURL
+    do {
+        let result = try LocalFileTranscriptionProcessor().process(
+            url: url,
+            progress: { _, _ in true }
+        )
+        let job = FileTranscriptionJob(
+            filename: url.lastPathComponent,
+            fileExtension: url.pathExtension.lowercased(),
+            status: .completed,
+            progress: 1,
+            durationMilliseconds: result.durationMilliseconds,
+            transcript: result.transcript,
+            engineSummary: result.engineSummary,
+            routeSummary: result.routeSummary,
+            segments: result.segments
+        )
+        let data = try FileTranscriptExporter.data(
+            job: job,
+            format: format
+        )
+        FileHandle.standardOutput.write(data)
+    } catch {
+        fputs(
+            "File transcription failed: \(error.localizedDescription)\n",
+            stderr
+        )
+        exit(1)
+    }
+}
+
 let args = CommandLine.arguments
 let rawCommand = args.count > 1 ? args[1] : nil
 let command: String? = {
@@ -243,6 +294,11 @@ case "benchmark":
     )
 case "contract-fixture":
     cmdContractFixture()
+case "transcribe-file":
+    cmdTranscribeFile(
+        path: args.count > 2 ? args[2] : nil,
+        formatName: args.count > 3 ? args[3] : nil
+    )
 case "status":
     cmdStatus()
 case "--help", "-h", "help":

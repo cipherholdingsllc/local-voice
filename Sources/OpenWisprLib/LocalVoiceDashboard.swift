@@ -25,12 +25,18 @@ public struct LocalVoiceDashboardActions {
 
 public struct LocalVoiceDashboard: View {
     @ObservedObject private var store: LocalVoiceStore
+    @ObservedObject private var fileStore: FileTranscriptionStore
     private let actions: LocalVoiceDashboardActions
     @State private var section: DashboardSection = .home
 
-    public init(store: LocalVoiceStore, actions: LocalVoiceDashboardActions) {
+    public init(
+        store: LocalVoiceStore,
+        actions: LocalVoiceDashboardActions,
+        fileStore: FileTranscriptionStore = .shared
+    ) {
         self.store = store
         self.actions = actions
+        self.fileStore = fileStore
     }
 
     public var body: some View {
@@ -116,6 +122,8 @@ public struct LocalVoiceDashboard: View {
             HomeView(store: store, actions: actions)
         case .history:
             HistoryView(store: store)
+        case .files:
+            FileTranscriptionView(store: fileStore)
         case .modes:
             ModesView()
         case .dictionary:
@@ -133,6 +141,7 @@ public struct LocalVoiceDashboard: View {
 private enum DashboardSection: String, CaseIterable, Identifiable {
     case home
     case history
+    case files
     case modes
     case dictionary
     case models
@@ -145,6 +154,7 @@ private enum DashboardSection: String, CaseIterable, Identifiable {
         switch self {
         case .home: return "Command Center"
         case .history: return "History"
+        case .files: return "Files"
         case .modes: return "Modes"
         case .dictionary: return "Dictionary"
         case .models: return "Models"
@@ -157,6 +167,7 @@ private enum DashboardSection: String, CaseIterable, Identifiable {
         switch self {
         case .home: return "square.grid.2x2"
         case .history: return "clock.arrow.circlepath"
+        case .files: return "doc.badge.waveform"
         case .modes: return "slider.horizontal.3"
         case .dictionary: return "text.book.closed"
         case .models: return "cpu"
@@ -660,6 +671,8 @@ private struct PrivacyView: View {
                         Divider().overlay(LocalVoiceTheme.line)
                         PrivacyRule(title: "Speech API", detail: "Loopback only", ready: true)
                         Divider().overlay(LocalVoiceTheme.line)
+                        PrivacyRule(title: "File preparation", detail: "Temporary audio deleted", ready: true)
+                        Divider().overlay(LocalVoiceTheme.line)
                         PrivacyRule(title: "Telemetry", detail: "None", ready: true)
                     }
                     .frame(width: 330)
@@ -705,7 +718,7 @@ private struct SettingsView: View {
                     SettingDivider()
                     SettingToggle(
                         title: "Save transcript history",
-                        detail: "Keep text locally; audio remains off by default",
+                        detail: "Keep dictation and file transcripts locally; audio remains off by default",
                         value: Binding(
                             get: { config.saveTranscriptHistory?.value ?? true },
                             set: { value in update { $0.saveTranscriptHistory = FlexBool(value) } }
@@ -747,7 +760,7 @@ private struct SettingsView: View {
     }
 }
 
-private struct PageHeader: View {
+struct PageHeader: View {
     let eyebrow: String
     let title: String
     let subtitle: String
@@ -768,7 +781,7 @@ private struct PageHeader: View {
     }
 }
 
-private struct SectionHeader: View {
+struct SectionHeader: View {
     let title: String
     let detail: String
 
@@ -1135,7 +1148,7 @@ private struct SettingDivider: View {
     }
 }
 
-private struct EmptyState: View {
+struct EmptyState: View {
     let symbol: String
     let title: String
     let detail: String
@@ -1176,7 +1189,7 @@ private struct StatusPill: View {
     }
 }
 
-private struct SmallTag: View {
+struct SmallTag: View {
     let text: String
 
     var body: some View {
@@ -1190,7 +1203,7 @@ private struct SmallTag: View {
     }
 }
 
-private struct QuietButton: View {
+struct QuietButton: View {
     let title: String
     let symbol: String
     let action: () -> Void
@@ -1215,7 +1228,7 @@ private struct QuietButton: View {
     }
 }
 
-private struct AccentButtonStyle: ButtonStyle {
+struct AccentButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 12, weight: .bold))
@@ -1229,7 +1242,7 @@ private struct AccentButtonStyle: ButtonStyle {
     }
 }
 
-private extension View {
+extension View {
     func cardStyle() -> some View {
         background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -1242,7 +1255,7 @@ private extension View {
     }
 }
 
-private enum LocalVoiceTheme {
+enum LocalVoiceTheme {
     static let background = Color(red: 0.043, green: 0.051, blue: 0.063)
     static let sidebar = Color(red: 0.054, green: 0.063, blue: 0.076)
     static let panel = Color(red: 0.075, green: 0.086, blue: 0.102)
@@ -1259,7 +1272,7 @@ private enum LocalVoiceTheme {
     static let danger = Color(red: 0.96, green: 0.39, blue: 0.42)
 }
 
-private func formatLatency(_ value: Double?) -> String {
+func formatLatency(_ value: Double?) -> String {
     guard let value, value > 0 else { return "—" }
     if value < 1_000 { return "\(Int(value.rounded())) ms" }
     return String(format: "%.1f s", value / 1_000)
