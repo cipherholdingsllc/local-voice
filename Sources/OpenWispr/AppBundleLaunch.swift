@@ -19,9 +19,11 @@ enum AppBundleLaunch {
         let exec = URL(fileURLWithPath: ProcessInfo.processInfo.arguments[0]).resolvingSymlinksInPath()
         var dir = exec.deletingLastPathComponent()
         for _ in 0..<10 {
-            let candidate = dir.appendingPathComponent("OpenWispr.app", isDirectory: true)
-            if FileManager.default.fileExists(atPath: candidate.path) {
-                return candidate
+            for appName in ["Local Voice.app", "OpenWispr.app"] {
+                let candidate = dir.appendingPathComponent(appName, isDirectory: true)
+                if FileManager.default.fileExists(atPath: candidate.path) {
+                    return candidate
+                }
             }
             let parent = dir.deletingLastPathComponent()
             if parent.path == dir.path { break }
@@ -29,10 +31,12 @@ enum AppBundleLaunch {
         }
 
         let home = FileManager.default.homeDirectoryForCurrentUser
-        let homeApps = home.appendingPathComponent("Applications/OpenWispr.app", isDirectory: true)
-        if FileManager.default.fileExists(atPath: homeApps.path) { return homeApps }
-        let system = URL(fileURLWithPath: "/Applications/OpenWispr.app", isDirectory: true)
-        if FileManager.default.fileExists(atPath: system.path) { return system }
+        for appName in ["Local Voice.app", "OpenWispr.app"] {
+            let homeApps = home.appendingPathComponent("Applications/\(appName)", isDirectory: true)
+            if FileManager.default.fileExists(atPath: homeApps.path) { return homeApps }
+            let system = URL(fileURLWithPath: "/Applications/\(appName)", isDirectory: true)
+            if FileManager.default.fileExists(atPath: system.path) { return system }
+        }
         return nil
     }
 
@@ -42,7 +46,7 @@ enum AppBundleLaunch {
         if isExecutableInsideAppBundle(exec) { return false }
         guard let appURL = findOpenWisprAppBundle() else { return false }
 
-        fputs("Relaunching via \(appURL.path) so Microphone/Accessibility apply to OpenWispr, not Terminal.\n", stdout)
+        fputs("Relaunching via \(appURL.path) so Microphone/Accessibility apply to Local Voice, not Terminal.\n", stdout)
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
@@ -51,7 +55,7 @@ enum AppBundleLaunch {
             try process.run()
             process.waitUntilExit()
         } catch {
-            fputs("Error: could not start OpenWispr.app: \(error.localizedDescription)\n", stderr)
+            fputs("Error: could not start Local Voice.app: \(error.localizedDescription)\n", stderr)
             return false
         }
         if process.terminationStatus != 0 {

@@ -1,6 +1,6 @@
 //
 //  TranscriptBridge.swift
-//  LocalFlow
+//  Local Voice
 //
 //  Copyright (c) 2026 Cipher Holdings LLC
 //  SPDX-License-Identifier: MIT
@@ -8,11 +8,12 @@
 
 import Foundation
 
-/// Cross-process bridge between the container app (mic + STT) and the keyboard extension (UI only).
-/// Keyboard extensions cannot access the microphone; all audio work stays in the container app.
+/// Transcript-only bridge between the container app and keyboard extension.
+/// Keyboard extensions cannot access the microphone and cannot reliably wake a
+/// suspended container app to begin recording.
 public enum TranscriptBridge {
-    public static let appGroupID = "group.com.cipherholdings.localflow"
-    public static let darwinNotificationName = "com.cipherholdings.localflow.signal" as CFString
+    public static let appGroupID = "group.com.cipherholdings.localvoice"
+    public static let darwinNotificationName = "com.cipherholdings.localvoice.transcript" as CFString
 
     public enum RecordingSignal: String, Codable, Sendable {
         case idle
@@ -39,8 +40,8 @@ public enum TranscriptBridge {
     }
 
     private enum Keys {
-        static let recordingSignal = "localflow.recordingSignal"
-        static let activeSessionID = "localflow.activeSessionID"
+        static let recordingSignal = "localvoice.recordingSignal"
+        static let activeSessionID = "localvoice.activeSessionID"
         static let lastTranscriptFile = "last_transcript.json"
     }
 

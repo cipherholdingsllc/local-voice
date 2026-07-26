@@ -1,148 +1,80 @@
-<p align="center">
-  <img src="logo.svg" width="80" alt="open-wispr logo">
-</p>
+# Local Voice
 
-<h1 align="center">open-wispr</h1>
+Private, system-wide dictation for macOS with a native iPhone companion. Local Voice is a Cipher Lab product built from the MIT-licensed `open-wispr` lineage and expanded around a shared local speech core.
 
-<p align="center">
-  <strong><a href="https://open-wispr.com">open-wispr.com</a></strong><br>
-  Local, private voice dictation for macOS. Hold a key, speak, release — your words appear at the cursor.<br>
-  Everything runs on-device. No audio or text ever leaves your machine.
-</p>
+## Product shape
 
-<p align="center">Powered by <a href="https://github.com/ggml-org/whisper.cpp">whisper.cpp</a> with Metal acceleration on Apple Silicon.</p>
+- **Local Voice** is the general desktop and mobile product: system-wide dictation, history, app-aware modes, vocabulary, model control, and privacy diagnostics.
+- **Exploit Poker Voice** is a separate domain surface that consumes the shared voice runtime with poker-specific prompts and latency rules.
+- The products share engines and measured telemetry, but they do not share one overloaded GUI or silently cross product data.
 
-## Install
+## What is implemented
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/human37/open-wispr/main/scripts/install.sh | bash
-```
+- Native SwiftUI command center with History, Modes, Dictionary, Models, Privacy, and Settings
+- Menu-bar push-to-talk with configurable global hotkeys
+- Persistent `whisper-server` pool to avoid model reloads between dictations
+- Optional Parakeet MLX English fast path with Whisper fallback
+- App-aware prompt profiles and secure-field blocking
+- Raw/polished output, voice commands, and local vocabulary learning
+- Local-only transcript history with explicit retention controls
+- Latency breakdown and privacy self-test
+- First-run permissions and model onboarding
+- Native iOS app with Apple on-device speech recognition
+- iOS keyboard extension that inserts transcripts completed in the main app
 
-The script handles everything: installs via Homebrew, walks you through granting permissions, downloads the Whisper model, and starts the service. You'll see live feedback as each step completes.
+No GPL or AGPL source was copied into this repository. Copyleft projects in the research set were used only as product and UX signal.
 
-> **Note:** Recent versions of Homebrew (6.0+) have tightened security around third-party taps, so you may be asked to trust this package before it installs. If that happens, the installer prints the exact `brew trust` command to run.
+## macOS
 
-A waveform icon appears in your menu bar when it's running.
-
-The default hotkey is the **Globe key** (🌐, bottom-left). Hold it, speak, release.
-
-> **[Full installation guide](docs/install-guide.md)** — permissions walkthrough with screenshots, non-English macOS instructions, and troubleshooting.
-
-## Uninstall
+Requirements: Apple Silicon Mac, macOS 13+, Swift 5.9+, `whisper-cpp`, and `ffmpeg`.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/human37/open-wispr/main/scripts/uninstall.sh | bash
+brew install whisper-cpp ffmpeg
+swift build -c release --product local-voice
+.build/release/local-voice download-model large-v3-turbo-q5_0
+.build/release/local-voice start
 ```
 
-This stops the service, removes the formula, tap, config, models, app bundle, logs, and permissions.
+Grant Microphone, Accessibility, and Input Monitoring when macOS asks. The default hotkey is Globe/Fn.
 
-## Configuration
-
-Edit `~/.config/open-wispr/config.json`:
-
-```json
-{
-  "hotkey": { "keyCode": 63, "modifiers": [] },
-  "modelSize": "base.en",
-  "language": "en",
-  "spokenPunctuation": false,
-  "maxRecordings": 0,
-  "toggleMode": false
-}
-```
-
-Then restart: `brew services restart open-wispr`
-
-To bind multiple hotkeys, use the `hotkeys` array instead:
-
-```json
-{
-  "hotkeys": [
-    { "keyCode": 63, "modifiers": [] },
-    { "keyCode": 96, "modifiers": [] }
-  ]
-}
-```
-
-Both `hotkey` (single) and `hotkeys` (array) are supported. If both are present, `hotkeys` takes precedence.
-
-| Option | Default | Values |
-|---|---|---|
-| **hotkey** | `63` | Globe (`63`), Right Option (`61`), F5 (`96`), or any key code |
-| **hotkeys** | — | Array of hotkey objects — bind multiple keys to trigger dictation |
-| **modifiers** | `[]` | `"cmd"`, `"ctrl"`, `"shift"`, `"opt"` — combine for chords |
-| **modelSize** | `"base.en"` | See model table below |
-| **language** | `"en"` | `"auto"` for auto-detect, or any [ISO 639-1 code](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes) — e.g. `it`, `fr`, `de`, `es` |
-| **spokenPunctuation** | `false` | Say "comma", "period", etc. to insert punctuation instead of auto-punctuation |
-| **maxRecordings** | `0` | Optionally store past recordings locally as `.wav` files for re-transcribing from the tray menu. `0` = nothing stored (default). Set 1-100 to keep that many recent recordings. |
-| **toggleMode** | `false` | Press hotkey once to start recording, press again to stop. Default is hold-to-talk. |
-
-### Models
-
-Larger models are more accurate but slower and use more memory. The default `base.en` is a good balance for most users.
-
-| Model | Size | Speed | Accuracy | Best for |
-|---|---|---|---|---|
-| `tiny.en` | 75 MB | Fastest | Lower | Quick notes, short phrases |
-| **`base.en`** | 142 MB | **Fast** | **Good** | **Most users (default)** |
-| `small.en` | 466 MB | Moderate | Better | Longer dictation, technical terms |
-| `medium.en` | 1.5 GB | Slower | Great | Maximum accuracy, complex speech |
-| `large-v3-turbo` | 1.6 GB | Moderate | Great | Fast multilingual, near-large accuracy |
-| `large-v3` | 3 GB | Slowest | Best | Multilingual, highest accuracy (M1 Pro+ recommended) |
-
-Each model also has quantized `-q5_0` / `-q5_1` / `-q8_0` variants at ~⅓–½ the disk and RAM with minimal quality loss. See **[MODELS.md](MODELS.md)** for the complete list and tradeoffs.
-
-> **Non-English languages:** Models ending in `.en` are English-only. To use another language, switch to the equivalent multilingual model (e.g. `base.en` → `base`, or `large-v3-turbo` for the fastest large-tier option) and set the `language` field to your language code. Multilingual models are slightly less accurate for English but support 99 languages.
-
-If the Globe key opens the emoji picker: **System Settings → Keyboard → "Press 🌐 key to" → "Do Nothing"**
-
-## Menu bar
-
-Click the waveform icon for status and options. **Recent Recordings** lists your last recordings; click one to re-transcribe and copy the result to the clipboard.
-
-| State | Icon |
-|---|---|
-| Idle | Waveform outline |
-| Recording | Bouncing waveform |
-| Transcribing | Wave dots |
-| Downloading model | Progress ring |
-| Waiting for permission | Lock |
-
-Click the menu bar icon to access **Copy Last Dictation** — recovers your most recent transcription if you dictated without a text field focused.
-
-## Compare
-
-| | open-wispr | VoiceInk | Wispr Flow | Superwhisper | Apple Dictation |
-|---|---|---|---|---|---|
-| **Price** | **Free** | $39.99 | $15/mo | $8.49/mo | Free |
-| **Open source** | MIT | GPLv3 | No | No | No |
-| **100% on-device** | Yes | Yes | No | Yes | Partial |
-| **Push-to-talk** | Yes | Yes | Yes | Yes | No |
-| **AI features** | No | AI assistant | AI rewriting | AI formatting | No |
-| **Account required** | No | No | Yes | Yes | Apple ID |
-
-## Privacy
-
-open-wispr is completely local. Audio is recorded to a temp file, transcribed by whisper.cpp on your CPU/GPU, and the temp file is deleted. No network requests are made except to download the Whisper model on first run. Optionally, you can configure open-wispr to store a number of past recordings locally via the `maxRecordings` setting. Those recordings stay private and on your machine, and we default to not storing anything.
-
-## Roadmap
-
-See what's planned and in progress on the [public roadmap](https://github.com/users/human37/projects/2). Feature requests and ideas are welcome as [issues](https://github.com/human37/open-wispr/issues).
-
-## Build from source
+Useful commands:
 
 ```bash
-git clone https://github.com/human37/open-wispr.git
-cd open-wispr
-brew install whisper-cpp
-swift build -c release
-.build/release/open-wispr start
+.build/release/local-voice status
+.build/release/local-voice set-hotkey rightoption
+.build/release/local-voice set-language auto
+.build/release/local-voice set-model large-v3-turbo-q5_0
 ```
 
-## Support
+Configuration lives at `~/.config/local-voice/config.json`. On first launch, Local Voice migrates a legacy `~/.config/open-wispr/config.json` if present.
 
-open-wispr is free and always will be. If you find it useful, you can [leave a tip](https://buy.stripe.com/4gM5kC2AU0Ssd4l6Hqd7q00).
+### Optional Parakeet fast path
 
-## License
+```bash
+./scripts/install-parakeet.sh
+```
 
-MIT
+English and automatic-language dictation prefer Parakeet when available and fall back to the persistent Whisper server. Other languages use Whisper.
+
+## iPhone
+
+Open [the iOS project](ios-spike/LocalFlow.xcodeproj) in Xcode. The app target performs microphone capture and on-device transcription. The keyboard extension only inserts the most recent finished transcript because iOS does not grant microphone access to keyboard extensions.
+
+See [the iOS implementation notes](ios-spike/README.md) for simulator, device, signing, and distribution details.
+
+## Verification
+
+```bash
+SWIFTPM_DISABLE_SANDBOX=1 swift test
+swift build -c release --product local-voice
+xcodebuild \
+  -project ios-spike/LocalFlow.xcodeproj \
+  -scheme LocalFlow \
+  -destination 'generic/platform=iOS Simulator' \
+  CODE_SIGNING_ALLOWED=NO \
+  build
+```
+
+## Lineage and license
+
+MIT licensed. The desktop foundation began as a fork of [human37/open-wispr](https://github.com/human37/open-wispr); the current Local Voice product shell, runtime orchestration, mobile app, and Cipher-specific features are maintained here.

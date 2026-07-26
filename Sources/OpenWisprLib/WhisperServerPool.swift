@@ -63,7 +63,7 @@ public final class WhisperServerPool: STTEngine {
 
     public func transcribe(audioURL: URL) throws -> String {
         try ensureRunning()
-        let boundary = "LocalFlow-\(UUID().uuidString)"
+        let boundary = "LocalVoice-\(UUID().uuidString)"
         var body = Data()
         let fileData = try Data(contentsOf: audioURL)
 

@@ -28,7 +28,7 @@ enum FailurePresenter {
         if let te = error as? TranscriberError {
             switch te {
             case .whisperNotFound: return "Whisper not installed — run: brew install whisper-cpp"
-            case .modelNotFound(let size): return "Model '\(size)' missing — run: open-wispr download-model \(size)"
+            case .modelNotFound(let size): return "Model '\(size)' missing — run: local-voice download-model \(size)"
             case .transcriptionFailed: return "Transcription failed — check mic and model"
             }
         }

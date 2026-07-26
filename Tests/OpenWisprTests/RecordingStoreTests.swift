@@ -8,7 +8,7 @@ final class RecordingStoreTests: XCTestCase {
     override func setUp() {
         super.setUp()
         savedDir = RecordingStore.recordingsDir
-        testDir = FileManager.default.temporaryDirectory.appendingPathComponent("open-wispr-test-\(UUID().uuidString)")
+        testDir = FileManager.default.temporaryDirectory.appendingPathComponent("local-voice-test-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: testDir, withIntermediateDirectories: true)
         RecordingStore.recordingsDir = testDir
     }
@@ -34,7 +34,7 @@ final class RecordingStoreTests: XCTestCase {
 
     func testTempRecordingURL() {
         let url = RecordingStore.tempRecordingURL()
-        XCTAssertTrue(url.lastPathComponent.hasPrefix("open-wispr-recording-"))
+        XCTAssertTrue(url.lastPathComponent.hasPrefix("local-voice-recording-"))
         XCTAssertEqual(url.pathExtension, "wav")
     }
 

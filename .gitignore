@@ -1,6 +1,8 @@
 .build/
 .swiftpm/
 *.xcodeproj
+!ios-spike/LocalFlow.xcodeproj/
+!ios-spike/LocalFlow.xcodeproj/project.pbxproj
 *.app
 .DS_Store
 .beads

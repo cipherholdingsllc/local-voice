@@ -1,107 +1,73 @@
-# LocalFlow iOS Spike (Features 17–20)
+# Local Voice for iPhone
 
-Simulator-only scaffold for the Local Wispr Flow mobile pattern. **No provisioning, no device ship** — validates the keyboard ↔ container app architecture before Apple Developer org gating clears.
+Native iOS companion for Local Voice. The project includes a containing app for capture/transcription and a custom keyboard for inserting a finished transcript.
 
-MIT licensed · product name **LocalFlow**
+## The iOS boundary
 
-## Hard constraint: keyboard extensions cannot access the microphone
+Apple does not grant microphone access to custom keyboard extensions, and an extension cannot rely on waking a suspended app to begin recording. The supported flow is:
 
-iOS keyboard extensions run in a sandbox that **does not grant microphone access**. This is not a policy choice — it is a platform limitation. Wispr Flow on iOS works around it by splitting responsibilities:
+1. Record in the **Local Voice** app.
+2. Transcribe in that app with an on-device engine.
+3. Save only the finished text to the shared App Group.
+4. Return to the **Local Voice** keyboard and tap **Insert latest transcript**.
 
-| Component | Role | Mic | STT |
-|-----------|------|-----|-----|
-| **LocalFlow** (container app) | Owns `AVAudioSession`, `AVAudioEngine`, WhisperKit | ✅ | ✅ |
-| **LocalFlowKeyboard** (extension) | UI-only dictation chrome + text insertion | ❌ | ❌ |
-| **App Group** (`group.com.cipherholdings.localflow`) | Signal + transcript bridge | — | — |
+| Component | Responsibility | Microphone | Speech engine |
+|---|---|---:|---:|
+| Local Voice app | Capture, live partials, final transcript, copy/share | Yes | Yes |
+| Local Voice keyboard | Preview and insert the last finished transcript | No | No |
+| `group.com.cipherholdings.localvoice` | Finished transcript bridge | No | No |
 
-## Architecture
+## Current engine
 
-```mermaid
-sequenceDiagram
-    participant KB as Keyboard Extension
-    participant AG as App Group
-    participant APP as Container App
+The iPhone app uses Apple's Speech framework with:
 
-    KB->>AG: postSignal(.startRequested)
-    AG-->>APP: Darwin notify + UserDefaults
-    APP->>APP: AVAudioEngine.start()
-    APP->>AG: postSignal(.recording)
-    Note over KB: User speaks (mic in container app)
-    KB->>AG: postSignal(.stopRequested)
-    APP->>APP: stop + WhisperKit stub
-    APP->>AG: writeTranscript + .ready
-    KB->>AG: poll / Darwin notify
-    KB->>KB: textDocumentProxy.insertText()
+- `requiresOnDeviceRecognition = true`
+- `supportsOnDeviceRecognition` checked before capture
+- partial results for live feedback
+- no raw-audio persistence
+
+This is a real local engine, not the old `WhisperKitTranscriberStub`. A bundled WhisperKit implementation remains a valid next engine if device benchmarks show a meaningful accuracy or language advantage.
+
+## Open and build
+
+1. Open `LocalFlow.xcodeproj` in Xcode.
+2. Select the `LocalFlow` scheme; the internal scheme name is retained to avoid a destructive project rename.
+3. Select an iPhone simulator or your connected iPhone.
+4. Set your signing team on both targets.
+5. Register `group.com.cipherholdings.localvoice` for both targets.
+6. Run the containing app and grant Microphone and Speech Recognition.
+7. For the keyboard: Settings → General → Keyboard → Keyboards → Add New Keyboard → Local Voice.
+
+Simulator verification:
+
+```bash
+xcodebuild \
+  -project LocalFlow.xcodeproj \
+  -scheme LocalFlow \
+  -destination 'generic/platform=iOS Simulator' \
+  CODE_SIGNING_ALLOWED=NO \
+  build
 ```
 
-### UI flow (keyboard)
+The simulator proves compilation and layout. It does not prove live on-device recognition, App Group signing, or physical keyboard insertion.
 
-1. **Globe** — arm dictation flow (distinct from system keyboard switcher on trailing globe)
-2. **Mic** — write `startRequested` to App Group; container app begins recording
-3. **Speak** — waveform state while container captures audio
-4. **Checkmark** — write `stopRequested`, poll for transcript, insert at cursor
+## Install and distribution
 
-### Bridge (`Shared/TranscriptBridge.swift`)
+- **Your own iPhone through Xcode:** no App Review. A free Personal Team build expires quickly and has capability limits.
+- **Ad Hoc distribution:** paid Apple Developer membership, registered device IDs, no public App Store review.
+- **TestFlight:** paid membership; external testers require beta review.
+- **Public App Store:** full App Review.
 
-- **UserDefaults** (`suiteName: appGroupID`) — lightweight state machine: `idle → startRequested → recording → stopRequested → transcribing → ready`
-- **File** (`last_transcript.json` in App Group container) — transcript payload with session UUID
-- **Darwin notifications** — wake the container app without polling-only latency
+The full app-plus-keyboard build uses App Groups, so plan on the paid Apple Developer Program for the clean production path even if a stripped containing-app build is first installed from a Personal Team.
 
 ## Project layout
 
-```
+```text
 ios-spike/
-├── README.md
-├── Package.swift                 # optional SPM mirror of Shared module
-├── Shared/
-│   └── TranscriptBridge.swift
-├── LocalFlowApp/
-│   ├── LocalFlowApp.swift
-│   ├── ContentView.swift         # AVAudioEngine + WhisperKit stub
-│   ├── Info.plist
-│   └── LocalFlowApp.entitlements
-├── LocalFlowKeyboard/
-│   ├── KeyboardViewController.swift
-│   ├── Info.plist
-│   └── LocalFlowKeyboard.entitlements
-└── LocalFlow.xcodeproj/
-    └── project.pbxproj
+├── LocalFlow.xcodeproj/          # internal project name
+├── LocalFlowApp/                 # Local Voice containing app
+├── LocalFlowKeyboard/            # transcript insertion keyboard
+└── Shared/TranscriptBridge.swift # App Group transcript bridge
 ```
 
-## Open in Xcode (simulator)
-
-1. Open `LocalFlow.xcodeproj`
-2. Select **LocalFlow** scheme → any **iPhone Simulator**
-3. Signing: **Automatically manage signing** with your personal team (simulator only; no App Store provisioning required for spike)
-4. Enable **App Groups** on both targets if Xcode prompts — group ID must match: `group.com.cipherholdings.localflow`
-5. Build & run **LocalFlow** first; grant microphone permission
-6. Settings → General → Keyboard → Keyboards → Add **LocalFlow** → enable **Allow Full Access** (required for App Group + open access keyboard)
-7. Background LocalFlow, open Notes, switch to LocalFlow keyboard, run globe → mic → speak → checkmark
-
-### CLI build (optional)
-
-```bash
-cd projects/cipher-lab/local-flow/ios-spike
-xcodebuild -scheme LocalFlow \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
-  -configuration Debug build
-```
-
-## WhisperKit integration (post-spike)
-
-`WhisperKitTranscriberStub` in `ContentView.swift` stands in for on-device STT. Replace with [WhisperKit](https://github.com/argmaxinc/WhisperKit) SPM dependency on the **container app target only**.
-
-## Gated scope (P5 · features 17–20)
-
-This spike covers the architectural proof for:
-
-- **17** — iOS keyboard extension shell
-- **18** — App Group cross-process bridge
-- **19** — Container-app mic + local STT path
-- **20** — End-to-end speak → insert loop (simulator)
-
-Device TestFlight, push-to-open container app, and production model bundling remain gated on Apple Developer org setup.
-
-## License
-
-MIT — see file headers. Based on the Local Wispr Flow / open-wispr desktop lineage (`projects/cipher-lab/local-flow`).
+MIT licensed.

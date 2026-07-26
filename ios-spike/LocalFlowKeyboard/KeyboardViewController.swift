@@ -1,6 +1,6 @@
 //
 //  KeyboardViewController.swift
-//  LocalFlowKeyboard
+//  Local Voice Keyboard
 //
 //  Copyright (c) 2026 Cipher Holdings LLC
 //  SPDX-License-Identifier: MIT
@@ -8,233 +8,141 @@
 
 import UIKit
 
-/// UI-only keyboard extension. Cannot access the microphone (iOS hard constraint).
-/// Flow: globe → mic → speak → checkmark. Recording runs in the container app via App Group signals.
+/// A truthful keyboard extension: iOS does not grant keyboard extensions
+/// microphone access, so this surface inserts transcripts completed in the app.
 final class KeyboardViewController: UIInputViewController {
-    private enum FlowStep {
-        case globe
-        case mic
-        case speaking
-        case checkmark
-    }
+    private let graphite = UIColor(red: 0.035, green: 0.055, blue: 0.051, alpha: 1)
+    private let panel = UIColor(red: 0.075, green: 0.102, blue: 0.094, alpha: 1)
+    private let mint = UIColor(red: 0.36, green: 0.94, blue: 0.72, alpha: 1)
 
-    private var step: FlowStep = .globe {
-        didSet { refreshChrome() }
-    }
-
-    private var activeSessionID: UUID?
-    private var pollTimer: Timer?
+    private let titleLabel = UILabel()
+    private let previewLabel = UILabel()
+    private let insertButton = UIButton(type: .system)
+    private let globeButton = UIButton(type: .system)
     private var signalObserver: DarwinObserver?
-
-    private let toolbar = UIStackView()
-    private let flowButton = UIButton(type: .system)
-    private let statusLabel = UILabel()
-    private let hintLabel = UILabel()
-
-    // MARK: - Lifecycle
+    private var latestPayload: TranscriptBridge.TranscriptPayload?
 
     override func viewDidLoad() {
         super.viewDidLoad()
         configureChrome()
-        wireDarwinObserver()
-        resetFlow()
+        signalObserver = TranscriptBridge.observeSignals { [weak self] in
+            DispatchQueue.main.async {
+                self?.reloadTranscript()
+            }
+        }
+        reloadTranscript()
     }
 
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        stopPolling()
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        reloadTranscript()
     }
-
-    deinit {
-        signalObserver = nil
-        stopPolling()
-    }
-
-    // MARK: - UI
 
     private func configureChrome() {
-        view.backgroundColor = UIColor.systemGray6
+        view.backgroundColor = graphite
 
-        toolbar.axis = .horizontal
-        toolbar.alignment = .center
-        toolbar.distribution = .fill
-        toolbar.spacing = 12
-        toolbar.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(toolbar)
+        let brandIcon = UIImageView(image: UIImage(systemName: "waveform"))
+        brandIcon.tintColor = mint
+        brandIcon.contentMode = .scaleAspectFit
+        brandIcon.translatesAutoresizingMaskIntoConstraints = false
 
-        flowButton.titleLabel?.font = .systemFont(ofSize: 28)
-        flowButton.addTarget(self, action: #selector(flowButtonTapped), for: .touchUpInside)
-        flowButton.accessibilityTraits = .button
-        toolbar.addArrangedSubview(flowButton)
+        titleLabel.text = "LOCAL VOICE"
+        titleLabel.textColor = .white
+        titleLabel.font = .systemFont(ofSize: 12, weight: .bold)
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        let globeSwitch = UIButton(type: .system)
-        globeSwitch.setImage(UIImage(systemName: "globe"), for: .normal)
-        globeSwitch.addTarget(self, action: #selector(handleInputModeList(from:with:)), for: .allTouchEvents)
-        globeSwitch.accessibilityLabel = "Switch keyboard"
-        toolbar.addArrangedSubview(globeSwitch)
+        globeButton.setImage(UIImage(systemName: "globe"), for: .normal)
+        globeButton.tintColor = .secondaryLabel
+        globeButton.accessibilityLabel = "Switch keyboard"
+        globeButton.addTarget(self, action: #selector(handleInputModeList(from:with:)), for: .allTouchEvents)
+        globeButton.translatesAutoresizingMaskIntoConstraints = false
 
-        statusLabel.font = .preferredFont(forTextStyle: .footnote)
-        statusLabel.textColor = .secondaryLabel
-        statusLabel.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(statusLabel)
+        let header = UIStackView(arrangedSubviews: [brandIcon, titleLabel, UIView(), globeButton])
+        header.axis = .horizontal
+        header.alignment = .center
+        header.spacing = 8
+        header.translatesAutoresizingMaskIntoConstraints = false
 
-        hintLabel.font = .preferredFont(forTextStyle: .caption1)
-        hintLabel.textColor = .tertiaryLabel
-        hintLabel.numberOfLines = 0
-        hintLabel.textAlignment = .center
-        hintLabel.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(hintLabel)
+        previewLabel.textColor = UIColor.white.withAlphaComponent(0.88)
+        previewLabel.font = .preferredFont(forTextStyle: .body)
+        previewLabel.numberOfLines = 3
+        previewLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        insertButton.backgroundColor = mint
+        insertButton.tintColor = graphite
+        insertButton.layer.cornerRadius = 13
+        insertButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+        insertButton.addTarget(self, action: #selector(insertLatestTranscript), for: .touchUpInside)
+        insertButton.translatesAutoresizingMaskIntoConstraints = false
+
+        let card = UIView()
+        card.backgroundColor = panel
+        card.layer.cornerRadius = 18
+        card.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(previewLabel)
+
+        view.addSubview(header)
+        view.addSubview(card)
+        view.addSubview(insertButton)
 
         NSLayoutConstraint.activate([
-            toolbar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
-            toolbar.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -12),
-            toolbar.topAnchor.constraint(equalTo: view.topAnchor, constant: 8),
-            toolbar.heightAnchor.constraint(equalToConstant: 44),
+            view.heightAnchor.constraint(greaterThanOrEqualToConstant: 220),
 
-            statusLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
-            statusLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
-            statusLabel.topAnchor.constraint(equalTo: toolbar.bottomAnchor, constant: 4),
+            brandIcon.widthAnchor.constraint(equalToConstant: 20),
+            brandIcon.heightAnchor.constraint(equalToConstant: 20),
+            globeButton.widthAnchor.constraint(equalToConstant: 40),
+            globeButton.heightAnchor.constraint(equalToConstant: 36),
 
-            hintLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
-            hintLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
-            hintLabel.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 4),
-            hintLabel.bottomAnchor.constraint(lessThanOrEqualTo: view.bottomAnchor, constant: -8)
+            header.topAnchor.constraint(equalTo: view.topAnchor, constant: 12),
+            header.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            header.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
+
+            card.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 10),
+            card.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            card.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
+            card.heightAnchor.constraint(greaterThanOrEqualToConstant: 78),
+
+            previewLabel.topAnchor.constraint(equalTo: card.topAnchor, constant: 14),
+            previewLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 14),
+            previewLabel.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -14),
+            previewLabel.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -14),
+
+            insertButton.topAnchor.constraint(equalTo: card.bottomAnchor, constant: 10),
+            insertButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            insertButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
+            insertButton.heightAnchor.constraint(equalToConstant: 48),
+            insertButton.bottomAnchor.constraint(lessThanOrEqualTo: view.bottomAnchor, constant: -10)
         ])
     }
 
-    private func refreshChrome() {
-        switch step {
-        case .globe:
-            flowButton.setImage(UIImage(systemName: "globe.americas.fill"), for: .normal)
-            flowButton.accessibilityLabel = "Start dictation flow"
-            statusLabel.text = "LocalFlow"
-            hintLabel.text = "Tap to arm mic (container app records audio)."
-        case .mic:
-            flowButton.setImage(UIImage(systemName: "mic.fill"), for: .normal)
-            flowButton.accessibilityLabel = "Start recording in container app"
-            statusLabel.text = "Ready"
-            hintLabel.text = "Open LocalFlow app in background, then tap mic."
-        case .speaking:
-            flowButton.setImage(UIImage(systemName: "waveform"), for: .normal)
-            flowButton.accessibilityLabel = "Speaking"
-            statusLabel.text = "Listening…"
-            hintLabel.text = "Speak now. Tap checkmark when finished."
-        case .checkmark:
-            flowButton.setImage(UIImage(systemName: "checkmark.circle.fill"), for: .normal)
-            flowButton.accessibilityLabel = "Insert transcript"
-            statusLabel.text = "Transcript ready"
-            hintLabel.text = "Tap to insert text at cursor."
-        }
+    private func reloadTranscript() {
+        latestPayload = try? TranscriptBridge.readTranscript()
+        let text = latestPayload?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let hasTranscript = !text.isEmpty
+
+        previewLabel.text = hasTranscript
+            ? text
+            : "Record in the Local Voice app, then return here to insert the finished transcript."
+
+        insertButton.isEnabled = hasTranscript
+        insertButton.alpha = hasTranscript ? 1 : 0.45
+        insertButton.setTitle(
+            hasTranscript ? "Insert latest transcript" : "No transcript ready",
+            for: .normal
+        )
+        insertButton.setImage(
+            UIImage(systemName: hasTranscript ? "arrow.down.doc.fill" : "mic.slash.fill"),
+            for: .normal
+        )
+        insertButton.configuration?.imagePadding = 8
     }
 
-    // MARK: - Flow actions
-
-    @objc private func flowButtonTapped() {
-        switch step {
-        case .globe:
-            step = .mic
-        case .mic:
-            beginRecordingRequest()
-        case .speaking:
-            finishRecordingRequest()
-        case .checkmark:
-            insertTranscriptIfReady()
-        }
-    }
-
-    private func resetFlow() {
-        step = .globe
-        activeSessionID = nil
-        stopPolling()
-    }
-
-    private func beginRecordingRequest() {
-        TranscriptBridge.clearTranscript()
-        let sessionID = TranscriptBridge.postSignal(.startRequested)
-        activeSessionID = sessionID
-        step = .speaking
-        startPolling(for: sessionID)
-    }
-
-    private func finishRecordingRequest() {
-        guard let sessionID = activeSessionID else { return }
-        TranscriptBridge.postSignal(.stopRequested, sessionID: sessionID)
-        statusLabel.text = "Transcribing…"
-        hintLabel.text = "Local WhisperKit stub running in container app."
-        startPolling(for: sessionID)
-    }
-
-    private func insertTranscriptIfReady() {
-        guard
-            let payload = try? TranscriptBridge.readTranscript(),
-            payload.isFinal,
-            !payload.text.isEmpty
-        else {
-            statusLabel.text = "No transcript yet"
+    @objc private func insertLatestTranscript() {
+        guard let text = latestPayload?.text, !text.isEmpty else {
+            reloadTranscript()
             return
         }
-
-        textDocumentProxy.insertText(payload.text)
-        TranscriptBridge.resetSession()
-        resetFlow()
-    }
-
-    // MARK: - Polling + Darwin
-
-    private func wireDarwinObserver() {
-        signalObserver = TranscriptBridge.observeSignals { [weak self] in
-            DispatchQueue.main.async {
-                self?.handleBridgeSignal()
-            }
-        }
-    }
-
-    private func handleBridgeSignal() {
-        guard let sessionID = activeSessionID else { return }
-        let signal = TranscriptBridge.currentSignal()
-
-        switch signal {
-        case .recording:
-            statusLabel.text = "Recording…"
-        case .transcribing:
-            statusLabel.text = "Transcribing…"
-        case .ready:
-            if let payload = try? TranscriptBridge.readTranscript(), payload.sessionID == sessionID {
-                step = .checkmark
-                statusLabel.text = "“\(payload.text.prefix(42))…”"
-            }
-        case .failed:
-            statusLabel.text = "Dictation failed"
-            hintLabel.text = "Check LocalFlow container app logs."
-            stopPolling()
-        default:
-            break
-        }
-    }
-
-    private func startPolling(for sessionID: UUID) {
-        stopPolling()
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
-            self?.pollTranscript(sessionID: sessionID)
-        }
-    }
-
-    private func stopPolling() {
-        pollTimer?.invalidate()
-        pollTimer = nil
-    }
-
-    private func pollTranscript(sessionID: UUID) {
-        let signal = TranscriptBridge.currentSignal()
-        if signal == .ready {
-            if let payload = try? TranscriptBridge.readTranscript(), payload.sessionID == sessionID, payload.isFinal {
-                step = .checkmark
-                statusLabel.text = "Transcript ready"
-                stopPolling()
-            }
-        } else if signal == .failed {
-            statusLabel.text = "Dictation failed"
-            stopPolling()
-        }
+        textDocumentProxy.insertText(text)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 }

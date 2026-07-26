@@ -1,0 +1,1234 @@
+import AppKit
+import SwiftUI
+
+public struct LocalVoiceDashboardActions {
+    public var toggleRecording: () -> Void
+    public var copyLast: () -> Void
+    public var runPrivacyTest: () -> Void
+    public var reloadConfiguration: () -> Void
+    public var openConfiguration: () -> Void
+
+    public init(
+        toggleRecording: @escaping () -> Void = {},
+        copyLast: @escaping () -> Void = {},
+        runPrivacyTest: @escaping () -> Void = {},
+        reloadConfiguration: @escaping () -> Void = {},
+        openConfiguration: @escaping () -> Void = {}
+    ) {
+        self.toggleRecording = toggleRecording
+        self.copyLast = copyLast
+        self.runPrivacyTest = runPrivacyTest
+        self.reloadConfiguration = reloadConfiguration
+        self.openConfiguration = openConfiguration
+    }
+}
+
+public struct LocalVoiceDashboard: View {
+    @ObservedObject private var store: LocalVoiceStore
+    private let actions: LocalVoiceDashboardActions
+    @State private var section: DashboardSection = .home
+
+    public init(store: LocalVoiceStore, actions: LocalVoiceDashboardActions) {
+        self.store = store
+        self.actions = actions
+    }
+
+    public var body: some View {
+        HStack(spacing: 0) {
+            sidebar
+                .frame(width: 224)
+            Rectangle()
+                .fill(LocalVoiceTheme.line)
+                .frame(width: 1)
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .background(LocalVoiceTheme.background)
+        .preferredColorScheme(.dark)
+    }
+
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 11) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(LocalVoiceTheme.accent)
+                    Image(systemName: "waveform")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(LocalVoiceTheme.background)
+                }
+                .frame(width: 34, height: 34)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("LOCAL VOICE")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .tracking(1.1)
+                    Text("Private by design")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(LocalVoiceTheme.muted)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 24)
+            .padding(.bottom, 28)
+
+            VStack(spacing: 5) {
+                ForEach(DashboardSection.allCases) { item in
+                    SidebarButton(
+                        section: item,
+                        selected: item == section,
+                        action: { section = item }
+                    )
+                }
+            }
+            .padding(.horizontal, 12)
+
+            Spacer()
+
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(store.runtime.privacyVerified ? LocalVoiceTheme.accent : LocalVoiceTheme.warning)
+                        .frame(width: 7, height: 7)
+                    Text(store.runtime.privacyVerified ? "On-device verified" : "Privacy check available")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(LocalVoiceTheme.secondary)
+                }
+                Text("Audio is not retained by default.")
+                    .font(.system(size: 10.5))
+                    .foregroundColor(LocalVoiceTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(LocalVoiceTheme.panel)
+            )
+            .padding(14)
+        }
+        .background(LocalVoiceTheme.sidebar)
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch section {
+        case .home:
+            HomeView(store: store, actions: actions)
+        case .history:
+            HistoryView(store: store)
+        case .modes:
+            ModesView()
+        case .dictionary:
+            DictionaryView()
+        case .models:
+            ModelsView(store: store)
+        case .privacy:
+            PrivacyView(store: store, actions: actions)
+        case .settings:
+            SettingsView(actions: actions)
+        }
+    }
+}
+
+private enum DashboardSection: String, CaseIterable, Identifiable {
+    case home
+    case history
+    case modes
+    case dictionary
+    case models
+    case privacy
+    case settings
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .home: return "Command Center"
+        case .history: return "History"
+        case .modes: return "Modes"
+        case .dictionary: return "Dictionary"
+        case .models: return "Models"
+        case .privacy: return "Privacy"
+        case .settings: return "Settings"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .home: return "square.grid.2x2"
+        case .history: return "clock.arrow.circlepath"
+        case .modes: return "slider.horizontal.3"
+        case .dictionary: return "text.book.closed"
+        case .models: return "cpu"
+        case .privacy: return "lock.shield"
+        case .settings: return "gearshape"
+        }
+    }
+}
+
+private struct SidebarButton: View {
+    let section: DashboardSection
+    let selected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: section.symbol)
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(width: 18)
+                Text(section.title)
+                    .font(.system(size: 13, weight: .semibold))
+                Spacer()
+            }
+            .foregroundColor(selected ? LocalVoiceTheme.primary : LocalVoiceTheme.secondary)
+            .padding(.horizontal, 12)
+            .frame(height: 38)
+            .background(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(selected ? LocalVoiceTheme.selected : Color.clear)
+            )
+            .overlay(alignment: .leading) {
+                if selected {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(LocalVoiceTheme.accent)
+                        .frame(width: 3, height: 18)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct HomeView: View {
+    @ObservedObject var store: LocalVoiceStore
+    let actions: LocalVoiceDashboardActions
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                PageHeader(
+                    eyebrow: "COMMAND CENTER",
+                    title: greeting,
+                    subtitle: "Your local voice stack is tuned, private, and ready across macOS."
+                )
+
+                HStack(alignment: .top, spacing: 16) {
+                    ReadyCard(store: store, actions: actions)
+                    RuntimeCard(store: store)
+                        .frame(width: 300)
+                }
+
+                HStack(spacing: 14) {
+                    MetricCard(
+                        label: "WORDS TODAY",
+                        value: store.todayWordCount.formatted(),
+                        detail: "\(store.todayRecords.count) dictations",
+                        symbol: "text.word.spacing"
+                    )
+                    MetricCard(
+                        label: "VOICE TODAY",
+                        value: formatMinutes(store.todayVoiceMinutes),
+                        detail: "captured locally",
+                        symbol: "waveform"
+                    )
+                    MetricCard(
+                        label: "MEDIAN FINISH",
+                        value: formatLatency(store.medianFinishMilliseconds),
+                        detail: "after you stop",
+                        symbol: "timer"
+                    )
+                }
+
+                SectionHeader(title: "Recent dictations", detail: "Stored on this Mac")
+                if store.records.isEmpty {
+                    EmptyState(
+                        symbol: "waveform.badge.plus",
+                        title: "Your first dictation will appear here",
+                        detail: "Hold fn, speak naturally, and release."
+                    )
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(Array(store.records.prefix(4).enumerated()), id: \.element.id) { index, record in
+                            RecordRow(record: record)
+                            if index < min(store.records.count, 4) - 1 {
+                                Rectangle()
+                                    .fill(LocalVoiceTheme.line)
+                                    .frame(height: 1)
+                                    .padding(.leading, 52)
+                            }
+                        }
+                    }
+                    .cardStyle()
+                }
+            }
+            .padding(32)
+        }
+    }
+
+    private var greeting: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        if hour < 12 { return "Good morning." }
+        if hour < 18 { return "Good afternoon." }
+        return "Good evening."
+    }
+}
+
+private struct ReadyCard: View {
+    @ObservedObject var store: LocalVoiceStore
+    let actions: LocalVoiceDashboardActions
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top) {
+                StatusPill(
+                    title: store.runtime.state.label.uppercased(),
+                    color: statusColor
+                )
+                Spacer()
+                Text(store.runtime.languageName)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(LocalVoiceTheme.muted)
+            }
+
+            Spacer(minLength: 18)
+
+            HStack(spacing: 20) {
+                Button(action: actions.toggleRecording) {
+                    ZStack {
+                        Circle()
+                            .fill(LocalVoiceTheme.accent)
+                            .shadow(color: LocalVoiceTheme.accent.opacity(0.18), radius: 18, y: 8)
+                        Image(systemName: store.runtime.state == .listening ? "stop.fill" : "mic.fill")
+                            .font(.system(size: 28, weight: .semibold))
+                            .foregroundColor(LocalVoiceTheme.background)
+                    }
+                    .frame(width: 72, height: 72)
+                }
+                .buttonStyle(.plain)
+
+                VStack(alignment: .leading, spacing: 7) {
+                    Text(store.runtime.state == .listening ? "Listening now" : "Hold fn to speak")
+                        .font(.system(size: 25, weight: .semibold, design: .rounded))
+                        .foregroundColor(LocalVoiceTheme.primary)
+                    Text(store.runtime.statusDetail)
+                        .font(.system(size: 13))
+                        .foregroundColor(LocalVoiceTheme.secondary)
+                    HStack(spacing: 8) {
+                        SmallTag(text: store.runtime.engineName)
+                        SmallTag(text: store.runtime.modelName)
+                    }
+                }
+            }
+
+            Spacer(minLength: 18)
+
+            HStack(spacing: 10) {
+                QuietButton(title: "Copy last", symbol: "doc.on.doc", action: actions.copyLast)
+                QuietButton(title: "Privacy test", symbol: "checkmark.shield", action: actions.runPrivacyTest)
+            }
+        }
+        .padding(22)
+        .frame(minHeight: 230)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(LocalVoiceTheme.panel)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(LocalVoiceTheme.line, lineWidth: 1)
+        )
+    }
+
+    private var statusColor: Color {
+        switch store.runtime.state {
+        case .ready: return LocalVoiceTheme.accent
+        case .listening: return LocalVoiceTheme.listening
+        case .transcribing, .refining, .preparing: return LocalVoiceTheme.info
+        case .error: return LocalVoiceTheme.danger
+        }
+    }
+}
+
+private struct RuntimeCard: View {
+    @ObservedObject var store: LocalVoiceStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("SYSTEM HEALTH")
+                .font(.system(size: 11, weight: .bold))
+                .tracking(1.1)
+                .foregroundColor(LocalVoiceTheme.muted)
+
+            HealthRow(
+                title: "Speech engine",
+                detail: store.runtime.engineName,
+                ready: store.runtime.whisperReady
+            )
+            HealthRow(
+                title: "Microphone",
+                detail: store.runtime.microphoneReady ? "Permission granted" : "Permission required",
+                ready: store.runtime.microphoneReady
+            )
+            HealthRow(
+                title: "Text insertion",
+                detail: store.runtime.accessibilityReady ? "Accessibility granted" : "Permission required",
+                ready: store.runtime.accessibilityReady
+            )
+            HealthRow(
+                title: "Privacy boundary",
+                detail: store.runtime.privacyVerified ? "Offline path verified" : "Run self-test",
+                ready: store.runtime.privacyVerified
+            )
+
+            Spacer(minLength: 0)
+
+            HStack {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 10))
+                Text("Loopback and on-device only")
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .foregroundColor(LocalVoiceTheme.muted)
+        }
+        .padding(22)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(LocalVoiceTheme.panel)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(LocalVoiceTheme.line, lineWidth: 1)
+        )
+    }
+}
+
+private struct HistoryView: View {
+    @ObservedObject var store: LocalVoiceStore
+    @State private var query = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            PageHeader(
+                eyebrow: "LIBRARY",
+                title: "History",
+                subtitle: "Search, review, and reuse transcripts stored only on this Mac."
+            )
+
+            HStack {
+                HStack(spacing: 9) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(LocalVoiceTheme.muted)
+                    TextField("Search transcripts or apps", text: $query)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13))
+                }
+                .padding(.horizontal, 13)
+                .frame(height: 40)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(LocalVoiceTheme.panel)
+                )
+                Spacer()
+                Text("\(filtered.count) records")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(LocalVoiceTheme.muted)
+            }
+
+            if filtered.isEmpty {
+                EmptyState(
+                    symbol: "text.magnifyingglass",
+                    title: query.isEmpty ? "No history yet" : "No matching dictations",
+                    detail: query.isEmpty ? "New local transcripts will collect here." : "Try a broader word or app name."
+                )
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 10) {
+                        ForEach(filtered) { record in
+                            HistoryCard(record: record)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(32)
+        .background(LocalVoiceTheme.background)
+    }
+
+    private var filtered: [LocalVoiceRecord] {
+        guard !query.isEmpty else { return store.records }
+        return store.records.filter {
+            $0.text.localizedCaseInsensitiveContains(query)
+                || $0.applicationName.localizedCaseInsensitiveContains(query)
+                || $0.modeName.localizedCaseInsensitiveContains(query)
+        }
+    }
+}
+
+private struct ModesView: View {
+    private let modes: [(String, String, String, String)] = [
+        ("Quick message", "Slack, Messages", "Friendly, direct, light cleanup", "message.fill"),
+        ("Professional", "Mail, Gmail", "Complete sentences and polished prose", "envelope.fill"),
+        ("Technical", "Codex, VS Code", "Preserves paths, identifiers, and code terms", "chevron.left.forwardslash.chevron.right"),
+        ("Command", "Terminal, iTerm", "Preserves flags and shell syntax", "terminal.fill"),
+    ]
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                PageHeader(
+                    eyebrow: "APP-AWARE WRITING",
+                    title: "Modes",
+                    subtitle: "Local Voice adapts formatting to the app you are already using."
+                )
+
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
+                    ForEach(modes, id: \.0) { mode in
+                        ModeCard(title: mode.0, apps: mode.1, detail: mode.2, symbol: mode.3)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 14) {
+                    SectionHeader(title: "Routing rule", detail: "Deterministic before intelligent")
+                    Text("The frontmost app selects a local prompt profile. Technical and terminal modes preserve symbols and identifiers. Cloud cleanup is never enabled silently.")
+                        .font(.system(size: 13))
+                        .foregroundColor(LocalVoiceTheme.secondary)
+                        .lineSpacing(4)
+                }
+                .padding(20)
+                .cardStyle()
+            }
+            .padding(32)
+        }
+    }
+}
+
+private struct DictionaryView: View {
+    @State private var terms = VocabularyLearner.shared.allTerms()
+    @State private var newTerm = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            PageHeader(
+                eyebrow: "PERSONAL LANGUAGE",
+                title: "Dictionary",
+                subtitle: "Teach names, acronyms, product terms, and phrases once."
+            )
+
+            HStack(spacing: 10) {
+                TextField("Add a word or phrase", text: $newTerm)
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 13)
+                    .frame(height: 42)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(LocalVoiceTheme.panel)
+                    )
+                    .onSubmit(addTerm)
+                Button("Add", action: addTerm)
+                    .buttonStyle(AccentButtonStyle())
+            }
+
+            if terms.isEmpty {
+                EmptyState(
+                    symbol: "text.badge.plus",
+                    title: "No learned terms yet",
+                    detail: "Corrections and words added here stay on this Mac."
+                )
+            } else {
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], spacing: 10) {
+                        ForEach(terms, id: \.self) { term in
+                            HStack {
+                                Text(term)
+                                    .font(.system(size: 13, weight: .semibold))
+                                Spacer()
+                                Button {
+                                    _ = VocabularyLearner.shared.removeTerm(term)
+                                    refresh()
+                                } label: {
+                                    Image(systemName: "xmark")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundColor(LocalVoiceTheme.muted)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .padding(.horizontal, 12)
+                            .frame(height: 38)
+                            .background(
+                                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                    .fill(LocalVoiceTheme.panel)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        .padding(32)
+    }
+
+    private func addTerm() {
+        guard VocabularyLearner.shared.addTerm(newTerm) else { return }
+        newTerm = ""
+        refresh()
+    }
+
+    private func refresh() {
+        terms = VocabularyLearner.shared.allTerms()
+    }
+}
+
+private struct ModelsView: View {
+    @ObservedObject var store: LocalVoiceStore
+
+    private let featuredModels: [(String, String, String)] = [
+        ("Parakeet TDT v3", "Fast multilingual", "bolt.fill"),
+        ("Whisper large-v3-turbo", "High-accuracy multilingual", "scope"),
+        ("Whisper base.en", "Lightweight English", "leaf.fill"),
+    ]
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                PageHeader(
+                    eyebrow: "LOCAL INFERENCE",
+                    title: "Models",
+                    subtitle: "Choose speed or accuracy without sending audio to a hosted API."
+                )
+
+                HStack(spacing: 14) {
+                    ForEach(featuredModels, id: \.0) { model in
+                        ModelCard(
+                            title: model.0,
+                            detail: model.1,
+                            symbol: model.2,
+                            active: store.runtime.engineName.localizedCaseInsensitiveContains(model.0.components(separatedBy: " ").first ?? "")
+                        )
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 16) {
+                    SectionHeader(title: "Current route", detail: "Automatic fallback")
+                    RouteStep(index: "01", title: "Fast path", detail: "Parakeet when installed and compatible")
+                    RouteStep(index: "02", title: "Quality path", detail: "Warm whisper-server with your selected model")
+                    RouteStep(index: "03", title: "Recovery path", detail: "whisper-cli if the persistent engine is unavailable")
+                }
+                .padding(20)
+                .cardStyle()
+            }
+            .padding(32)
+        }
+    }
+}
+
+private struct PrivacyView: View {
+    @ObservedObject var store: LocalVoiceStore
+    let actions: LocalVoiceDashboardActions
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                PageHeader(
+                    eyebrow: "TRUST CENTER",
+                    title: "Privacy",
+                    subtitle: "The default speech path is local. Any future network route must be explicit."
+                )
+
+                HStack(alignment: .top, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Image(systemName: store.runtime.privacyVerified ? "checkmark.shield.fill" : "shield.lefthalf.filled")
+                            .font(.system(size: 34))
+                            .foregroundColor(store.runtime.privacyVerified ? LocalVoiceTheme.accent : LocalVoiceTheme.warning)
+                        Text(store.runtime.privacyVerified ? "Offline path verified" : "Verification available")
+                            .font(.system(size: 20, weight: .semibold))
+                        Text("The self-test checks that a local model is present and the active transcription route can run without a cloud speech provider.")
+                            .font(.system(size: 13))
+                            .foregroundColor(LocalVoiceTheme.secondary)
+                            .lineSpacing(4)
+                        Button("Run privacy self-test", action: actions.runPrivacyTest)
+                            .buttonStyle(AccentButtonStyle())
+                    }
+                    .padding(22)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .cardStyle()
+
+                    VStack(spacing: 0) {
+                        PrivacyRule(title: "Audio retention", detail: "Off by default", ready: true)
+                        Divider().overlay(LocalVoiceTheme.line)
+                        PrivacyRule(title: "Transcript history", detail: "Local JSON, 30-day default", ready: true)
+                        Divider().overlay(LocalVoiceTheme.line)
+                        PrivacyRule(title: "Speech API", detail: "Loopback only", ready: true)
+                        Divider().overlay(LocalVoiceTheme.line)
+                        PrivacyRule(title: "Telemetry", detail: "None", ready: true)
+                    }
+                    .frame(width: 330)
+                    .cardStyle()
+                }
+            }
+            .padding(32)
+        }
+    }
+}
+
+private struct SettingsView: View {
+    let actions: LocalVoiceDashboardActions
+    @State private var config = Config.load()
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                PageHeader(
+                    eyebrow: "PREFERENCES",
+                    title: "Settings",
+                    subtitle: "The defaults are intentionally private, fast, and low-friction."
+                )
+
+                VStack(spacing: 0) {
+                    SettingToggle(
+                        title: "Keep model warm",
+                        detail: "Avoid model load time between dictations",
+                        value: Binding(
+                            get: { config.keepModelWarm?.value ?? true },
+                            set: { value in update { $0.keepModelWarm = FlexBool(value) } }
+                        )
+                    )
+                    SettingDivider()
+                    SettingToggle(
+                        title: "Live transcription preview",
+                        detail: "Show partial words in the floating pill",
+                        value: Binding(
+                            get: { config.streamingEnabled?.value ?? true },
+                            set: { value in update { $0.streamingEnabled = FlexBool(value) } }
+                        )
+                    )
+                    SettingDivider()
+                    SettingToggle(
+                        title: "Save transcript history",
+                        detail: "Keep text locally; audio remains off by default",
+                        value: Binding(
+                            get: { config.saveTranscriptHistory?.value ?? true },
+                            set: { value in update { $0.saveTranscriptHistory = FlexBool(value) } }
+                        )
+                    )
+                    SettingDivider()
+                    SettingToggle(
+                        title: "Local refinement",
+                        detail: "Use Ollama when it is already running",
+                        value: Binding(
+                            get: { config.ollamaEnabled?.value ?? true },
+                            set: { value in update { $0.ollamaEnabled = FlexBool(value) } }
+                        )
+                    )
+                }
+                .cardStyle()
+
+                VStack(alignment: .leading, spacing: 14) {
+                    SectionHeader(title: "Current shortcut", detail: config.hotkeySummary())
+                    Text("Hold to speak. Double-tap fn to lock a longer recording, then tap again to finish.")
+                        .font(.system(size: 13))
+                        .foregroundColor(LocalVoiceTheme.secondary)
+                    HStack(spacing: 10) {
+                        QuietButton(title: "Open advanced config", symbol: "doc.text", action: actions.openConfiguration)
+                        QuietButton(title: "Reload", symbol: "arrow.clockwise", action: actions.reloadConfiguration)
+                    }
+                }
+                .padding(20)
+                .cardStyle()
+            }
+            .padding(32)
+        }
+    }
+
+    private func update(_ transform: (inout Config) -> Void) {
+        transform(&config)
+        try? config.save()
+        actions.reloadConfiguration()
+    }
+}
+
+private struct PageHeader: View {
+    let eyebrow: String
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(eyebrow)
+                .font(.system(size: 11, weight: .bold))
+                .tracking(1.4)
+                .foregroundColor(LocalVoiceTheme.accent)
+            Text(title)
+                .font(.system(size: 30, weight: .semibold, design: .rounded))
+                .foregroundColor(LocalVoiceTheme.primary)
+            Text(subtitle)
+                .font(.system(size: 13))
+                .foregroundColor(LocalVoiceTheme.secondary)
+        }
+    }
+}
+
+private struct SectionHeader: View {
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 15, weight: .semibold))
+            Spacer()
+            Text(detail)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(LocalVoiceTheme.muted)
+        }
+    }
+}
+
+private struct MetricCard: View {
+    let label: String
+    let value: String
+    let detail: String
+    let symbol: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(label)
+                    .font(.system(size: 10, weight: .bold))
+                    .tracking(1)
+                    .foregroundColor(LocalVoiceTheme.muted)
+                Spacer()
+                Image(systemName: symbol)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(LocalVoiceTheme.accent)
+            }
+            Text(value)
+                .font(.system(size: 25, weight: .semibold, design: .rounded))
+            Text(detail)
+                .font(.system(size: 11))
+                .foregroundColor(LocalVoiceTheme.secondary)
+        }
+        .padding(17)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(LocalVoiceTheme.panel)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(LocalVoiceTheme.line, lineWidth: 1)
+        )
+    }
+}
+
+private struct HealthRow: View {
+    let title: String
+    let detail: String
+    let ready: Bool
+
+    var body: some View {
+        HStack(spacing: 11) {
+            ZStack {
+                Circle()
+                    .fill((ready ? LocalVoiceTheme.accent : LocalVoiceTheme.warning).opacity(0.12))
+                Image(systemName: ready ? "checkmark" : "exclamationmark")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundColor(ready ? LocalVoiceTheme.accent : LocalVoiceTheme.warning)
+            }
+            .frame(width: 25, height: 25)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                Text(detail)
+                    .font(.system(size: 10.5))
+                    .foregroundColor(LocalVoiceTheme.muted)
+                    .lineLimit(1)
+            }
+        }
+    }
+}
+
+private struct RecordRow: View {
+    let record: LocalVoiceRecord
+
+    var body: some View {
+        HStack(spacing: 14) {
+            AppGlyph(name: record.applicationName)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(record.text)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(LocalVoiceTheme.primary)
+                    .lineLimit(1)
+                HStack(spacing: 7) {
+                    Text(record.applicationName)
+                    Text("•")
+                    Text(record.modeName)
+                    Text("•")
+                    Text(record.createdAt, style: .relative)
+                }
+                .font(.system(size: 10.5))
+                .foregroundColor(LocalVoiceTheme.muted)
+            }
+            Spacer()
+            Text("\(record.wordCount) words")
+                .font(.system(size: 10.5, weight: .semibold))
+                .foregroundColor(LocalVoiceTheme.secondary)
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 66)
+    }
+}
+
+private struct HistoryCard: View {
+    let record: LocalVoiceRecord
+    @State private var copied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            HStack {
+                HStack(spacing: 10) {
+                    AppGlyph(name: record.applicationName)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(record.applicationName)
+                            .font(.system(size: 12, weight: .semibold))
+                        Text(record.createdAt.formatted(date: .abbreviated, time: .shortened))
+                            .font(.system(size: 10.5))
+                            .foregroundColor(LocalVoiceTheme.muted)
+                    }
+                }
+                Spacer()
+                SmallTag(text: record.modeName)
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(record.text, forType: .string)
+                    copied = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
+                } label: {
+                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(copied ? LocalVoiceTheme.accent : LocalVoiceTheme.secondary)
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(LocalVoiceTheme.raised))
+                }
+                .buttonStyle(.plain)
+            }
+
+            Text(record.text)
+                .font(.system(size: 13))
+                .foregroundColor(LocalVoiceTheme.primary)
+                .lineSpacing(4)
+                .textSelection(.enabled)
+
+            HStack(spacing: 8) {
+                Text(record.engineName)
+                Text("•")
+                Text("\(record.wordCount) words")
+                Text("•")
+                Text(formatLatency(record.finishMilliseconds))
+            }
+            .font(.system(size: 10.5))
+            .foregroundColor(LocalVoiceTheme.muted)
+        }
+        .padding(17)
+        .cardStyle()
+    }
+}
+
+private struct AppGlyph: View {
+    let name: String
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(LocalVoiceTheme.raised)
+            Text(String(name.prefix(1)).uppercased())
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundColor(LocalVoiceTheme.accent)
+        }
+        .frame(width: 36, height: 36)
+    }
+}
+
+private struct ModeCard: View {
+    let title: String
+    let apps: String
+    let detail: String
+    let symbol: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            HStack {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(LocalVoiceTheme.accent.opacity(0.1))
+                    Image(systemName: symbol)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(LocalVoiceTheme.accent)
+                }
+                .frame(width: 38, height: 38)
+                Spacer()
+                Text("AUTO")
+                    .font(.system(size: 9, weight: .bold))
+                    .tracking(1)
+                    .foregroundColor(LocalVoiceTheme.accent)
+            }
+            Text(title)
+                .font(.system(size: 16, weight: .semibold))
+            Text(apps)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(LocalVoiceTheme.accent)
+            Text(detail)
+                .font(.system(size: 12))
+                .foregroundColor(LocalVoiceTheme.secondary)
+                .lineSpacing(3)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, minHeight: 165, alignment: .topLeading)
+        .cardStyle()
+    }
+}
+
+private struct ModelCard: View {
+    let title: String
+    let detail: String
+    let symbol: String
+    let active: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: symbol)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(LocalVoiceTheme.accent)
+                Spacer()
+                if active {
+                    StatusPill(title: "ACTIVE", color: LocalVoiceTheme.accent)
+                }
+            }
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+            Text(detail)
+                .font(.system(size: 11))
+                .foregroundColor(LocalVoiceTheme.secondary)
+        }
+        .padding(17)
+        .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
+        .cardStyle()
+    }
+}
+
+private struct RouteStep: View {
+    let index: String
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack(spacing: 13) {
+            Text(index)
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundColor(LocalVoiceTheme.accent)
+                .frame(width: 26, height: 26)
+                .background(Circle().fill(LocalVoiceTheme.accent.opacity(0.1)))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                Text(detail)
+                    .font(.system(size: 11))
+                    .foregroundColor(LocalVoiceTheme.muted)
+            }
+        }
+    }
+}
+
+private struct PrivacyRule: View {
+    let title: String
+    let detail: String
+    let ready: Bool
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                Text(detail)
+                    .font(.system(size: 10.5))
+                    .foregroundColor(LocalVoiceTheme.muted)
+            }
+            Spacer()
+            Image(systemName: ready ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                .foregroundColor(ready ? LocalVoiceTheme.accent : LocalVoiceTheme.warning)
+        }
+        .padding(.horizontal, 17)
+        .frame(height: 64)
+    }
+}
+
+private struct SettingToggle: View {
+    let title: String
+    let detail: String
+    @Binding var value: Bool
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                Text(detail)
+                    .font(.system(size: 11))
+                    .foregroundColor(LocalVoiceTheme.muted)
+            }
+            Spacer()
+            Toggle("", isOn: $value)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .tint(LocalVoiceTheme.accent)
+        }
+        .padding(.horizontal, 18)
+        .frame(height: 68)
+    }
+}
+
+private struct SettingDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(LocalVoiceTheme.line)
+            .frame(height: 1)
+            .padding(.leading, 18)
+    }
+}
+
+private struct EmptyState: View {
+    let symbol: String
+    let title: String
+    let detail: String
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Image(systemName: symbol)
+                .font(.system(size: 25, weight: .medium))
+                .foregroundColor(LocalVoiceTheme.accent)
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+            Text(detail)
+                .font(.system(size: 11.5))
+                .foregroundColor(LocalVoiceTheme.muted)
+        }
+        .frame(maxWidth: .infinity, minHeight: 180)
+        .cardStyle()
+    }
+}
+
+private struct StatusPill: View {
+    let title: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(color)
+                .frame(width: 6, height: 6)
+            Text(title)
+                .font(.system(size: 9, weight: .bold))
+                .tracking(0.8)
+        }
+        .foregroundColor(color)
+        .padding(.horizontal, 9)
+        .frame(height: 24)
+        .background(Capsule().fill(color.opacity(0.1)))
+    }
+}
+
+private struct SmallTag: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 9.5, weight: .semibold))
+            .foregroundColor(LocalVoiceTheme.secondary)
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .frame(height: 23)
+            .background(Capsule().fill(LocalVoiceTheme.raised))
+    }
+}
+
+private struct QuietButton: View {
+    let title: String
+    let symbol: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                Image(systemName: symbol)
+                    .font(.system(size: 11, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .foregroundColor(LocalVoiceTheme.secondary)
+            .padding(.horizontal, 12)
+            .frame(height: 34)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(LocalVoiceTheme.raised)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct AccentButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12, weight: .bold))
+            .foregroundColor(LocalVoiceTheme.background)
+            .padding(.horizontal, 16)
+            .frame(height: 40)
+            .background(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(LocalVoiceTheme.accent.opacity(configuration.isPressed ? 0.78 : 1))
+            )
+    }
+}
+
+private extension View {
+    func cardStyle() -> some View {
+        background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(LocalVoiceTheme.panel)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(LocalVoiceTheme.line, lineWidth: 1)
+        )
+    }
+}
+
+private enum LocalVoiceTheme {
+    static let background = Color(red: 0.043, green: 0.051, blue: 0.063)
+    static let sidebar = Color(red: 0.054, green: 0.063, blue: 0.076)
+    static let panel = Color(red: 0.075, green: 0.086, blue: 0.102)
+    static let raised = Color(red: 0.102, green: 0.114, blue: 0.133)
+    static let selected = Color(red: 0.102, green: 0.122, blue: 0.139)
+    static let line = Color.white.opacity(0.075)
+    static let primary = Color(red: 0.94, green: 0.95, blue: 0.96)
+    static let secondary = Color(red: 0.66, green: 0.69, blue: 0.73)
+    static let muted = Color(red: 0.43, green: 0.47, blue: 0.52)
+    static let accent = Color(red: 0.42, green: 0.84, blue: 0.64)
+    static let info = Color(red: 0.40, green: 0.66, blue: 0.96)
+    static let listening = Color(red: 0.96, green: 0.45, blue: 0.40)
+    static let warning = Color(red: 0.96, green: 0.69, blue: 0.31)
+    static let danger = Color(red: 0.96, green: 0.39, blue: 0.42)
+}
+
+private func formatLatency(_ value: Double?) -> String {
+    guard let value, value > 0 else { return "—" }
+    if value < 1_000 { return "\(Int(value.rounded())) ms" }
+    return String(format: "%.1f s", value / 1_000)
+}
+
+private func formatMinutes(_ value: Double) -> String {
+    if value < 1 { return "\(Int((value * 60).rounded())) sec" }
+    return String(format: "%.1f min", value)
+}

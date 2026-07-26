@@ -1,68 +1,27 @@
-# Local Flow — Local Wispr Clone (Cipher Lab)
+# Local Voice status
 
-> MIT fork of [human37/open-wispr](https://github.com/human37/open-wispr) upgraded to A+ local dictation.
+Verified snapshot: 2026-07-25
 
-## Status (2026-07-03) — A+ drivers complete
+| Surface | Current state | Evidence |
+|---|---|---|
+| macOS command center | Implemented | Native SwiftUI window rendered from the real app |
+| macOS local speech runtime | Implemented | Persistent Whisper server, Parakeet routing, fallback, latency telemetry |
+| macOS product features | Implemented | History, app modes, dictionary, model controls, privacy, settings |
+| macOS automated checks | Passing | 108 Swift tests, including live model URL availability |
+| macOS release artifact | Passing | Release build and strict local code-signature verification |
+| iPhone app | Implemented, simulator-verified | Native UI and Apple on-device Speech path; simulator build passes |
+| iPhone keyboard | Implemented, simulator-verified | Inserts the most recent App Group transcript; no microphone claim |
+| Physical iPhone capture | Not yet verified | Requires signing team, device install, permissions, and live speech test |
+| Exploit Poker UI integration | Deliberately deferred | Kimi's active Poker redesign remains isolated |
 
-| Phase | Features | State |
-|-------|----------|-------|
-| P1 Feel | #1 #6 #5 #3 | **verified build** |
-| P2 Intelligence | #7 #8 #9 #10 | **shipped** |
-| P3 Harden | #11 #12 #13 #14 | **shipped** |
-| P4 Ship | #15 #16 | **shipped** |
-| A+ gaps | #4 #6b #8 learn #14 panel #15 test #16 wizard | **shipped** |
-| P5 iOS | #17-20 | simulator scaffold (`ios-spike/`) |
+## What remains before calling it production-ready
 
-OzReceipt: `vault-staging/wizardoz/receipts/runs/OzReceipt-LocalWisprFlowClone.md`
+1. Run a physical iPhone capture and keyboard insertion test.
+2. Decide whether the shipping iPhone engine remains Apple Speech or gains a bundled WhisperKit model/profile.
+3. Measure cold start, first partial, and finalization latency on the target iPhone.
+4. Apply the shared voice contract to Exploit Poker after the Poker redesign is handed back.
+5. Complete product signing, release identity, privacy copy, and the selected distribution path.
 
-## Quick start
+## Current product boundary
 
-```bash
-brew install whisper-cpp ffmpeg
-cd projects/cipher-lab/local-flow
-swift build -c release
-.build/release/open-wispr start
-```
-
-**Optional English fast path:**
-```bash
-./scripts/install-parakeet.sh
-```
-Do not paste comment lines into zsh — run the script alone.
-
-Grant: Microphone · Accessibility · Input Monitoring.
-
-Optional cleanup: `ollama serve`
-
-## Dual STT (#4)
-
-| Language | Engine |
-|----------|--------|
-| `en` / `auto` | Parakeet TDT-0.6b (if installed) → whisper-server fallback |
-| Other | whisper-server (large-v3-turbo recommended) |
-
-Menu shows active engine. Config: `"sttEngine": "auto"|"parakeet"|"whisper"`
-
-## A+ five + drivers
-
-1. Streaming STT + warm whisper-server (persistent model)
-2. Ollama cleanup + per-app profiles + voice commands
-3. Raw↔polished toggle (⌘T menu)
-4. Visible privacy badge + self-test menu item
-5. Vocabulary learning from corrections (`~/.config/open-wispr/learned-vocabulary.json`)
-6. Latency Debug panel (menu)
-7. First-run onboarding wizard
-
-## Menu shortcuts
-
-- **Toggle Raw ↔ Polished** — ⌘T
-- **Latency Debug…** — per-stage ms breakdown
-- **Run Privacy Self-Test** — verifies local models + offline STT
-
-## Latency
-
-Per-stage timings in stderr + Latency Debug panel.
-
-## iOS (gated)
-
-See `ios-spike/README.md`
+Local Voice owns general dictation, user history, language/model settings, and iPhone distribution. Exploit Poker owns poker-specific interface states and vocabulary. Shared runtime code may serve both, but no transcript history crosses products by default.

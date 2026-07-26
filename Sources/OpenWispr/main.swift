@@ -9,23 +9,24 @@ let version = OpenWispr.version
 
 func printUsage() {
     print("""
-    open-wispr v\(version) — Push-to-talk voice dictation for macOS
+    Local Voice v\(version) — Private, system-wide dictation for macOS
 
     USAGE:
-        open-wispr start              Start the dictation daemon
-        open-wispr set-hotkey <key>   Set the push-to-talk hotkey
-        open-wispr get-hotkey         Show current hotkey
-        open-wispr set-model <size>   Set the Whisper model
-        open-wispr set-language <code>  Set the language (e.g. en, fr, auto)
-        open-wispr download-model [size]  Download a Whisper model
-        open-wispr status             Show configuration and status
-        open-wispr --help             Show this help message
+        local-voice start               Start Local Voice
+        local-voice dashboard-preview   Open the fixture-backed GUI preview
+        local-voice set-hotkey <key>    Set the push-to-talk hotkey
+        local-voice get-hotkey          Show current hotkey
+        local-voice set-model <size>    Set the Whisper model
+        local-voice set-language <code> Set the language (e.g. en, fr, auto)
+        local-voice download-model [size] Download a Whisper model
+        local-voice status              Show configuration and status
+        local-voice --help              Show this help message
 
     HOTKEY EXAMPLES:
-        open-wispr set-hotkey globe             Globe/fn key (default)
-        open-wispr set-hotkey rightoption        Right Option key
-        open-wispr set-hotkey f5                 F5 key
-        open-wispr set-hotkey ctrl+space         Ctrl + Space
+        local-voice set-hotkey globe             Globe/fn key (default)
+        local-voice set-hotkey rightoption        Right Option key
+        local-voice set-hotkey f5                 F5 key
+        local-voice set-hotkey ctrl+space         Ctrl + Space
 
     AVAILABLE MODELS:
         \(Config.supportedModels.joined(separator: ", "))
@@ -40,17 +41,24 @@ func cmdStart() {
     app.delegate = delegate
 
     signal(SIGINT) { _ in
-        print("\nStopping open-wispr...")
+        print("\nStopping Local Voice...")
         exit(0)
     }
 
     app.run()
 }
 
+func cmdDashboardPreview() {
+    let app = NSApplication.shared
+    app.setActivationPolicy(.regular)
+    DashboardWindowController.shared.showPreview()
+    app.run()
+}
+
 func cmdSetHotkey(_ keyString: String) {
     guard let parsed = KeyCodes.parse(keyString) else {
         print("Error: Unknown key '\(keyString)'")
-        print("Run 'open-wispr --help' for examples")
+        print("Run 'local-voice --help' for examples")
         exit(1)
     }
 
@@ -94,7 +102,7 @@ func cmdSetLanguage(_ lang: String) {
     guard validCodes.contains(lang) else {
         print("Error: Unknown language '\(lang)'")
         print("Available: auto, en, fr, de, es, zh, ja, ko, pt, it, nl, ru, ...")
-        print("See full list: https://github.com/human37/open-wispr")
+        print("Run 'local-voice --help' for the supported model list.")
         exit(1)
     }
 
@@ -130,7 +138,7 @@ func cmdStatus() {
     let config = Config.load()
     let hotkeyDesc = config.hotkeySummary()
 
-    print("open-wispr v\(version)")
+    print("Local Voice v\(version)")
     print("Config:      \(Config.configFile.path)")
     print("Hotkey:      \(hotkeyDesc)")
     print("Model:       \(config.modelSize)")
@@ -155,21 +163,23 @@ case "start":
         exit(0)
     }
     cmdStart()
+case "dashboard-preview":
+    cmdDashboardPreview()
 case "set-hotkey":
     guard args.count > 2 else {
-        print("Usage: open-wispr set-hotkey <key>")
+        print("Usage: local-voice set-hotkey <key>")
         exit(1)
     }
     cmdSetHotkey(args[2])
 case "set-model":
     guard args.count > 2 else {
-        print("Usage: open-wispr set-model <size>")
+        print("Usage: local-voice set-model <size>")
         exit(1)
     }
     cmdSetModel(args[2])
 case "set-language":
     guard args.count > 2 else {
-        print("Usage: open-wispr set-language <code>")
+        print("Usage: local-voice set-language <code>")
         print("Examples: en, fr, auto")
         exit(1)
     }

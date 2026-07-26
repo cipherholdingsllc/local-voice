@@ -115,22 +115,26 @@ public final class ParakeetDaemon: STTEngine {
     }
 
     private static func resolvePython() -> String {
-        let marker = Config.configDir.appendingPathComponent("parakeet-python.txt")
-        if let raw = try? String(contentsOf: marker, encoding: .utf8) {
-            let marked = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !marked.isEmpty,
-               FileManager.default.isExecutableFile(atPath: marked),
-               canImportParakeet(python: marked) {
-                return marked
+        let legacyConfigDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/open-wispr")
+        for configDir in [Config.configDir, legacyConfigDir] {
+            let marker = configDir.appendingPathComponent("parakeet-python.txt")
+            if let raw = try? String(contentsOf: marker, encoding: .utf8) {
+                let marked = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !marked.isEmpty,
+                   FileManager.default.isExecutableFile(atPath: marked),
+                   canImportParakeet(python: marked) {
+                    return marked
+                }
             }
-        }
 
-        let venvPython = Config.configDir
-            .appendingPathComponent("parakeet-venv/bin/python")
-            .path
-        if FileManager.default.isExecutableFile(atPath: venvPython),
-           canImportParakeet(python: venvPython) {
-            return venvPython
+            let venvPython = configDir
+                .appendingPathComponent("parakeet-venv/bin/python")
+                .path
+            if FileManager.default.isExecutableFile(atPath: venvPython),
+               canImportParakeet(python: venvPython) {
+                return venvPython
+            }
         }
 
         for path in ["/opt/homebrew/bin/python3", "/usr/local/bin/python3", "/usr/bin/python3"] {
@@ -169,17 +173,17 @@ public final class ParakeetDaemon: STTEngine {
     }
 
     private static func resolveScriptPath() -> String {
-        let candidates = [
+        var candidates = [
             FileManager.default.currentDirectoryPath + "/scripts/parakeet_daemon.py",
-            Bundle.main.bundlePath + "/../scripts/parakeet_daemon.py",
         ]
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        candidates.forEach { _ in () }
-        let devPath = "\(home)/CipherCowork/projects/cipher-lab/local-flow/scripts/parakeet_daemon.py"
-        for path in [devPath] + candidates {
+        if let resourcePath = Bundle.main.resourceURL?
+            .appendingPathComponent("parakeet_daemon.py").path {
+            candidates.insert(resourcePath, at: 0)
+        }
+        for path in candidates {
             if FileManager.default.fileExists(atPath: path) { return path }
         }
-        return devPath
+        return candidates[0]
     }
 }
 

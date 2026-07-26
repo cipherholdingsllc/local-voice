@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Install Parakeet MLX for Local Flow dual-engine STT (#4)
-# Creates a dedicated venv at ~/.config/open-wispr/parakeet-venv — same Python the daemon uses.
+# Install Parakeet MLX for the Local Voice dual-engine speech path.
+# Creates a dedicated venv at ~/.config/local-voice/parakeet-venv.
 set -euo pipefail
 
-CONFIG_DIR="${HOME}/.config/open-wispr"
+CONFIG_DIR="${HOME}/.config/local-voice"
 VENV_DIR="${CONFIG_DIR}/parakeet-venv"
 PYTHON_MARKER="${CONFIG_DIR}/parakeet-python.txt"
 
-echo "Local Flow — Parakeet installer"
+echo "Local Voice — Parakeet installer"
 echo "Requires: ffmpeg, Python 3.10+"
 
 if ! command -v ffmpeg >/dev/null; then
@@ -41,4 +41,4 @@ echo "Done."
 echo "  Python: ${VENV_PYTHON}"
 echo "  Marker: ${PYTHON_MARKER}"
 echo "First transcribe downloads ~2.5GB model to HF cache."
-echo "Restart Local Flow — English dictation will auto-select Parakeet."
+echo "Restart Local Voice — English dictation will auto-select Parakeet."

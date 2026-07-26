@@ -2,8 +2,11 @@
 import PackageDescription
 
 let package = Package(
-    name: "open-wispr",
+    name: "local-voice",
     platforms: [.macOS(.v13)],
+    products: [
+        .executable(name: "local-voice", targets: ["open-wispr"]),
+    ],
     targets: [
         .target(
             name: "OpenWisprLib",

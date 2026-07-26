@@ -22,6 +22,7 @@ class StatusBarController: NSObject {
     var onPrivacyTest: (() -> Void)?
     var onShowLatency: (() -> Void)?
     var onToggleRawPolished: (() -> Void)?
+    var onOpenDashboard: (() -> Void)?
     var sttEngineName: String?
     var privacyStatus: String?
 
@@ -95,9 +96,21 @@ class StatusBarController: NSObject {
 
         let menu = NSMenu()
 
-        let titleItem = NSMenuItem(title: "Local Flow v\(OpenWispr.version)", action: nil, keyEquivalent: "")
+        let titleItem = NSMenuItem(title: "Local Voice v\(OpenWispr.version)", action: nil, keyEquivalent: "")
         titleItem.isEnabled = false
         menu.addItem(titleItem)
+
+        let dashboardTarget = MenuItemTarget { [weak self] in
+            self?.onOpenDashboard?()
+        }
+        menuItemTargets.append(dashboardTarget)
+        let dashboardItem = NSMenuItem(
+            title: "Open Local Voice",
+            action: #selector(MenuItemTarget.invoke),
+            keyEquivalent: ""
+        )
+        dashboardItem.target = dashboardTarget
+        menu.addItem(dashboardItem)
 
         if config.showPrivacyBadge?.value ?? true {
             let badge = privacyStatus ?? "100% on-device"

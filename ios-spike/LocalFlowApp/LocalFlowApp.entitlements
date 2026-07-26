@@ -4,7 +4,7 @@
 <dict>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.com.cipherholdings.localflow</string>
+		<string>group.com.cipherholdings.localvoice</string>
 	</array>
 </dict>
 </plist>

@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 
 public class AppDelegate: NSObject, NSApplicationDelegate {
     var statusBar: StatusBarController!
@@ -14,7 +15,11 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     private var isLockMode = false
     public var lastTranscription: String?
     private var streamingPartial = ""
-    private let streamingQueue = DispatchQueue(label: "local-flow.streaming", qos: .userInitiated)
+    private let streamingQueue = DispatchQueue(label: "local-voice.streaming", qos: .userInitiated)
+    private var dashboardCaptureMode = false
+    private var captureApplicationName = "Unknown app"
+    private var captureBundleIdentifier: String?
+    private var captureModeName = "Default"
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         statusBar = StatusBarController()
@@ -65,6 +70,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             }
             self.statusBar.onToggleRawPolished = { [weak self] in
                 self?.toggleRawPolished()
+            }
+            self.statusBar.onOpenDashboard = { [weak self] in
+                self?.showDashboard()
             }
             self.statusBar.buildMenu()
         }
@@ -122,7 +130,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         if let modelPath = Transcriber.findModel(modelSize: config.modelSize) {
             let modelURL = URL(fileURLWithPath: modelPath)
             if !ModelDownloader.isValidGGMLFile(at: modelURL) {
-                let msg = "Model file is corrupted. Re-download with: open-wispr download-model \(config.modelSize)"
+                let msg = "Model file is corrupted. Re-download with: local-voice download-model \(config.modelSize)"
                 print("Error: \(msg)")
                 DispatchQueue.main.async {
                     self.statusBar.state = .error(msg)
@@ -145,6 +153,14 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         let privacy = PrivacySelfTest.run(router: sttRouter)
         if config.showPrivacyBadge?.value ?? true {
             print("Privacy self-test: \(privacy.message)")
+        }
+        DispatchQueue.main.async {
+            LocalVoiceStore.shared.updateRuntime {
+                $0.privacyVerified = privacy.passed
+                $0.whisperReady = Transcriber.findWhisperBinary() != nil
+                $0.accessibilityReady = AXIsProcessTrusted()
+                $0.microphoneReady = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+            }
         }
 
         DispatchQueue.main.async { [weak self] in
@@ -172,8 +188,46 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 self.statusBar.state = result.passed ? .idle : .error(result.message)
                 self.statusBar.privacyStatus = result.message
                 self.statusBar.buildMenu()
+                LocalVoiceStore.shared.updateRuntime {
+                    $0.privacyVerified = result.passed
+                    $0.statusDetail = result.message
+                    $0.state = result.passed ? .ready : .error
+                }
             }
         }
+    }
+
+    func showDashboard() {
+        DashboardWindowController.shared.show(
+            store: .shared,
+            actions: LocalVoiceDashboardActions(
+                toggleRecording: { [weak self] in self?.toggleDashboardCapture() },
+                copyLast: { [weak self] in self?.copyLastTranscription() },
+                runPrivacyTest: { [weak self] in self?.runPrivacySelfTest() },
+                reloadConfiguration: { [weak self] in self?.reloadConfig() },
+                openConfiguration: {
+                    if !FileManager.default.fileExists(atPath: Config.configFile.path) {
+                        try? Config.defaultConfig.save()
+                    }
+                    NSWorkspace.shared.open(Config.configFile)
+                }
+            )
+        )
+    }
+
+    private func toggleDashboardCapture() {
+        if isPressed {
+            handleRecordingStop()
+        } else {
+            dashboardCaptureMode = true
+            handleRecordingStart()
+        }
+    }
+
+    private func copyLastTranscription() {
+        guard let lastTranscription else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(lastTranscription, forType: .string)
     }
 
     func toggleRawPolished() {
@@ -215,9 +269,20 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         statusBar.state = .idle
         statusBar.sttEngineName = sttRouter.activeEngineName()
         statusBar.buildMenu()
+        let languageName = Config.supportedLanguages
+            .first(where: { $0.code == config.language })?.name ?? config.language
+        LocalVoiceStore.shared.updateRuntime {
+            $0.state = .ready
+            $0.engineName = self.sttRouter.activeEngineName()
+            $0.modelName = self.config.modelSize
+            $0.languageName = languageName
+            $0.statusDetail = "Hold \(self.config.hotkeySummary()) to dictate anywhere"
+            $0.whisperReady = Transcriber.findWhisperBinary() != nil
+            $0.accessibilityReady = AXIsProcessTrusted()
+        }
 
         let hotkeyDesc = config.hotkeySummary()
-        print("Local Flow v\(OpenWispr.version)")
+        print("Local Voice v\(OpenWispr.version)")
         if config.showPrivacyBadge?.value ?? true {
             print("Privacy: 100% on-device — zero network egress by default")
         }
@@ -348,11 +413,20 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     private func handleRecordingStart() {
         guard !isPressed else { return }
         isPressed = true
+        let frontmost = NSWorkspace.shared.frontmostApplication
+        captureApplicationName = dashboardCaptureMode
+            ? "Local Voice"
+            : (frontmost?.localizedName ?? "Unknown app")
+        captureBundleIdentifier = dashboardCaptureMode
+            ? "com.cipherholdings.localvoice"
+            : frontmost?.bundleIdentifier
+        captureModeName = AppPromptProfiles.profile(for: captureBundleIdentifier).name
         streamingPartial = ""
         LatencyInstrumentation.shared.reset()
         LatencyInstrumentation.shared.mark("record")
 
         statusBar.state = .recording
+        LocalVoiceStore.shared.setState(.listening, detail: "Speak naturally. Click stop when finished.")
         if config.showCursorHUD?.value ?? true {
             pillOverlay.show(state: .listening)
         }
@@ -373,7 +447,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         recorder.onSessionCap = { [weak self] in
             self?.handleRecordingStop()
         }
-        recorder.onSilenceTimeout = { [weak self] in
+        recorder.onSilenceTimeout = {
             // Lock mode ends only via double-tap fn or session cap — never silence.
         }
 
@@ -398,8 +472,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             print("Error: \(msg)")
             isPressed = false
             statusBar.state = .error(msg)
+            LocalVoiceStore.shared.setError(msg)
             pillOverlay.show(state: .error)
             pillOverlay.hide()
+            dashboardCaptureMode = false
         }
     }
 
@@ -437,6 +513,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         statusBar.state = .transcribing
+        LocalVoiceStore.shared.setState(.transcribing, detail: "Finishing locally with \(sttRouter.activeEngineName())")
         if config.showCursorHUD?.value ?? true {
             pillOverlay.show(state: .transcribing, partialText: streamingPartial.isEmpty ? nil : streamingPartial)
         }
@@ -459,7 +536,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 LatencyInstrumentation.shared.mark("llm")
                 let vocab = VocabularyLearner.shared.merged(with: self.config.customVocabulary ?? [])
                 if self.ollamaCleanup.enabled, OllamaCleanup.isReachable() {
-                    let profile = AppPromptProfiles.profile(for: AppPromptProfiles.frontmostBundleID())
+                    DispatchQueue.main.async {
+                        LocalVoiceStore.shared.setState(.refining, detail: "Applying your local writing mode")
+                    }
+                    let profile = AppPromptProfiles.profile(for: self.captureBundleIdentifier)
                     text = try self.ollamaCleanup.polish(
                         raw: text,
                         systemPrompt: profile.systemPrompt,
@@ -479,8 +559,13 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     LatencyInstrumentation.shared.mark("inject")
                     if !text.isEmpty {
                         self.lastTranscription = text
-                        self.inserter.insert(text: text)
-                        VoiceCommandExecutor.shared.flush()
+                        if self.dashboardCaptureMode {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(text, forType: .string)
+                        } else {
+                            self.inserter.insert(text: text)
+                            VoiceCommandExecutor.shared.flush()
+                        }
                     } else {
                         let msg = "Empty transcript — speak louder or check mic"
                         self.statusBar.state = .error(msg)
@@ -492,12 +577,38 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
                     if !text.isEmpty {
                         VocabularyLearner.shared.observeCorrection(inserted: raw, polished: text)
+                        let recordMs = LatencyInstrumentation.shared.lastSession["record"] ?? 0
+                        let finishMs = (LatencyInstrumentation.shared.lastSession["stt"] ?? 0)
+                            + (LatencyInstrumentation.shared.lastSession["llm"] ?? 0)
+                            + (LatencyInstrumentation.shared.lastSession["inject"] ?? 0)
+                        if self.config.saveTranscriptHistory?.value ?? true {
+                            LocalVoiceStore.shared.append(
+                                LocalVoiceRecord(
+                                    rawText: raw,
+                                    polishedText: text,
+                                    applicationName: self.captureApplicationName,
+                                    bundleIdentifier: self.captureBundleIdentifier,
+                                    modeName: self.captureModeName,
+                                    engineName: self.sttRouter.activeEngineName(),
+                                    language: self.config.language,
+                                    recordingMilliseconds: recordMs,
+                                    finishMilliseconds: finishMs
+                                )
+                            )
+                        }
                     }
 
                     self.statusBar.sttEngineName = self.sttRouter.activeEngineName()
                     self.statusBar.state = .idle
                     self.statusBar.buildMenu()
                     self.pillOverlay.hide()
+                    self.dashboardCaptureMode = false
+                    LocalVoiceStore.shared.updateRuntime {
+                        $0.state = .ready
+                        $0.engineName = self.sttRouter.activeEngineName()
+                        $0.modelName = self.config.modelSize
+                        $0.statusDetail = "Hold \(self.config.hotkeySummary()) to dictate anywhere"
+                    }
                 }
             } catch {
                 if maxRecordings > 0 {
@@ -508,7 +619,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     print("Error: \(msg)")
                     self.statusBar.state = .error(msg)
                     self.statusBar.buildMenu()
+                    LocalVoiceStore.shared.setError(msg)
                     self.pillOverlay.show(state: .error, partialText: msg)
+                    self.dashboardCaptureMode = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
                         if case .error = self.statusBar.state {
                             self.statusBar.state = .idle

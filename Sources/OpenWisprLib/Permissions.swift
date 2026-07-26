@@ -29,14 +29,14 @@ struct Permissions {
     static func resetAccessibility() {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
-        process.arguments = ["reset", "Accessibility", "com.human37.open-wispr"]
+        process.arguments = ["reset", "Accessibility", "com.cipherholdings.localvoice"]
         try? process.run()
         process.waitUntilExit()
     }
 
     static func didUpgrade() -> Bool {
         let configDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/open-wispr")
+            .appendingPathComponent(".config/local-voice")
         let versionFile = configDir.appendingPathComponent(".last-version")
         let current = OpenWispr.version
         let raw = (try? String(contentsOf: versionFile, encoding: .utf8))?

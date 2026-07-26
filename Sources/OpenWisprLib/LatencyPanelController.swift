@@ -21,7 +21,7 @@ final class LatencyPanelController {
                 backing: .buffered,
                 defer: false
             )
-            p.title = "Local Flow — Latency"
+            p.title = "Local Voice — Latency"
             p.level = .floating
             p.isReleasedWhenClosed = false
 

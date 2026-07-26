@@ -29,6 +29,26 @@ public final class VocabularyLearner {
         return out
     }
 
+    @discardableResult
+    public func addTerm(_ value: String) -> Bool {
+        let term = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard term.count >= 2 else { return false }
+        return queue.sync {
+            let inserted = terms.insert(term).inserted
+            if inserted { persist() }
+            return inserted
+        }
+    }
+
+    @discardableResult
+    public func removeTerm(_ value: String) -> Bool {
+        queue.sync {
+            guard terms.remove(value) != nil else { return false }
+            persist()
+            return true
+        }
+    }
+
     /// Schedule observation: after insert, read focused field and diff against polished text.
     public func observeCorrection(inserted: String, polished: String, delay: TimeInterval = 2.5) {
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + delay) { [weak self] in

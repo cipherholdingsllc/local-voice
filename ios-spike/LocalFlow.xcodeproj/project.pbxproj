@@ -1,0 +1,402 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A1B2C3D401 /* LocalFlowApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D411 /* LocalFlowApp.swift */; };
+		A1B2C3D402 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D412 /* ContentView.swift */; };
+		A1B2C3D403 /* TranscriptBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D413 /* TranscriptBridge.swift */; };
+		A1B2C3D404 /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D414 /* KeyboardViewController.swift */; };
+		A1B2C3D405 /* TranscriptBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D413 /* TranscriptBridge.swift */; };
+		A1B2C3D406 /* LocalFlowKeyboard.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A1B2C3D420 /* LocalFlowKeyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A1B2C3D430 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A1B2C3D400 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1B2C3D422;
+			remoteInfo = LocalFlowKeyboard;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A1B2C3D431 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A1B2C3D406 /* LocalFlowKeyboard.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		A1B2C3D410 /* LocalFlow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LocalFlow.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1B2C3D411 /* LocalFlowApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalFlowApp.swift; sourceTree = "<group>"; };
+		A1B2C3D412 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A1B2C3D413 /* TranscriptBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptBridge.swift; sourceTree = "<group>"; };
+		A1B2C3D414 /* KeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardViewController.swift; sourceTree = "<group>"; };
+		A1B2C3D415 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A1B2C3D416 /* LocalFlowApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LocalFlowApp.entitlements; sourceTree = "<group>"; };
+		A1B2C3D417 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A1B2C3D418 /* LocalFlowKeyboard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LocalFlowKeyboard.entitlements; sourceTree = "<group>"; };
+		A1B2C3D420 /* LocalFlowKeyboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LocalFlowKeyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A1B2C3D441 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1B2C3D442 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A1B2C3D450 = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D451 /* LocalFlowApp */,
+				A1B2C3D452 /* LocalFlowKeyboard */,
+				A1B2C3D453 /* Shared */,
+				A1B2C3D454 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A1B2C3D451 /* LocalFlowApp */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D411 /* LocalFlowApp.swift */,
+				A1B2C3D412 /* ContentView.swift */,
+				A1B2C3D415 /* Info.plist */,
+				A1B2C3D416 /* LocalFlowApp.entitlements */,
+			);
+			path = LocalFlowApp;
+			sourceTree = "<group>";
+		};
+		A1B2C3D452 /* LocalFlowKeyboard */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D414 /* KeyboardViewController.swift */,
+				A1B2C3D417 /* Info.plist */,
+				A1B2C3D418 /* LocalFlowKeyboard.entitlements */,
+			);
+			path = LocalFlowKeyboard;
+			sourceTree = "<group>";
+		};
+		A1B2C3D453 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D413 /* TranscriptBridge.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		A1B2C3D454 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D410 /* LocalFlow.app */,
+				A1B2C3D420 /* LocalFlowKeyboard.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A1B2C3D421 /* LocalFlow */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1B2C3D461 /* Build configuration list for PBXNativeTarget "LocalFlow" */;
+			buildPhases = (
+				A1B2C3D471 /* Sources */,
+				A1B2C3D441 /* Frameworks */,
+				A1B2C3D481 /* Resources */,
+				A1B2C3D431 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A1B2C3D432 /* PBXTargetDependency */,
+			);
+			name = LocalFlow;
+			productName = LocalFlow;
+			productReference = A1B2C3D410 /* LocalFlow.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A1B2C3D422 /* LocalFlowKeyboard */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1B2C3D462 /* Build configuration list for PBXNativeTarget "LocalFlowKeyboard" */;
+			buildPhases = (
+				A1B2C3D472 /* Sources */,
+				A1B2C3D442 /* Frameworks */,
+				A1B2C3D482 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LocalFlowKeyboard;
+			productName = LocalFlowKeyboard;
+			productReference = A1B2C3D420 /* LocalFlowKeyboard.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A1B2C3D400 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					A1B2C3D421 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					A1B2C3D422 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = A1B2C3D460 /* Build configuration list for PBXProject "LocalFlow" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A1B2C3D450;
+			productRefGroup = A1B2C3D454 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A1B2C3D421 /* LocalFlow */,
+				A1B2C3D422 /* LocalFlowKeyboard */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A1B2C3D481 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1B2C3D482 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A1B2C3D471 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1B2C3D401 /* LocalFlowApp.swift in Sources */,
+				A1B2C3D402 /* ContentView.swift in Sources */,
+				A1B2C3D403 /* TranscriptBridge.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1B2C3D472 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1B2C3D404 /* KeyboardViewController.swift in Sources */,
+				A1B2C3D405 /* TranscriptBridge.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A1B2C3D432 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1B2C3D422 /* LocalFlowKeyboard */;
+			targetProxy = A1B2C3D430 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		A1B2C3D491 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		A1B2C3D492 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 5.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A1B2C3D493 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = LocalFlowApp/LocalFlowApp.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = LocalFlowApp/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.cipherholdings.localvoice;
+				PRODUCT_NAME = LocalVoice;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A1B2C3D494 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = LocalFlowApp/LocalFlowApp.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = LocalFlowApp/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.cipherholdings.localvoice;
+				PRODUCT_NAME = LocalVoice;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		A1B2C3D495 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = LocalFlowKeyboard/LocalFlowKeyboard.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = LocalFlowKeyboard/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.cipherholdings.localvoice.keyboard;
+				PRODUCT_NAME = LocalVoiceKeyboard;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A1B2C3D496 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = LocalFlowKeyboard/LocalFlowKeyboard.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = LocalFlowKeyboard/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.cipherholdings.localvoice.keyboard;
+				PRODUCT_NAME = LocalVoiceKeyboard;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A1B2C3D460 /* Build configuration list for PBXProject "LocalFlow" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1B2C3D491 /* Debug */,
+				A1B2C3D492 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1B2C3D461 /* Build configuration list for PBXNativeTarget "LocalFlow" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1B2C3D493 /* Debug */,
+				A1B2C3D494 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1B2C3D462 /* Build configuration list for PBXNativeTarget "LocalFlowKeyboard" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1B2C3D495 /* Debug */,
+				A1B2C3D496 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A1B2C3D400 /* Project object */;
+}

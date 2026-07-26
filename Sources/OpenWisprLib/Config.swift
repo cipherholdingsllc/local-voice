@@ -26,6 +26,8 @@ public struct Config: Codable {
     public var sessionCapSeconds: Double?
     public var silenceTimeoutSeconds: Double?
     public var sttEngine: STTEngineKind?
+    public var saveTranscriptHistory: FlexBool?
+    public var historyRetentionDays: Int?
 
     public var hotkey: HotkeyConfig {
         get { hotkeys[0] }
@@ -68,6 +70,8 @@ public struct Config: Codable {
         case sessionCapSeconds
         case silenceTimeoutSeconds
         case sttEngine
+        case saveTranscriptHistory
+        case historyRetentionDays
     }
 
     public init(from decoder: Decoder) throws {
@@ -100,6 +104,8 @@ public struct Config: Codable {
         self.sessionCapSeconds = try c.decodeIfPresent(Double.self, forKey: .sessionCapSeconds)
         self.silenceTimeoutSeconds = try c.decodeIfPresent(Double.self, forKey: .silenceTimeoutSeconds)
         self.sttEngine = try c.decodeIfPresent(STTEngineKind.self, forKey: .sttEngine)
+        self.saveTranscriptHistory = try c.decodeIfPresent(FlexBool.self, forKey: .saveTranscriptHistory)
+        self.historyRetentionDays = try c.decodeIfPresent(Int.self, forKey: .historyRetentionDays)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -125,6 +131,8 @@ public struct Config: Codable {
         try c.encodeIfPresent(sessionCapSeconds, forKey: .sessionCapSeconds)
         try c.encodeIfPresent(silenceTimeoutSeconds, forKey: .silenceTimeoutSeconds)
         try c.encodeIfPresent(sttEngine, forKey: .sttEngine)
+        try c.encodeIfPresent(saveTranscriptHistory, forKey: .saveTranscriptHistory)
+        try c.encodeIfPresent(historyRetentionDays, forKey: .historyRetentionDays)
     }
 
     public init(
@@ -147,7 +155,9 @@ public struct Config: Codable {
         showPrivacyBadge: FlexBool? = FlexBool(true),
         sessionCapSeconds: Double? = 600,
         silenceTimeoutSeconds: Double? = nil,
-        sttEngine: STTEngineKind? = .auto
+        sttEngine: STTEngineKind? = .auto,
+        saveTranscriptHistory: FlexBool? = FlexBool(true),
+        historyRetentionDays: Int? = 30
     ) {
         self.hotkeys = hotkeys.isEmpty
             ? [HotkeyConfig(keyCode: 63, modifiers: [])]
@@ -171,6 +181,8 @@ public struct Config: Codable {
         self.sessionCapSeconds = sessionCapSeconds
         self.silenceTimeoutSeconds = silenceTimeoutSeconds
         self.sttEngine = sttEngine
+        self.saveTranscriptHistory = saveTranscriptHistory
+        self.historyRetentionDays = historyRetentionDays
     }
 
     public static let supportedLanguages: [LanguageOption] = [
@@ -321,24 +333,35 @@ public struct Config: Codable {
 
     public static var configDir: URL {
         let home = FileManager.default.homeDirectoryForCurrentUser
-        return home.appendingPathComponent(".config/open-wispr")
+        return home.appendingPathComponent(".config/local-voice")
     }
 
     public static var configFile: URL {
         configDir.appendingPathComponent("config.json")
     }
 
+    public static var legacyConfigFile: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/open-wispr/config.json")
+    }
+
     public static func load() -> Config {
-        guard let data = try? Data(contentsOf: configFile) else {
+        let sourceURL: URL
+        if FileManager.default.fileExists(atPath: configFile.path) {
+            sourceURL = configFile
+        } else if FileManager.default.fileExists(atPath: legacyConfigFile.path) {
+            sourceURL = legacyConfigFile
+        } else {
             let config = Config.defaultConfig
             try? config.save()
             return config
         }
 
         do {
+            let data = try Data(contentsOf: sourceURL)
             var config = try JSONDecoder().decode(Config.self, from: data)
             let resolved = Config.resolveModelAlias(config.modelSize)
-            if resolved != config.modelSize {
+            if resolved != config.modelSize || sourceURL == legacyConfigFile {
                 config.modelSize = resolved
                 try? config.save()
             }
