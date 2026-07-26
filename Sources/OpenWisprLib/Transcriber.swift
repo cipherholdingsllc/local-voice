@@ -1,6 +1,8 @@
 import Foundation
 
 public class Transcriber {
+    public var name: String { "whisper-cli (\(modelSize))" }
+    public let executionRoute = STTExecutionRoute.localProcess
     public let modelSize: String
     private let language: String
     public var spokenPunctuation: Bool = false
@@ -65,6 +67,14 @@ public class Transcriber {
         }
 
         return output
+    }
+
+    public func isAvailable() -> Bool {
+        Self.findWhisperBinary() != nil && Self.findModel(modelSize: modelSize) != nil
+    }
+
+    public func warmup() {
+        WhisperWarmKeeper.warmup(transcriber: self)
     }
 
     private static let knownMarkers: Set<String> = [
@@ -139,16 +149,7 @@ public class Transcriber {
     }
 
     static func findModel(modelSize: String) -> String? {
-        let modelFileName = "ggml-\(modelSize).bin"
-
-        let candidates = [
-            "\(Config.configDir.path)/models/\(modelFileName)",
-            "/opt/homebrew/share/whisper-cpp/models/\(modelFileName)",
-            "/usr/local/share/whisper-cpp/models/\(modelFileName)",
-            "\(FileManager.default.homeDirectoryForCurrentUser.path)/.cache/whisper/\(modelFileName)",
-        ]
-
-        for path in candidates {
+        for path in modelSearchPaths(modelSize: modelSize) {
             if FileManager.default.fileExists(atPath: path) {
                 return path
             }
@@ -156,7 +157,47 @@ public class Transcriber {
 
         return nil
     }
+
+    static func modelSearchPaths(
+        modelSize: String,
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
+        configDirectory: URL = Config.configDir,
+        resourceDirectory: URL? = Bundle.main.resourceURL
+    ) -> [String] {
+        let modelFileName = "ggml-\(modelSize).bin"
+        var candidates = [
+            configDirectory
+                .appendingPathComponent("models/\(modelFileName)")
+                .path,
+            homeDirectory
+                .appendingPathComponent(
+                    ".config/open-wispr/models/\(modelFileName)"
+                )
+                .path,
+            homeDirectory
+                .appendingPathComponent(
+                    ".cache/whisper-cpp/\(modelFileName)"
+                )
+                .path,
+            homeDirectory
+                .appendingPathComponent(".cache/whisper/\(modelFileName)")
+                .path,
+            "/opt/homebrew/share/whisper-cpp/models/\(modelFileName)",
+            "/usr/local/share/whisper-cpp/models/\(modelFileName)",
+        ]
+        if let resourceDirectory {
+            candidates.insert(
+                resourceDirectory
+                    .appendingPathComponent("models/\(modelFileName)")
+                    .path,
+                at: 1
+            )
+        }
+        return candidates
+    }
 }
+
+extension Transcriber: STTEngine {}
 
 enum TranscriberError: LocalizedError {
     case whisperNotFound

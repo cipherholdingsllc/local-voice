@@ -1,11 +1,29 @@
 import Foundation
 
+public enum STTExecutionRoute: String, Sendable {
+    case localProcess = "local_process"
+    case localLoopback = "local_loopback"
+
+    public var label: String {
+        switch self {
+        case .localProcess: return "local process"
+        case .localLoopback: return "local loopback"
+        }
+    }
+}
+
 /// STT engine abstraction for dual-engine routing (#4).
 public protocol STTEngine: AnyObject {
     var name: String { get }
+    var executionRoute: STTExecutionRoute { get }
     func isAvailable() -> Bool
     func warmup() throws
     func transcribe(audioURL: URL) throws -> String
+    func shutdown()
+}
+
+public extension STTEngine {
+    func shutdown() {}
 }
 
 public enum STTEngineKind: String, Codable, Sendable {
@@ -17,9 +35,12 @@ public enum STTEngineKind: String, Codable, Sendable {
 public final class STTRouter {
     public let language: String
     public let preferredEngine: STTEngineKind
-    private let parakeet: ParakeetDaemon
-    private let whisper: WhisperServerPool
-    private let whisperFallback: Transcriber
+    private let parakeet: STTEngine
+    private let whisper: STTEngine
+    private let whisperFallback: STTEngine
+    private let healthLock = NSLock()
+    private var parakeetHealthy = true
+    private var whisperHealthy = true
 
     public init(
         language: String,
@@ -28,38 +49,83 @@ public final class STTRouter {
         spokenPunctuation: Bool = false,
         initialPrompt: String? = nil
     ) {
+        let fallback = Transcriber(modelSize: modelSize, language: language)
+        fallback.spokenPunctuation = spokenPunctuation
+        fallback.initialPrompt = initialPrompt
         self.language = language
         self.preferredEngine = preferredEngine
         self.parakeet = ParakeetDaemon.shared
-        self.whisper = WhisperServerPool(modelSize: modelSize, language: language)
-        self.whisperFallback = Transcriber(modelSize: modelSize, language: language)
-        self.whisperFallback.spokenPunctuation = spokenPunctuation
-        self.whisperFallback.initialPrompt = initialPrompt
+        self.whisper = WhisperServerPool(
+            modelSize: modelSize,
+            language: language
+        )
+        self.whisperFallback = fallback
+    }
+
+    init(
+        language: String,
+        preferredEngine: STTEngineKind,
+        parakeet: STTEngine,
+        whisper: STTEngine,
+        whisperFallback: STTEngine
+    ) {
+        self.language = language
+        self.preferredEngine = preferredEngine
+        self.parakeet = parakeet
+        self.whisper = whisper
+        self.whisperFallback = whisperFallback
     }
 
     public func warmup() {
-        if shouldUseParakeet() {
-            try? parakeet.ensureRunning()
-            try? parakeet.warmup()
+        if shouldUseParakeet(), parakeetCanRun() {
+            do {
+                try parakeet.warmup()
+                setParakeetHealthy(true)
+                return
+            } catch {
+                setParakeetHealthy(false)
+                fputs(
+                    "STTRouter: Parakeet warmup failed (\(error.localizedDescription)); warming Whisper\n",
+                    stderr
+                )
+            }
         }
-        if shouldUseWhisper() {
-            try? whisper.ensureRunning()
-            WhisperWarmKeeper.warmup(transcriber: whisperFallback)
+        if whisperCanRun() {
+            do {
+                try whisper.warmup()
+                setWhisperHealthy(true)
+                return
+            } catch {
+                setWhisperHealthy(false)
+                fputs(
+                    "STTRouter: whisper-server warmup failed (\(error.localizedDescription)); warming CLI fallback\n",
+                    stderr
+                )
+            }
+        }
+        if whisperFallback.isAvailable() {
+            try? whisperFallback.warmup()
         }
     }
 
     public func transcribe(audioURL: URL) throws -> String {
-        if shouldUseParakeet(), parakeet.isAvailable() {
+        if shouldUseParakeet(), parakeetCanRun() {
             do {
-                return try parakeet.transcribe(audioURL: audioURL)
+                let text = try parakeet.transcribe(audioURL: audioURL)
+                setParakeetHealthy(true)
+                return text
             } catch {
+                setParakeetHealthy(false)
                 fputs("STTRouter: Parakeet failed (\(error.localizedDescription)), falling back to Whisper\n", stderr)
             }
         }
-        if whisper.isAvailable() {
+        if whisperCanRun() {
             do {
-                return try whisper.transcribe(audioURL: audioURL)
+                let text = try whisper.transcribe(audioURL: audioURL)
+                setWhisperHealthy(true)
+                return text
             } catch {
+                setWhisperHealthy(false)
                 fputs("STTRouter: whisper-server failed (\(error.localizedDescription)), falling back to CLI\n", stderr)
             }
         }
@@ -67,15 +133,59 @@ public final class STTRouter {
     }
 
     public func chunkEngine() -> STTEngine? {
-        if shouldUseParakeet(), parakeet.isAvailable() { return parakeet }
-        if whisper.isAvailable() { return whisper }
+        if shouldUseParakeet(), parakeetCanRun() { return parakeet }
+        if whisperCanRun() { return whisper }
         return nil
     }
 
     public func activeEngineName() -> String {
-        if shouldUseParakeet(), parakeet.isAvailable() { return "Parakeet TDT-0.6b" }
-        if whisper.isAvailable() { return "whisper-server (\(whisper.modelSize))" }
-        return "whisper-cli (\(whisperFallback.modelSize))"
+        activeEngine().name
+    }
+
+    public func activeExecutionRoute() -> STTExecutionRoute {
+        activeEngine().executionRoute
+    }
+
+    public func hasAvailableLocalEngine() -> Bool {
+        activeEngine().isAvailable()
+    }
+
+    public func shutdown() {
+        parakeet.shutdown()
+        whisper.shutdown()
+        whisperFallback.shutdown()
+    }
+
+    private func activeEngine() -> STTEngine {
+        if shouldUseParakeet(), parakeetCanRun() { return parakeet }
+        if whisperCanRun() { return whisper }
+        return whisperFallback
+    }
+
+    private func parakeetCanRun() -> Bool {
+        healthLock.lock()
+        let healthy = parakeetHealthy
+        healthLock.unlock()
+        return healthy && parakeet.isAvailable()
+    }
+
+    private func whisperCanRun() -> Bool {
+        healthLock.lock()
+        let healthy = whisperHealthy
+        healthLock.unlock()
+        return healthy && whisper.isAvailable()
+    }
+
+    private func setParakeetHealthy(_ healthy: Bool) {
+        healthLock.lock()
+        parakeetHealthy = healthy
+        healthLock.unlock()
+    }
+
+    private func setWhisperHealthy(_ healthy: Bool) {
+        healthLock.lock()
+        whisperHealthy = healthy
+        healthLock.unlock()
     }
 
     private func shouldUseParakeet() -> Bool {
@@ -83,14 +193,6 @@ public final class STTRouter {
         case .parakeet: return true
         case .whisper: return false
         case .auto: return language == "en" || language == "auto"
-        }
-    }
-
-    private func shouldUseWhisper() -> Bool {
-        switch preferredEngine {
-        case .whisper: return true
-        case .parakeet: return false
-        case .auto: return language != "en"
         }
     }
 }

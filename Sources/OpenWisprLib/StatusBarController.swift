@@ -113,7 +113,7 @@ class StatusBarController: NSObject {
         menu.addItem(dashboardItem)
 
         if config.showPrivacyBadge?.value ?? true {
-            let badge = privacyStatus ?? "100% on-device"
+            let badge = privacyStatus ?? "Local speech route"
             let privacyItem = NSMenuItem(title: "Privacy: \(badge)", action: nil, keyEquivalent: "")
             privacyItem.isEnabled = false
             menu.addItem(privacyItem)

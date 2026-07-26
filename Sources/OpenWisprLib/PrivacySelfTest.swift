@@ -1,50 +1,54 @@
 import Foundation
 
-/// Airplane-mode privacy self-test (#15) — proves STT works with zero network.
+/// Local-route privacy self-test.
+///
+/// This proves that the selected engine is a known local route and can
+/// transcribe a local fixture. Packet-level network isolation is a separate
+/// release test; this code does not pretend to create a firewall.
 public enum PrivacySelfTest {
     public struct Result: Sendable {
         public let passed: Bool
-        public let modelsLocal: Bool
-        public let sttOffline: Bool
+        public let localEngineAvailable: Bool
+        public let route: STTExecutionRoute
+        public let transcriptionSucceeded: Bool
+        public let packetIsolationVerified: Bool
         public let message: String
     }
 
     public static func run(router: STTRouter) -> Result {
-        let modelsLocal = Transcriber.modelExists(modelSize: "base.en") || anyModelCached()
-        var sttOffline = false
+        var route = router.activeExecutionRoute()
+        var localEngineAvailable = router.hasAvailableLocalEngine()
+        var transcriptionSucceeded = false
         var sttMessage = ""
 
-        if modelsLocal, let url = try? makeTestTone() {
+        if localEngineAvailable, let url = try? makeTestTone() {
             defer { try? FileManager.default.removeItem(at: url) }
-            let config = URLSessionConfiguration.ephemeral
-            config.timeoutIntervalForRequest = 1
-            config.timeoutIntervalForResource = 1
-            // Block all network during STT attempt
-            let session = URLSession(configuration: config)
-            _ = session // STT path uses local whisper-server/CLI, not URLSession for inference
-
             do {
                 _ = try router.transcribe(audioURL: url)
-                sttOffline = true
-                sttMessage = "Local STT succeeded without cloud"
+                transcriptionSucceeded = true
+                route = router.activeExecutionRoute()
+                localEngineAvailable = router.hasAvailableLocalEngine()
+                sttMessage = "Local speech route verified via \(route.label)"
             } catch {
-                sttOffline = false
-                sttMessage = "STT offline test failed: \(error.localizedDescription)"
+                sttMessage = "Local route test failed: \(error.localizedDescription)"
             }
         } else {
-            sttMessage = "Model not cached locally — download first"
+            sttMessage = "No configured local speech engine is available"
         }
 
-        let passed = modelsLocal && sttOffline
+        let passed = localEngineAvailable && transcriptionSucceeded
         let message = passed
-            ? "100% on-device verified — models local, STT works offline"
+            ? "\(sttMessage). Packet isolation is a separate release gate."
             : "Privacy test incomplete: \(sttMessage)"
 
-        return Result(passed: passed, modelsLocal: modelsLocal, sttOffline: sttOffline, message: message)
-    }
-
-    private static func anyModelCached() -> Bool {
-        Config.supportedModels.contains { Transcriber.modelExists(modelSize: $0) }
+        return Result(
+            passed: passed,
+            localEngineAvailable: localEngineAvailable,
+            route: route,
+            transcriptionSucceeded: transcriptionSucceeded,
+            packetIsolationVerified: false,
+            message: message
+        )
     }
 
     private static func makeTestTone() throws -> URL {

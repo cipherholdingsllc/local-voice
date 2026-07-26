@@ -12,12 +12,14 @@ Private, system-wide dictation for macOS with a native iPhone companion. Local V
 
 - Native SwiftUI command center with History, Modes, Dictionary, Models, Privacy, and Settings
 - Menu-bar push-to-talk with configurable global hotkeys
-- Persistent `whisper-server` pool to avoid model reloads between dictations
+- Persistent `whisper-server` pool on a private ephemeral loopback port to
+  avoid model reloads between dictations
 - Optional Parakeet MLX English fast path with Whisper fallback
 - App-aware prompt profiles and secure-field blocking
 - Raw/polished output, voice commands, and local vocabulary learning
 - Local-only transcript history with explicit retention controls
-- Latency breakdown and privacy self-test
+- Latency breakdown, repeatable local benchmark, and truthful local-route
+  privacy self-test
 - First-run permissions and model onboarding
 - Native iOS app with Apple on-device speech recognition
 - iOS keyboard extension that inserts transcripts completed in the main app
@@ -45,9 +47,12 @@ Useful commands:
 .build/release/local-voice set-hotkey rightoption
 .build/release/local-voice set-language auto
 .build/release/local-voice set-model large-v3-turbo-q5_0
+.build/release/local-voice benchmark auto base.en
 ```
 
 Configuration lives at `~/.config/local-voice/config.json`. On first launch, Local Voice migrates a legacy `~/.config/open-wispr/config.json` if present.
+Model discovery also preserves the legacy OpenWispr cache and supports the
+standard `~/.cache/whisper-cpp` cache.
 
 ### Optional Parakeet fast path
 
@@ -56,6 +61,18 @@ Configuration lives at `~/.config/local-voice/config.json`. On first launch, Loc
 ```
 
 English and automatic-language dictation prefer Parakeet when available and fall back to the persistent Whisper server. Other languages use Whisper.
+
+## Performance gate
+
+`local-voice benchmark` generates eight repeatable macOS text-to-speech
+fixtures, transcribes them through the selected real engine, and reports
+word-error rate, median/p95 finish latency, realtime factor, cold process
+warmup, engine, and privacy route as JSON. It exits nonzero when p95 exceeds
+1,000 ms or synthetic WER exceeds 15%.
+
+See [BENCHMARK.md](BENCHMARK.md) for the current measured matrix and its
+limitations. Synthetic speech is a regression fixture; it is not a substitute
+for human-microphone, accent, noise, insertion, or packet-isolation testing.
 
 ## iPhone
 

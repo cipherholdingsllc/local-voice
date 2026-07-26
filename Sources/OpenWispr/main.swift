@@ -19,6 +19,7 @@ func printUsage() {
         local-voice set-model <size>    Set the Whisper model
         local-voice set-language <code> Set the language (e.g. en, fr, auto)
         local-voice download-model [size] Download a Whisper model
+        local-voice benchmark [engine] [model] Run the local synthetic quality gate
         local-voice status              Show configuration and status
         local-voice --help              Show this help message
 
@@ -150,6 +151,42 @@ func cmdStatus() {
     print("Toggle:      \(toggleMode ? "on (press to start/stop)" : "off (hold to talk)")")
 }
 
+func cmdBenchmark(engine: String?, model: String?) {
+    let config = Config.load()
+    let preference: STTEngineKind
+    if let engine {
+        guard let parsed = STTEngineKind(rawValue: engine) else {
+            print("Error: benchmark engine must be auto, parakeet, or whisper")
+            exit(1)
+        }
+        preference = parsed
+    } else {
+        preference = config.sttEngine ?? .auto
+    }
+    let selectedModel = model ?? config.modelSize
+    guard Config.supportedModels.contains(selectedModel) else {
+        print("Error: Unknown model '\(selectedModel)'")
+        exit(1)
+    }
+
+    do {
+        let report = try VoiceBenchmark.run(
+            preferredEngine: preference,
+            modelSize: selectedModel,
+            language: "en"
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(report)
+        print(String(data: data, encoding: .utf8) ?? "{}")
+        if !report.aggregate.passed { exit(2) }
+    } catch {
+        print("Benchmark failed: \(error.localizedDescription)")
+        exit(1)
+    }
+}
+
 let args = CommandLine.arguments
 let rawCommand = args.count > 1 ? args[1] : nil
 let command: String? = {
@@ -189,6 +226,11 @@ case "get-hotkey":
 case "download-model":
     let size = args.count > 2 ? args[2] : "base.en"
     cmdDownloadModel(size)
+case "benchmark":
+    cmdBenchmark(
+        engine: args.count > 2 ? args[2] : nil,
+        model: args.count > 3 ? args[3] : nil
+    )
 case "status":
     cmdStatus()
 case "--help", "-h", "help":

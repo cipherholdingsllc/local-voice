@@ -7,8 +7,9 @@ Verified snapshot: 2026-07-25
 | macOS command center | Implemented | Native SwiftUI window rendered from the real app |
 | macOS local speech runtime | Implemented | Persistent Whisper server, Parakeet routing, fallback, latency telemetry |
 | macOS product features | Implemented | History, app modes, dictionary, model controls, privacy, settings |
-| macOS automated checks | Passing | 108 Swift tests, including live model URL availability |
+| macOS automated checks | Passing | 121 Swift tests, including routing failover, benchmark math, cache migration, and live model URL availability |
 | macOS release artifact | Passing | Release build and strict local code-signature verification |
+| macOS synthetic performance gate | Passing | Final installed Parakeet: 115.7 ms p95 / 6.25% WER; base Whisper: 64.5 ms p95 / 9.38% WER; large turbo: 715 ms p95 / 7.81% WER |
 | iPhone app | Implemented, simulator and arm64 build verified | Native UI, branded app icon, Apple on-device Speech path |
 | iPhone keyboard | Implemented, simulator-verified | Inserts the most recent App Group transcript; no microphone claim |
 | Personal Team path | Prepared | Explicit installer disables App Groups and requires caller-supplied team/device IDs |
@@ -21,7 +22,9 @@ Verified snapshot: 2026-07-25
 2. Decide whether the shipping iPhone engine remains Apple Speech or gains a bundled WhisperKit model/profile.
 3. Measure cold start, first partial, and finalization latency on the target iPhone.
 4. Apply the shared voice contract to Exploit Poker after the Poker redesign is handed back.
-5. Complete product signing, release identity, privacy copy, and the selected distribution path.
+5. Run packet-level network-isolation verification; the in-app self-test proves
+   a local route, not a firewall.
+6. Complete product signing, release identity, privacy copy, and the selected distribution path.
 
 ## Current product boundary
 

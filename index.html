@@ -3,22 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>open-wispr — Free Voice Dictation for macOS (100% Local, No Cloud)</title>
-  <meta name="description" content="The best free speech-to-text app for Mac. Hold a key, speak, release — text appears instantly. Powered by Whisper AI, runs 100% on-device. No cloud, no accounts, no subscription. Open source.">
+  <title>open-wispr — Local Voice Dictation for macOS</title>
+  <meta name="description" content="Open-source voice dictation for Apple Silicon Macs. Speech inference uses a local process or private loopback service, with no hosted speech-to-text provider configured.">
   <meta name="keywords" content="voice dictation, speech to text, macOS, whisper, on-device, privacy, open source, Apple Silicon, voice typing, dictation app">
   <meta name="author" content="human37">
   <link rel="canonical" href="https://open-wispr.com/">
 
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://open-wispr.com/">
-  <meta property="og:title" content="open-wispr — Free Voice Dictation for macOS (100% Local)">
-  <meta property="og:description" content="The best free speech-to-text for Mac. Hold a key, speak, release — text appears instantly. Whisper AI, 100% on-device. No cloud, no subscription.">
+  <meta property="og:title" content="open-wispr — Local Voice Dictation for macOS">
+  <meta property="og:description" content="Open-source voice dictation with speech inference through a local process or private loopback service.">
   <meta property="og:image" content="https://open-wispr.com/og.png">
   <meta property="og:site_name" content="open-wispr">
 
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="open-wispr — Free Voice Dictation for macOS (100% Local)">
-  <meta name="twitter:description" content="The best free speech-to-text for Mac. Hold a key, speak, release — text appears instantly. Whisper AI, 100% on-device. No subscription.">
+  <meta name="twitter:title" content="open-wispr — Local Voice Dictation for macOS">
+  <meta name="twitter:description" content="Open-source voice dictation with speech inference through a local process or private loopback service.">
   <meta name="twitter:image" content="https://open-wispr.com/og.png">
 
   <script type="application/ld+json">
@@ -29,7 +29,7 @@
     "operatingSystem": "macOS",
     "applicationCategory": "UtilitiesApplication",
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-    "description": "Free, private voice-to-text for macOS. Powered by Whisper AI, runs entirely on-device.",
+    "description": "Open-source voice-to-text for macOS. Speech inference uses a local process or private loopback service.",
     "url": "https://open-wispr.com/",
     "downloadUrl": "https://open-wispr.com/#install",
     "softwareVersion": "0.30.0",
@@ -55,7 +55,7 @@
         "name": "Does any audio or text leave my computer?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "No. Everything runs 100% on-device. Audio is recorded to a temporary file, transcribed locally by Whisper, and the file is immediately deleted. There are zero network requests."
+          "text": "Speech inference runs through a local process or private loopback service, with no hosted speech-to-text provider configured. Model downloads and availability checks can use the network. Audio retention is off by default."
         }
       },
       {
@@ -63,7 +63,7 @@
         "name": "How does this compare to VoiceInk, Whisper Flow, or Superwhisper?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "open-wispr is the free, MIT-licensed alternative. VoiceInk ($39.99, GPLv3) is the closest — also open source and local — but adds AI features and custom dictionaries. Wispr Flow ($15/mo) uses cloud AI. Superwhisper ($8.49/mo) is local but closed-source. open-wispr gives you the same core push-to-talk Whisper experience with zero cost and the most permissive license."
+          "text": "open-wispr is MIT-licensed and built around local speech inference. Compare current vendor features, privacy terms, and pricing directly before choosing a product."
         }
       },
       {
@@ -79,7 +79,7 @@
         "name": "How accurate is it compared to Apple Dictation?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Significantly better. Whisper handles punctuation, technical jargon, code terms, and accented speech far more reliably than Apple's built-in dictation. It supports 99 languages."
+          "text": "Accuracy depends on the selected model, microphone, voice, and environment. The project exposes a repeatable synthetic benchmark and requires human-speech testing before broader accuracy claims."
         }
       },
       {
@@ -613,9 +613,9 @@
 
 <main>
 <section class="hero">
-  <h1>Voice to text, entirely on-device.</h1>
+  <h1>Voice to text, processed locally.</h1>
 
-  <p class="hero-sub">Hold a key, speak, release. Your words appear at the cursor. Powered by <a href="https://github.com/ggerganov/whisper.cpp">whisper.cpp</a> with Metal acceleration. 100% local — no cloud, no accounts, no telemetry. Free and open source under MIT.</p>
+  <p class="hero-sub">Hold a key, speak, release. Your words appear at the cursor. Speech inference uses a local process or private loopback service, with no hosted speech-to-text provider configured. Free and open source under MIT.</p>
 
   <div class="demo-inline">
     <div class="demo-editor">
@@ -651,7 +651,7 @@
     <div class="step-card">
       <div class="step-num">02</div>
       <div class="step-title">Speak</div>
-      <div class="step-desc">Talk naturally. Whisper runs on your GPU via Metal. No network latency, no cloud processing.</div>
+      <div class="step-desc">Talk naturally. Speech inference stays on this Mac through a local process or private loopback service.</div>
     </div>
     <div class="step-card">
       <div class="step-num">03</div>
@@ -696,7 +696,7 @@
         <td class="muted">No</td>
       </tr>
       <tr>
-        <td>100% on-device</td>
+        <td>Local speech inference</td>
         <td class="check">Yes</td>
         <td class="check">Yes</td>
         <td class="muted">No</td>
@@ -804,7 +804,7 @@
   <div class="feature-grid">
     <div class="feature-cell">
       <h3><span class="feature-marker"></span>Private</h3>
-      <p>Audio is recorded to a temp file, transcribed locally, and deleted. Zero network requests. No accounts, no telemetry, no cloud.</p>
+      <p>Speech inference uses a local process or private loopback service. No hosted speech-to-text provider or telemetry is configured; model downloads and availability checks can use the network.</p>
     </div>
     <div class="feature-cell">
       <h3><span class="feature-marker"></span>Fast</h3>
@@ -915,11 +915,11 @@
     </details>
     <details class="faq-item">
       <summary>Does any audio or text leave my computer?</summary>
-      <p>No. Everything runs 100% on-device. Audio goes to a temp file, transcribed locally by Whisper, then deleted immediately. There are zero network requests -- no cloud, no accounts, no telemetry. Optionally, you can configure open-wispr to store a number of past recordings locally via the <code>maxRecordings</code> setting. Those recordings stay private and on your machine, and we default to not storing anything.</p>
+      <p>Speech inference runs through a local process or private loopback service, with no hosted speech-to-text provider or telemetry configured. Model downloads and availability checks can use the network. Audio retention is off by default; optional retained recordings stay on the Mac under operator control.</p>
     </details>
     <details class="faq-item">
       <summary>How does this compare to VoiceInk, Whisper Flow, or Superwhisper?</summary>
-      <p>open-wispr is the free, MIT-licensed alternative. VoiceInk ($39.99, GPLv3) is the closest — also open source and local — but adds AI features, custom dictionaries, and app-specific modes. Wispr Flow ($15/mo) uses cloud AI. Superwhisper ($8.49/mo) is local but closed-source. open-wispr gives you the same core experience — push-to-talk local dictation powered by Whisper — with zero cost, zero bloat, and the most permissive license.</p>
+      <p>open-wispr is MIT-licensed and built around local speech inference. Compare current vendor features, privacy terms, and pricing directly before choosing a product.</p>
     </details>
     <details class="faq-item">
       <summary>What Macs are supported?</summary>
@@ -927,7 +927,7 @@
     </details>
     <details class="faq-item">
       <summary>How accurate is it compared to Apple Dictation?</summary>
-      <p>Significantly better. Whisper handles punctuation, technical jargon, code terms, and accented speech far more reliably than Apple's built-in dictation. It supports 99 languages and produces properly punctuated output by default.</p>
+      <p>Accuracy depends on the selected model, microphone, voice, and environment. The project exposes a repeatable synthetic benchmark and requires human-speech testing before broader accuracy claims.</p>
     </details>
     <details class="faq-item">
       <summary>Can I use it in any app?</summary>

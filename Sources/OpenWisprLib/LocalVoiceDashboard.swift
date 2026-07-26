@@ -90,7 +90,7 @@ public struct LocalVoiceDashboard: View {
                     Circle()
                         .fill(store.runtime.privacyVerified ? LocalVoiceTheme.accent : LocalVoiceTheme.warning)
                         .frame(width: 7, height: 7)
-                    Text(store.runtime.privacyVerified ? "On-device verified" : "Privacy check available")
+                    Text(store.runtime.privacyVerified ? "Local route verified" : "Privacy check available")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(LocalVoiceTheme.secondary)
                 }
@@ -378,7 +378,7 @@ private struct RuntimeCard: View {
             )
             HealthRow(
                 title: "Privacy boundary",
-                detail: store.runtime.privacyVerified ? "Offline path verified" : "Run self-test",
+                detail: store.runtime.privacyVerified ? "Local route verified" : "Run self-test",
                 ready: store.runtime.privacyVerified
             )
 
@@ -387,7 +387,7 @@ private struct RuntimeCard: View {
             HStack {
                 Image(systemName: "lock.fill")
                     .font(.system(size: 10))
-                Text("Loopback and on-device only")
+                Text("Local process and loopback only")
                     .font(.system(size: 11, weight: .medium))
             }
             .foregroundColor(LocalVoiceTheme.muted)
@@ -640,9 +640,9 @@ private struct PrivacyView: View {
                         Image(systemName: store.runtime.privacyVerified ? "checkmark.shield.fill" : "shield.lefthalf.filled")
                             .font(.system(size: 34))
                             .foregroundColor(store.runtime.privacyVerified ? LocalVoiceTheme.accent : LocalVoiceTheme.warning)
-                        Text(store.runtime.privacyVerified ? "Offline path verified" : "Verification available")
+                        Text(store.runtime.privacyVerified ? "Local speech route verified" : "Verification available")
                             .font(.system(size: 20, weight: .semibold))
-                        Text("The self-test checks that a local model is present and the active transcription route can run without a cloud speech provider.")
+                        Text("The self-test confirms a configured local engine and successful transcription through a local process or loopback route. Packet isolation is checked separately during release testing.")
                             .font(.system(size: 13))
                             .foregroundColor(LocalVoiceTheme.secondary)
                             .lineSpacing(4)

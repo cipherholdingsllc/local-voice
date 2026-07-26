@@ -284,7 +284,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         let hotkeyDesc = config.hotkeySummary()
         print("Local Voice v\(OpenWispr.version)")
         if config.showPrivacyBadge?.value ?? true {
-            print("Privacy: 100% on-device — zero network egress by default")
+            print("Privacy: local speech process or loopback route; no hosted STT configured")
         }
         print("Hotkey: \(hotkeyDesc)")
         print("STT: \(sttRouter.activeEngineName())")

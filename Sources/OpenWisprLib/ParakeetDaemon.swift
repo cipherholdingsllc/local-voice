@@ -4,11 +4,13 @@ import Foundation
 public final class ParakeetDaemon: STTEngine {
     public static let shared = ParakeetDaemon()
     public let name = "parakeet-tdt-0.6b"
+    public let executionRoute = STTExecutionRoute.localProcess
 
     private var process: Process?
     private var stdinHandle: FileHandle?
     private let lock = NSLock()
     private var ready = false
+    private var isWarmed = false
     private let scriptPath: String
 
     private init() {
@@ -21,6 +23,18 @@ public final class ParakeetDaemon: STTEngine {
 
     public func warmup() throws {
         try ensureRunning()
+        lock.lock()
+        let alreadyWarmed = isWarmed
+        lock.unlock()
+        guard !alreadyWarmed else { return }
+
+        let url = try makeSilentWAV()
+        defer { try? FileManager.default.removeItem(at: url) }
+        _ = try transcribe(audioURL: url)
+
+        lock.lock()
+        isWarmed = true
+        lock.unlock()
     }
 
     public func ensureRunning() throws {
@@ -88,6 +102,10 @@ public final class ParakeetDaemon: STTEngine {
         stopLocked()
     }
 
+    public func shutdown() {
+        stop()
+    }
+
     private func stopLocked() {
         if let stdin = stdinHandle {
             try? stdin.write(contentsOf: Data("{\"cmd\":\"quit\"}\n".utf8))
@@ -96,6 +114,7 @@ public final class ParakeetDaemon: STTEngine {
         process = nil
         stdinHandle = nil
         ready = false
+        isWarmed = false
     }
 
     private func readLine(from handle: FileHandle) -> String? {
@@ -112,6 +131,30 @@ public final class ParakeetDaemon: STTEngine {
 
     private func canLaunchPython() -> Bool {
         Self.resolvePython() != ""
+    }
+
+    private func makeSilentWAV() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("parakeet-warm-\(UUID().uuidString).wav")
+        let sampleRate = 16_000
+        let frameCount = 4_000
+        let dataSize = frameCount * 2
+        var data = Data()
+        data.append(contentsOf: "RIFF".utf8)
+        data.append(UInt32(36 + dataSize).parakeetLittleEndianData)
+        data.append(contentsOf: "WAVEfmt ".utf8)
+        data.append(UInt32(16).parakeetLittleEndianData)
+        data.append(UInt16(1).parakeetLittleEndianData)
+        data.append(UInt16(1).parakeetLittleEndianData)
+        data.append(UInt32(sampleRate).parakeetLittleEndianData)
+        data.append(UInt32(sampleRate * 2).parakeetLittleEndianData)
+        data.append(UInt16(2).parakeetLittleEndianData)
+        data.append(UInt16(16).parakeetLittleEndianData)
+        data.append(contentsOf: "data".utf8)
+        data.append(UInt32(dataSize).parakeetLittleEndianData)
+        data.append(Data(count: dataSize))
+        try data.write(to: url, options: [.atomic])
+        return url
     }
 
     private static func resolvePython() -> String {
@@ -184,6 +227,18 @@ public final class ParakeetDaemon: STTEngine {
             if FileManager.default.fileExists(atPath: path) { return path }
         }
         return candidates[0]
+    }
+}
+
+private extension UInt32 {
+    var parakeetLittleEndianData: Data {
+        withUnsafeBytes(of: littleEndian) { Data($0) }
+    }
+}
+
+private extension UInt16 {
+    var parakeetLittleEndianData: Data {
+        withUnsafeBytes(of: littleEndian) { Data($0) }
     }
 }
 

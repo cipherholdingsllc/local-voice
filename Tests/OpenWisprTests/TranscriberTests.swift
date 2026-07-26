@@ -2,6 +2,40 @@ import XCTest
 @testable import OpenWisprLib
 
 final class TranscriberTests: XCTestCase {
+    func testModelSearchIncludesCurrentLegacyAndWhisperCppCaches() {
+        let home = URL(fileURLWithPath: "/tmp/local-voice-home")
+        let config = URL(fileURLWithPath: "/tmp/local-voice-config")
+        let resources = URL(fileURLWithPath: "/tmp/local-voice-resources")
+
+        let paths = Transcriber.modelSearchPaths(
+            modelSize: "base.en",
+            homeDirectory: home,
+            configDirectory: config,
+            resourceDirectory: resources
+        )
+
+        XCTAssertTrue(
+            paths.contains(
+                "/tmp/local-voice-config/models/ggml-base.en.bin"
+            )
+        )
+        XCTAssertTrue(
+            paths.contains(
+                "/tmp/local-voice-home/.config/open-wispr/models/ggml-base.en.bin"
+            )
+        )
+        XCTAssertTrue(
+            paths.contains(
+                "/tmp/local-voice-home/.cache/whisper-cpp/ggml-base.en.bin"
+            )
+        )
+        XCTAssertTrue(
+            paths.contains(
+                "/tmp/local-voice-resources/models/ggml-base.en.bin"
+            )
+        )
+    }
+
 
     func testBlankAudioMarker() {
         XCTAssertEqual(Transcriber.stripWhisperMarkers("[BLANK_AUDIO]"), "")

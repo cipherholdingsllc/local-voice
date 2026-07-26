@@ -1,8 +1,10 @@
+import Darwin
 import Foundation
 
 /// Persistent whisper-server process (#6b) — model stays resident between dictations.
 public final class WhisperServerPool: STTEngine {
-    public let name = "whisper-server"
+    public var name: String { "whisper-server (\(modelSize))" }
+    public let executionRoute = STTExecutionRoute.localLoopback
     public let modelSize: String
     private let language: String
     private var process: Process?
@@ -10,16 +12,16 @@ public final class WhisperServerPool: STTEngine {
     private let queue = DispatchQueue(label: "local-flow.whisper-server")
     private var isWarmed = false
 
-    public init(modelSize: String, language: String, port: Int = 8177) {
+    public init(modelSize: String, language: String, port: Int? = nil) {
         self.modelSize = modelSize
         self.language = language
-        self.port = port
+        self.port = port ?? Self.availableLoopbackPort()
     }
 
     public func isAvailable() -> Bool {
         guard Transcriber.findWhisperBinary() != nil,
               Transcriber.findModel(modelSize: modelSize) != nil else { return false }
-        return process?.isRunning == true || ping()
+        return true
     }
 
     public func warmup() throws {
@@ -55,9 +57,14 @@ public final class WhisperServerPool: STTEngine {
         process = proc
 
         for _ in 0..<40 {
-            if ping() { return }
+            if !proc.isRunning { break }
+            if ping() {
+                Thread.sleep(forTimeInterval: 0.05)
+                if proc.isRunning, ping() { return }
+            }
             Thread.sleep(forTimeInterval: 0.1)
         }
+        stop()
         throw WhisperServerError.startTimeout
     }
 
@@ -112,6 +119,14 @@ public final class WhisperServerPool: STTEngine {
         isWarmed = false
     }
 
+    public func shutdown() {
+        stop()
+    }
+
+    deinit {
+        stop()
+    }
+
     private func ping() -> Bool {
         var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/")!)
         request.timeoutInterval = 0.5
@@ -130,6 +145,48 @@ public final class WhisperServerPool: STTEngine {
             if FileManager.default.fileExists(atPath: path) { return path }
         }
         return nil
+    }
+
+    private static func availableLoopbackPort() -> Int {
+        let descriptor = Darwin.socket(
+            AF_INET,
+            SOCK_STREAM,
+            0
+        )
+        guard descriptor >= 0 else {
+            return Int.random(in: 49152...65535)
+        }
+        defer { Darwin.close(descriptor) }
+
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = 0
+        address.sin_addr = in_addr(s_addr: inet_addr("127.0.0.1"))
+
+        let bindResult = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                Darwin.bind(
+                    descriptor,
+                    $0,
+                    socklen_t(MemoryLayout<sockaddr_in>.size)
+                )
+            }
+        }
+        guard bindResult == 0 else {
+            return Int.random(in: 49152...65535)
+        }
+
+        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+        let nameResult = withUnsafeMutablePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                Darwin.getsockname(descriptor, $0, &length)
+            }
+        }
+        guard nameResult == 0 else {
+            return Int.random(in: 49152...65535)
+        }
+        return Int(UInt16(bigEndian: address.sin_port))
     }
 
     private func makeSilentWAV() throws -> URL {

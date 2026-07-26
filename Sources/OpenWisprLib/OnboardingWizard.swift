@@ -28,7 +28,7 @@ final class OnboardingWindowController: NSWindowController {
 
     private var step = 0
     private let steps: [(title: String, body: String, action: () -> Void)] = [
-        ("Welcome to Local Voice", "100% on-device dictation. No cloud. No accounts.\n\nWe'll set up three permissions.", {}),
+        ("Welcome to Local Voice", "Private-first dictation through a local speech engine. No speech account required.\n\nWe'll set up three permissions.", {}),
         ("Microphone", "Local Voice needs your microphone to hear you speak.", { Permissions.ensureMicrophone() }),
         ("Accessibility", "Required to insert text at your cursor in any app.", {
             Permissions.promptAccessibility()

@@ -132,7 +132,7 @@ Check the [open issues](https://github.com/human37/open-wispr/issues) for bugs a
 ## Guidelines
 
 - Keep it simple. open-wispr is intentionally minimal.
-- No cloud dependencies. Everything must run on-device.
+- No hosted speech-inference dependencies. Speech processing must stay in a local process or private loopback service.
 - Test on Apple Silicon. Intel Macs are not supported.
 - Match the existing code style.
 - Include tests for any new or changed logic.
