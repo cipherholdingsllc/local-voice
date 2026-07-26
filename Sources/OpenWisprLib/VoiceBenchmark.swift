@@ -1,4 +1,5 @@
 import AVFoundation
+import Darwin
 import Dispatch
 import Foundation
 
@@ -257,18 +258,42 @@ public enum VoiceBenchmark {
         return Double(end - start) / 1_000_000
     }
 
-    private static func runProcess(
+    static func runProcess(
         executable: String,
-        arguments: [String]
+        arguments: [String],
+        timeoutSeconds: Double = 15
     ) throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
         let errorPipe = Pipe()
-        process.standardOutput = Pipe()
+        process.standardOutput = FileHandle.nullDevice
         process.standardError = errorPipe
+        let completion = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in completion.signal() }
         try process.run()
-        process.waitUntilExit()
+
+        let timeoutMilliseconds = max(
+            1,
+            Int((timeoutSeconds * 1_000).rounded(.up))
+        )
+        if completion.wait(
+            timeout: .now() + .milliseconds(timeoutMilliseconds)
+        ) == .timedOut {
+            let pid = process.processIdentifier
+            if process.isRunning {
+                process.terminate()
+            }
+            if completion.wait(timeout: .now() + .seconds(1)) == .timedOut {
+                _ = Darwin.kill(pid, SIGKILL)
+                _ = completion.wait(timeout: .now() + .seconds(1))
+            }
+            throw VoiceBenchmarkError.processTimedOut(
+                executable,
+                timeoutSeconds
+            )
+        }
+
         guard process.terminationStatus == 0 else {
             let detail = String(
                 data: errorPipe.fileHandleForReading.readDataToEndOfFile(),
@@ -286,6 +311,7 @@ public enum VoiceBenchmark {
 private enum VoiceBenchmarkError: LocalizedError {
     case invalidAudio(String)
     case processFailed(String, Int32, String)
+    case processTimedOut(String, Double)
 
     var errorDescription: String? {
         switch self {
@@ -294,6 +320,8 @@ private enum VoiceBenchmarkError: LocalizedError {
         case .processFailed(let executable, let status, let detail):
             let suffix = detail.isEmpty ? "" : ": \(detail)"
             return "\(executable) failed with status \(status)\(suffix)"
+        case .processTimedOut(let executable, let seconds):
+            return "\(executable) exceeded the \(seconds)-second benchmark fixture timeout"
         }
     }
 }

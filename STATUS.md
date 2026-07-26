@@ -7,9 +7,10 @@ Verified snapshot: 2026-07-25
 | macOS command center | Implemented | Native SwiftUI window rendered from the real app |
 | macOS local speech runtime | Implemented | Persistent Whisper server, Parakeet routing, fallback, latency telemetry |
 | macOS product features | Implemented | History, app modes, dictionary, model controls, privacy, settings |
-| macOS automated checks | Passing | 121 Swift tests, including routing failover, benchmark math, cache migration, and live model URL availability |
+| macOS automated checks | Passing | 122 Swift tests, including routing failover, bounded benchmark subprocesses, benchmark math, cache migration, and live model URL availability |
 | macOS release artifact | Passing | Release build and strict local code-signature verification |
-| macOS synthetic performance gate | Passing | Final installed Parakeet: 115.7 ms p95 / 6.25% WER; base Whisper: 64.5 ms p95 / 9.38% WER; large turbo: 715 ms p95 / 7.81% WER |
+| macOS synthetic performance gate | Passing | Final installed v0.50.2 Parakeet: 119.3 ms p95 / 6.25% WER; base Whisper: 66.1 ms p95 / 9.38% WER; large turbo: 715 ms p95 / 7.81% WER |
+| macOS OS-enforced external-egress gate | Passing | Packaged Parakeet and private-loopback Whisper both pass while external outbound IP is denied |
 | iPhone app | Implemented, simulator and arm64 build verified | Native UI, branded app icon, Apple on-device Speech path |
 | iPhone keyboard | Implemented, simulator-verified | Inserts the most recent App Group transcript; no microphone claim |
 | Personal Team path | Prepared | Explicit installer disables App Groups and requires caller-supplied team/device IDs |
@@ -22,8 +23,9 @@ Verified snapshot: 2026-07-25
 2. Decide whether the shipping iPhone engine remains Apple Speech or gains a bundled WhisperKit model/profile.
 3. Measure cold start, first partial, and finalization latency on the target iPhone.
 4. Apply the shared voice contract to Exploit Poker after the Poker redesign is handed back.
-5. Run packet-level network-isolation verification; the in-app self-test proves
-   a local route, not a firewall.
+5. Run an independent packet capture before a broad public privacy claim. The
+   OS-enforced process-tree external-egress gate passes; the in-app self-test
+   separately proves the actual local route.
 6. Complete product signing, release identity, privacy copy, and the selected distribution path.
 
 ## Current product boundary

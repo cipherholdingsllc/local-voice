@@ -74,6 +74,22 @@ See [BENCHMARK.md](BENCHMARK.md) for the current measured matrix and its
 limitations. Synthetic speech is a regression fixture; it is not a substitute
 for human-microphone, accent, noise, insertion, or packet-isolation testing.
 
+## Remote-network isolation gate
+
+The packaged speech routes can be rerun under an OS-enforced test profile that
+preserves private loopback while denying external outbound IP connectivity:
+
+```bash
+./scripts/verify-network-isolation.sh \
+  "$HOME/Applications/Local Voice.app/Contents/MacOS/local-voice"
+```
+
+The harness proves the policy with positive and negative connectivity controls,
+then requires both Parakeet `local_process` and persistent Whisper
+`local_loopback` to pass the benchmark. It emits a machine-readable JSON
+receipt. See [NETWORK_ISOLATION.md](NETWORK_ISOLATION.md) for evidence and
+claim boundaries.
+
 ## iPhone
 
 Open [the iOS project](ios-spike/LocalFlow.xcodeproj) in Xcode. The app target performs microphone capture and on-device transcription. The keyboard extension only inserts the most recent finished transcript because iOS does not grant microphone access to keyboard extensions.

@@ -26,10 +26,11 @@ The process-warmup figures were measured from fresh benchmark processes, but
 operating-system file caches may already have been warm. They are not
 post-reboot cold-start claims.
 
-The final installed, ad-hoc-signed v0.50.1 app bundle was rerun through the
-automatic gate after packaging with monotonic timing: 1,765.7 ms fresh-process
-warmup, 110.3 ms median, 115.7 ms p95, 0.035x realtime factor, 6.25% WER,
-Parakeet local-process route, PASS.
+The final installed, ad-hoc-signed v0.50.2 bundle passed the OS-enforced
+external-egress gate. Parakeet completed at 106.3 ms median / 119.3 ms p95 /
+6.25% WER, and persistent Whisper `base.en` completed at 58.9 ms median /
+66.1 ms p95 / 9.38% WER while external outbound IP connections were denied.
+See [NETWORK_ISOLATION.md](NETWORK_ISOLATION.md).
 
 ## Decision
 
@@ -53,6 +54,9 @@ Parakeet local-process route, PASS.
   discovered
 - benchmark processes stop their Parakeet and Whisper children; a post-run
   process check found no orphan speech engines
+- fixture-generation subprocesses have a 15-second deadline, graceful
+  termination, and forced-kill escalation so a stuck macOS TTS process cannot
+  hang the gate indefinitely
 - the privacy self-test now claims only a successful known-local route and
   explicitly leaves packet isolation to a separate release gate
 
@@ -64,7 +68,7 @@ human-speech performance study. It does not cover:
 - the operator's microphone and natural delivery
 - accents, background noise, crosstalk, or long-form dictation
 - cursor insertion across target apps or secure-field behavior
-- packet-level network isolation
+- independent packet capture beyond the OS-enforced process-tree egress gate
 - iPhone recognition, first partial, finalization, or keyboard insertion
 
 Run:

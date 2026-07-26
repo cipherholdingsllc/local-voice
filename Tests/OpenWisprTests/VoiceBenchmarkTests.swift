@@ -30,4 +30,21 @@ final class VoiceBenchmarkTests: XCTestCase {
             500
         )
     }
+
+    func testFixtureProcessTimeoutIsBounded() {
+        let started = ProcessInfo.processInfo.systemUptime
+
+        XCTAssertThrowsError(
+            try VoiceBenchmark.runProcess(
+                executable: "/bin/sleep",
+                arguments: ["5"],
+                timeoutSeconds: 0.05
+            )
+        )
+
+        XCTAssertLessThan(
+            ProcessInfo.processInfo.systemUptime - started,
+            2
+        )
+    }
 }

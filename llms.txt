@@ -11,7 +11,7 @@ Local Voice is a desktop voice workspace and push-to-talk dictation app. Speech 
 - **Mobile**: native iPhone companion source with required on-device recognition.
 - **Distribution**: local builds only until a Cipher-owned remote and signing identity are selected.
 - **Configuration**: `~/.config/local-voice/config.json`.
-- **Privacy boundary**: the built-in diagnostic verifies the selected local process or private-loopback route. Packet-level isolation remains a separate release gate.
+- **Privacy boundary**: the built-in diagnostic verifies the selected local process or private-loopback route. The packaged Parakeet and Whisper paths also pass an OS-enforced external-egress test; independent packet capture remains a broader pre-distribution gate.
 
 ## Product surfaces
 
@@ -20,6 +20,7 @@ Local Voice is a desktop voice workspace and push-to-talk dictation app. Speech 
 - Automatic Parakeet-to-persistent-Whisper routing with circuit-breaker fallbacks.
 - App-specific modes, custom dictionary, local transcript history, and retention controls.
 - Repeatable command-line performance benchmark with a machine-readable JSON receipt.
+- Repeatable external-egress gate that preserves private loopback and emits a machine-readable receipt.
 - Native iPhone companion project and Personal Team installation script.
 
 ## Performance evidence
@@ -28,4 +29,4 @@ See `BENCHMARK.md` for the measured macOS synthetic speech fixture, latency gate
 
 ## Current release boundary
 
-Local Voice has not yet been published to a Cipher-owned remote or distributed through TestFlight or the App Store. A physical-iPhone signing team, real-device validation, human-speech testing, cursor-insertion testing, and packet-level isolation audit remain explicit release gates.
+Local Voice has not yet been published to a Cipher-owned remote or distributed through TestFlight or the App Store. A physical-iPhone signing team, real-device validation, human-speech testing, cursor-insertion testing, and independent packet capture remain explicit release gates.
