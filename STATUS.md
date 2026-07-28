@@ -23,7 +23,7 @@ Verified snapshot: 2026-07-28
 | iPhone keyboard | Implemented, simulator-verified | Inserts the most recent App Group transcript; no microphone claim |
 | Personal Team path | Prepared; operator setup required | The paired iPhone is visible; the explicit installer now has a read-only preflight that reports pairing, Developer Mode, and local signing readiness before any build. Current blockers remain Developer Mode disabled and zero valid code-signing identities |
 | Physical iPhone capture | Not yet verified | Enable Developer Mode on the phone, select a signing team in Xcode, install, grant permissions, and run a live speech test |
-| Exploit Poker UI integration | Passing with the shared contract | Isolated worktree commits `0fe01e5d` and `61edc79d` default to the instant local profile and enforce `voice-request.v1` / `voice-response.v1` under `poker.exploit`; 280 app tests, 11 sidecar tests, 21 applicable browser tests, the dedicated live voice test, and a fresh 160 ms p95 / 100% synthetic poker-term gate pass |
+| Exploit Poker UI integration | Passing with the shared contract | Isolated worktree commits `0fe01e5d`, `61edc79d`, and `cc0a53c9` default to the instant local profile, enforce `voice-request.v1` / `voice-response.v1` under `poker.exploit`, and add supervised one-command startup; 280 app tests, 14 sidecar tests, 21 applicable browser tests, the dedicated live voice test, and a fresh 160 ms p95 / 100% synthetic poker-term gate pass |
 | 3k+ GitHub source smelt | Incomplete | The explicit qualifying-source review has not been materialized; no replacement dependency was imported on incomplete evidence |
 
 ## What remains before calling it production-ready
