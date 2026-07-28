@@ -25,10 +25,10 @@ Passing thresholds:
 
 ### Long-form finalization
 
-The release v0.56.0 long-form gate synthesized 147.4 seconds of speech,
+The release v0.57.0 long-form gate synthesized 147.4 seconds of speech,
 warmed Parakeet, and exercised the same adaptive cleanup decision used after
-hotkey release. Inference completed in 2,421.3 ms; the fast long-form cleanup
-decision completed in 0.018 ms; total finalization was 2,421.3 ms against a
+hotkey release. Inference completed in 2,423.4 ms; the fast long-form cleanup
+decision completed in 0.016 ms; total finalization was 2,423.4 ms against a
 5,000 ms target. The gate passed.
 
 This closes the measured regression shape in which a 119.3-second operator
@@ -42,10 +42,10 @@ The process-warmup figures were measured from fresh benchmark processes, but
 operating-system file caches may already have been warm. They are not
 post-reboot cold-start claims.
 
-The final installed, ad-hoc-signed v0.56.0 bundle passed the OS-enforced
-external-egress gate. Parakeet completed at 110.9 ms median / 133.1 ms p95 /
-6.25% WER, and persistent Whisper `base.en` completed at 52.9 ms median /
-59.8 ms p95 / 9.38% WER while external outbound IP connections were denied.
+The final installed, ad-hoc-signed v0.57.0 bundle passed the OS-enforced
+external-egress gate. Parakeet completed at 102.0 ms median / 114.9 ms p95 /
+6.25% WER, and persistent Whisper `base.en` completed at 53.3 ms median /
+58.6 ms p95 / 9.38% WER while external outbound IP connections were denied.
 The same v2 gate also passed the installed timestamped file-transcription path.
 See [NETWORK_ISOLATION.md](NETWORK_ISOLATION.md).
 
@@ -59,6 +59,8 @@ See [NETWORK_ISOLATION.md](NETWORK_ISOLATION.md).
   the latency gate but is not the best everyday choice on this corpus.
 - Startup warmup includes a real silent Parakeet inference so the first user
   utterance does not pay an MLX compile-on-first-use penalty.
+- Wake recovery re-arms Core Audio and re-runs the selected warm-model route
+  away from the main thread after macOS sleep.
 - live preview now transcribes bounded incremental PCM chunks with a 250 ms
   boundary overlap; a two-minute fixture schedules 134.75 seconds of preview
   audio rather than about 3,660 seconds of cumulative retranscription

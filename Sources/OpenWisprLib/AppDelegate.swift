@@ -26,10 +26,12 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     private var permissionTimer: Timer?
     private var lastPermissionSnapshot: LocalVoicePermissionSnapshot?
     private var hotkeyMonitorReady = false
+    private var wakeObserver: NSObjectProtocol?
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         statusBar = StatusBarController()
         recorder = AudioRecorder()
+        startWakeMonitoring()
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             self?.setup()
@@ -219,9 +221,42 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     public func applicationWillTerminate(_ notification: Notification) {
         permissionTimer?.invalidate()
         permissionTimer = nil
+        if let wakeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
+            self.wakeObserver = nil
+        }
         for manager in hotkeyManagers { manager.stop() }
         hotkeyManagers = []
         sttRouter?.shutdown(preserveParakeet: false)
+    }
+
+    private func startWakeMonitoring() {
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.recoverAfterSystemWake()
+        }
+    }
+
+    private func recoverAfterSystemWake() {
+        guard isReady, !isPressed else { return }
+
+        // Core Audio and local model processes can become stale across sleep.
+        // Re-arm capture immediately, then restore warm-model latency away
+        // from the main thread.
+        recorder.reload()
+
+        guard config.keepModelWarm?.value ?? true,
+              let router = sttRouter else {
+            print("Wake recovery: audio re-armed")
+            return
+        }
+        DispatchQueue.global(qos: .userInitiated).async {
+            router.warmup()
+            print("Wake recovery: audio re-armed; local model warm")
+        }
     }
 
     private func toggleDashboardCapture() {

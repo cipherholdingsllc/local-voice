@@ -18,6 +18,7 @@ Private, system-wide dictation for macOS with a native iPhone companion. Local V
   a microphone-free visual QA harness driven by the shipping renderer
 - Persistent `whisper-server` pool on a private ephemeral loopback port to
   avoid model reloads between dictations
+- Automatic Core Audio re-arm and local-model re-warm after system wake
 - Optional Parakeet MLX English fast path with Whisper fallback
 - Bounded incremental live-preview chunks and an adaptive long-form cleanup
   route that avoids retranscribing cumulative audio or regenerating an entire
