@@ -67,7 +67,16 @@ normal external distribution.
 ### Fast Personal Team install
 
 The paired iPhone appears in Xcode's destinations list. To install the standalone
-recorder before App Group access is available:
+recorder before App Group access is available, first run the read-only
+preflight:
+
+```bash
+./scripts/install-personal-team.sh --preflight IPHONE_DEVICE_ID
+```
+
+It checks pairing, Developer Mode, and whether this Mac already has a valid
+Apple Development signing identity. It does not read credentials, create a
+certificate, or contact the developer portal. Once it passes:
 
 ```bash
 ./scripts/install-personal-team.sh APPLE_TEAM_ID IPHONE_DEVICE_ID
