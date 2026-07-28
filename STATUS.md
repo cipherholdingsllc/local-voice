@@ -29,8 +29,9 @@ Verified snapshot: 2026-07-28
 ## What remains before calling it production-ready
 
 1. Enable iPhone Developer Mode, supply an Apple Personal Team in Xcode, then
-   run a physical capture test. Keyboard insertion additionally requires the
-   paid-team App Group path.
+   run a physical capture test. The fast Personal Team installer intentionally
+   omits App Groups; keyboard insertion requires a separately provisioned and
+   physically verified App Group build.
 2. Physically confirm Fn hold, release, double-tap lock, and cursor insertion
    with the installed v0.57.0 bundle, then sleep/wake the Mac and repeat once.
 3. Decide whether the shipping iPhone engine remains Apple Speech or gains a bundled WhisperKit model/profile.

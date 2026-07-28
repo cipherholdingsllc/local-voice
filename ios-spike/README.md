@@ -58,7 +58,11 @@ The simulator proves compilation and layout. It does not prove live on-device re
 - **TestFlight:** paid membership; external testers require beta review.
 - **Public App Store:** full App Review.
 
-The full app-plus-keyboard build uses App Groups, so plan on the paid Apple Developer Program for the clean production path even if a stripped containing-app build is first installed from a Personal Team.
+The full app-plus-keyboard build uses App Groups. The fast Personal Team path
+below deliberately omits that capability so the standalone recorder can reach
+the phone first. Treat App Group provisioning and keyboard insertion as a
+separate physical acceptance gate; use the paid Apple Developer Program for
+normal external distribution.
 
 ### Fast Personal Team install
 
