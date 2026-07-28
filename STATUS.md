@@ -21,27 +21,27 @@ Verified snapshot: 2026-07-28
 | macOS Launch at Login | Implemented; release identity pending | Native Service Management control is present, but the current ad-hoc development bundle reports the service unavailable; a stable Apple signing identity remains required |
 | iPhone app | Implemented, simulator and arm64 build verified | Native UI, branded app icon, Apple on-device Speech path |
 | iPhone keyboard | Implemented, simulator-verified | Inserts the most recent App Group transcript; no microphone claim |
-| Personal Team path | Prepared | Explicit installer disables App Groups and requires caller-supplied team/device IDs |
-| Physical iPhone capture | Not yet verified | Requires signing team, device install, permissions, and live speech test |
-| Exploit Poker UI integration | Passing independently; shared runtime consolidation pending | Isolated worktree commit `0fe01e5d` defaults to the measured instant local profile, keeps accuracy mode selectable, disables browser speech without opt-in, and passes 278 app tests, 7 voice tests, 21 applicable browser tests, the dedicated live voice test, and a 112 ms p95 synthetic poker benchmark |
+| Personal Team path | Prepared; operator setup required | The paired iPhone is visible, but Xcode reports Developer Mode disabled and this Mac has zero valid code-signing identities; the explicit installer disables App Groups and requires caller-supplied team/device IDs |
+| Physical iPhone capture | Not yet verified | Enable Developer Mode on the phone, select a signing team in Xcode, install, grant permissions, and run a live speech test |
+| Exploit Poker UI integration | Passing with the shared contract | Isolated worktree commits `0fe01e5d` and `61edc79d` default to the instant local profile and enforce `voice-request.v1` / `voice-response.v1` under `poker.exploit`; 280 app tests, 11 sidecar tests, 21 applicable browser tests, the dedicated live voice test, and a fresh 160 ms p95 / 100% synthetic poker-term gate pass |
 | 3k+ GitHub source smelt | Incomplete | The explicit qualifying-source review has not been materialized; no replacement dependency was imported on incomplete evidence |
 
 ## What remains before calling it production-ready
 
-1. Run a physical iPhone capture and keyboard insertion test.
+1. Enable iPhone Developer Mode, supply an Apple Personal Team in Xcode, then
+   run a physical capture test. Keyboard insertion additionally requires the
+   paid-team App Group path.
 2. Physically confirm Fn hold, release, double-tap lock, and cursor insertion
    with the installed v0.57.0 bundle, then sleep/wake the Mac and repeat once.
 3. Decide whether the shipping iPhone engine remains Apple Speech or gains a bundled WhisperKit model/profile.
 4. Measure cold start, first partial, and finalization latency on the target iPhone.
-5. Consolidate Exploit Poker's passing dedicated sidecar onto the shared voice
-   contract after the Poker redesign is handed back; keep product history isolated.
-6. Run an independent packet capture before a broad public privacy claim. The
+5. Run an independent packet capture before a broad public privacy claim. The
    OS-enforced process-tree external-egress gate passes; the in-app self-test
    separately proves the actual local route.
-7. Complete product signing, release identity, privacy copy, and the selected distribution path.
-8. Select a stable macOS Apple signing identity for release upgrades; local
+6. Complete product signing, release identity, privacy copy, and the selected distribution path.
+7. Select a stable macOS Apple signing identity for release upgrades; local
    development bundles remain ad-hoc signed unless the operator supplies one.
-9. Complete the requested GitHub source smelt with a current 3,000-star floor,
+8. Complete the requested GitHub source smelt with a current 3,000-star floor,
    license/activity receipts, and a feature-to-implementation matrix before
    importing any new dependency.
 
