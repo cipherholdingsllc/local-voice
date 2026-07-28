@@ -13,8 +13,9 @@ Private, system-wide dictation for macOS with a native iPhone companion. Local V
 - Native SwiftUI command center with History, Files, Modes, Dictionary, Models, Privacy, and Settings
 - Menu-bar push-to-talk with configurable global hotkeys, live Fn readiness,
   guided permission repair, and an optional Launch at Login control
-- Voice Aperture floating state surface with a sound-reactive Listening glyph,
-  a coherent Locked voice seal, and a microphone-free visual QA harness
+- Signal Blades floating state surface with a sound-reactive Listening
+  formation, an interlocked Locked seal, distinct finishing/error states, and
+  a microphone-free visual QA harness driven by the shipping renderer
 - Persistent `whisper-server` pool on a private ephemeral loopback port to
   avoid model reloads between dictations
 - Optional Parakeet MLX English fast path with Whisper fallback
@@ -77,8 +78,15 @@ Useful commands:
 .build/release/local-voice long-form-benchmark auto base.en
 .build/release/local-voice pill-preview listening
 .build/release/local-voice pill-preview locked
+.build/release/local-voice glyph-sheet signal-blades.png 4
 .build/release/local-voice contract-fixture
 .build/release/local-voice transcribe-file recording.m4a json
+```
+
+Build and install the reproducible local app bundle with:
+
+```bash
+./scripts/install-local-voice.sh
 ```
 
 Configuration lives at `~/.config/local-voice/config.json`. On first launch, Local Voice migrates a legacy `~/.config/open-wispr/config.json` if present.

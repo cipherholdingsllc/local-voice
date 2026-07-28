@@ -30,161 +30,158 @@ final class PillOverlayTests: XCTestCase {
         )
     }
 
-    // MARK: - Triad geometry
+    // MARK: - Signal Blades geometry
 
-    func testKerfClosesAsVoiceEnergyRises() {
-        let quiet = TriadGlyph.Metrics.make(level: 0, state: .listening)
-        let loud = TriadGlyph.Metrics.make(level: 1, state: .listening)
+    func testListeningApertureClosesAsVoiceEnergyRises() {
+        let quiet = SignalBladesGlyph.Metrics.make(
+            level: 0,
+            state: .listening
+        )
+        let loud = SignalBladesGlyph.Metrics.make(
+            level: 1,
+            state: .listening
+        )
 
-        XCTAssertLessThan(loud.kerf, quiet.kerf)
+        XCTAssertLessThan(loud.aperture, quiet.aperture)
         XCTAssertGreaterThan(loud.energy, quiet.energy)
     }
 
-    /// The design claim that justifies the kerf compensation: speaking closes
-    /// the gap without the mark appearing to grow or shrink. If someone drops
-    /// the `1 - kerf/2` divisor this test is what catches it.
-    func testOuterSilhouetteStaysFixedWhileKerfBreathes() {
-        func extent(_ metrics: TriadGlyph.Metrics) -> (CGFloat, CGFloat) {
-            let bounds = CGRect(x: 0, y: 0, width: 26, height: 26)
-            let anchor = TriadGlyph.anchor(
-                in: bounds,
-                radius: metrics.radius
-            )
-            let drawn = metrics.radius / (1 - (metrics.kerf / 2))
-            let ring = drawn / 2
-            let base = (1 - metrics.kerf) * ring
-            let centres = TriadGlyph.seatCentres(
-                anchor: anchor,
-                drawnRadius: drawn
-            )
-            let apex = TriadGlyph.pointUp(
-                center: centres[0],
-                radius: base * TriadGlyph.seatScales[0]
-            ).apex.y
-            let right = TriadGlyph.pointUp(
-                center: centres[2],
-                radius: base * TriadGlyph.seatScales[2]
-            ).right.x
-            return (apex, right)
-        }
-
-        let (quietTop, quietRight) = extent(
-            TriadGlyph.Metrics.make(level: 0, state: .listening)
+    func testListeningWidthStaysFixedAcrossVoiceEnergy() {
+        let quiet = SignalBladesGlyph.Metrics.make(
+            level: 0,
+            state: .listening
         )
-        let (loudTop, loudRight) = extent(
-            TriadGlyph.Metrics.make(level: 1, state: .listening)
+        let loud = SignalBladesGlyph.Metrics.make(
+            level: 1,
+            state: .listening
         )
 
-        XCTAssertEqual(quietTop, loudTop, accuracy: 0.05)
-        XCTAssertEqual(quietRight, loudRight, accuracy: 0.05)
+        XCTAssertEqual(quiet.span, loud.span)
+        XCTAssertEqual(quiet.thickness, loud.thickness)
     }
 
-    /// An equilateral triangle's centroid is not its bounding-box centre.
-    /// Deriving vertices from a centred box puts the mark ~0.18·r low, which
-    /// reads as a sag that is very hard to diagnose by eye.
-    func testOpticalAnchorSitsAboveTheNaiveBoundingBoxPlacement() {
-        let bounds = CGRect(x: 0, y: 0, width: 26, height: 26)
-        let radius: CGFloat = 11.2
-        let anchor = TriadGlyph.anchor(in: bounds, radius: radius)
-
-        XCTAssertEqual(anchor.x, bounds.midX, accuracy: 0.0001)
+    func testLockedInterlocksAndOtherStatesUseDistinctFormations() {
         XCTAssertEqual(
-            anchor.y,
-            bounds.midY - (0.07 * radius),
-            accuracy: 0.0001
+            SignalBladesGlyph.Metrics.make(
+                level: 0.5,
+                state: .locked
+            ).formation,
+            .sealed
         )
-
-        let baseline = anchor.y - (radius / 2)
-        let naiveBaseline = bounds.midY - (0.75 * radius)
         XCTAssertEqual(
-            baseline - naiveBaseline,
-            0.18 * radius,
-            accuracy: 0.0001
+            SignalBladesGlyph.Metrics.make(
+                level: 0.5,
+                state: .listening
+            ).formation,
+            .open
+        )
+        XCTAssertEqual(
+            SignalBladesGlyph.Metrics.make(
+                level: 0.5,
+                state: .transcribing
+            ).formation,
+            .advancing
+        )
+        XCTAssertEqual(
+            SignalBladesGlyph.Metrics.make(
+                level: 0.5,
+                state: .error
+            ).formation,
+            .fractured
         )
     }
 
-    func testLockedSeatsEachChipletAndOtherStatesDoNot() {
-        XCTAssertTrue(
-            TriadGlyph.Metrics.make(level: 0.5, state: .locked).seated
+    func testErrorFracturesTheBladesAndOpensTheApertureWidest() {
+        let error = SignalBladesGlyph.Metrics.make(
+            level: 0,
+            state: .error
         )
-        for state in [PillState.listening, .transcribing, .error] {
-            XCTAssertFalse(
-                TriadGlyph.Metrics.make(level: 0.5, state: state).seated,
-                "\(state) must not seat the chiplets"
-            )
-        }
-    }
+        let listening = SignalBladesGlyph.Metrics.make(
+            level: 0,
+            state: .listening
+        )
 
-    func testErrorGhostsTheApexAndOpensTheKerfWidest() {
-        let error = TriadGlyph.Metrics.make(level: 0, state: .error)
-        let listening = TriadGlyph.Metrics.make(level: 0, state: .listening)
-
-        XCTAssertTrue(error.apexGhosted)
-        XCTAssertFalse(listening.apexGhosted)
-        XCTAssertGreaterThan(error.kerf, listening.kerf)
+        XCTAssertEqual(error.formation, .fractured)
+        XCTAssertGreaterThan(error.aperture, listening.aperture)
+        XCTAssertGreaterThan(error.upperShift, 0)
+        XCTAssertLessThan(error.lowerShift, 0)
     }
 
     /// Capture has ended, so a level-reactive glyph during transcription would
     /// be reporting microphone activity that is no longer being consumed.
     func testTranscribingIgnoresVoiceLevelEntirely() {
-        let quiet = TriadGlyph.Metrics.make(level: 0, state: .transcribing)
-        let loud = TriadGlyph.Metrics.make(level: 1, state: .transcribing)
+        let quiet = SignalBladesGlyph.Metrics.make(
+            level: 0,
+            state: .transcribing
+        )
+        let loud = SignalBladesGlyph.Metrics.make(
+            level: 1,
+            state: .transcribing
+        )
 
         XCTAssertEqual(quiet.energy, 0)
         XCTAssertEqual(loud.energy, 0)
-        XCTAssertEqual(quiet.kerf, loud.kerf)
-        XCTAssertEqual(loud.glowIntensity, 0)
+        XCTAssertEqual(quiet.aperture, loud.aperture)
+        XCTAssertEqual(quiet.formation, .advancing)
     }
 
     func testLockedGeometryHoldsStillAcrossAudioLevels() {
-        let quiet = TriadGlyph.Metrics.make(level: 0, state: .locked)
-        let loud = TriadGlyph.Metrics.make(level: 1, state: .locked)
+        let quiet = SignalBladesGlyph.Metrics.make(
+            level: 0,
+            state: .locked
+        )
+        let loud = SignalBladesGlyph.Metrics.make(
+            level: 1,
+            state: .locked
+        )
 
-        XCTAssertEqual(quiet.kerf, loud.kerf)
-        XCTAssertLessThanOrEqual(loud.energy, 0.35)
+        XCTAssertEqual(quiet, loud)
+        XCTAssertEqual(loud.energy, 0)
     }
 
     func testEnergyIsClampedAndGated() {
-        XCTAssertEqual(TriadGlyph.Energy.condition(-4), 0)
-        XCTAssertEqual(TriadGlyph.Energy.condition(9), 1, accuracy: 0.0001)
-        XCTAssertEqual(TriadGlyph.Energy.condition(.nan), 0)
+        XCTAssertEqual(SignalBladesGlyph.Energy.condition(-4), 0)
+        XCTAssertEqual(
+            SignalBladesGlyph.Energy.condition(9),
+            1,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(SignalBladesGlyph.Energy.condition(.nan), 0)
         // Idle room tone must not move the mark.
-        XCTAssertEqual(TriadGlyph.Energy.condition(0.05), 0)
+        XCTAssertEqual(SignalBladesGlyph.Energy.condition(0.05), 0)
     }
 
     func testEnergyQuantizationSuppressesSubPixelJitter() {
-        let a = TriadGlyph.Energy.quantize(0.500)
-        let b = TriadGlyph.Energy.quantize(0.505)
+        let a = SignalBladesGlyph.Energy.quantize(0.500)
+        let b = SignalBladesGlyph.Energy.quantize(0.505)
         XCTAssertEqual(a, b, "jitter below one step must not redraw")
 
-        let far = TriadGlyph.Energy.quantize(0.60)
+        let far = SignalBladesGlyph.Energy.quantize(0.60)
         XCTAssertNotEqual(a, far)
     }
 
     func testSmoothingAttacksFasterThanItReleases() {
-        let attack = TriadGlyph.Energy.smooth(previous: 0, target: 1)
-        let release = TriadGlyph.Energy.smooth(previous: 1, target: 0)
+        let attack = SignalBladesGlyph.Energy.smooth(
+            previous: 0,
+            target: 1
+        )
+        let release = SignalBladesGlyph.Energy.smooth(
+            previous: 1,
+            target: 0
+        )
 
         XCTAssertGreaterThan(attack, 1 - release)
     }
 
-    func testRimHoldsHueIdentityAtLowBodyAlpha() {
-        let gold = PillState.locked.accentColor
-        let rim = TriadGlyph.rim(gold)
+    func testRimIsBrighterThanTheSignalBody() {
+        let color = PillState.listening.accentColor
+        let rim = SignalBladesGlyph.rim(color)
+            .usingColorSpace(.deviceRGB)
+        let body = SignalBladesGlyph.body(color)
+            .usingColorSpace(.deviceRGB)
 
-        var hue: CGFloat = 0
-        var saturation: CGFloat = 0
-        var brightness: CGFloat = 0
-        var alpha: CGFloat = 0
-        rim.usingColorSpace(.deviceRGB)?.getHue(
-            &hue,
-            saturation: &saturation,
-            brightness: &brightness,
-            alpha: &alpha
-        )
-
-        // Full value is what keeps dim gold from compositing to brown.
-        XCTAssertEqual(brightness, 1.0, accuracy: 0.001)
-        XCTAssertLessThan(saturation, 1.0)
+        XCTAssertNotNil(rim)
+        XCTAssertNotNil(body)
+        XCTAssertGreaterThan(rim!.brightnessComponent, body!.brightnessComponent)
     }
 }

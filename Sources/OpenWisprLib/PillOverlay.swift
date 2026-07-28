@@ -4,9 +4,9 @@ import QuartzCore
 /// A fixed, non-activating state surface for system-wide dictation.
 ///
 /// The glyph deliberately avoids literal microphones, equalizer bars, and
-/// padlocks. Capture is represented by a sound-reactive triad whose kerf
-/// closes as you speak. Lock mode seats the same geometry rather than
-/// introducing a second visual language — see `TriadGlyph`.
+/// padlocks. Capture is represented by two sound-reactive signal blades around
+/// a luminous core. Lock mode interlocks the same geometry rather than
+/// introducing a second visual language — see `SignalBladesGlyph`.
 final class PillOverlay {
     enum Anchor: String, Codable {
         case bottomRight
@@ -21,7 +21,7 @@ final class PillOverlay {
 
     private var panel: NSPanel?
     private var chromeView: PillChromeView?
-    private var glyphView: TriadGlyphView?
+    private var glyphView: SignalBladesGlyphView?
     private var statusLabel: NSTextField?
     private var anchor: Anchor = .bottomRight
     private var followsCursor = false
@@ -132,7 +132,7 @@ final class PillOverlay {
         )
         chrome.autoresizingMask = [.width, .height]
 
-        let glyph = TriadGlyphView(
+        let glyph = SignalBladesGlyphView(
             frame: NSRect(x: 13, y: 11, width: 26, height: 26)
         )
         glyph.setAccessibilityRole(.image)
@@ -277,48 +277,37 @@ enum PillState: String, CaseIterable {
         [title, detail].compactMap { $0 }.joined(separator: ", ")
     }
 
-    /// Capture runs hot and bright; commitment cools and deepens. The four
-    /// states are separated by hue first so they survive the squint test,
-    /// rather than by brightness alone.
+    /// A restrained cold-spectrum system: ion blue for live capture, titanium
+    /// for commitment, ultraviolet for processing, and plasma magenta only
+    /// when attention is required.
     var accentColor: NSColor {
         switch self {
         case .listening:
-            // Citrine: warm yellow, gold-adjacent. Live and electric without
-            // tipping into highlighter, which is where a cooler yellow lands.
             return NSColor(
-                calibratedRed: 1.00,
-                green: 0.84,
-                blue: 0.32,
+                calibratedRed: 0.28,
+                green: 0.82,
+                blue: 1.00,
                 alpha: 1
             )
         case .transcribing:
-            // Slate: the one deliberate break from the warm family. With
-            // listening now yellow, a warm straw would collide with it, and
-            // this state needs to read as work rather than as capture.
             return NSColor(
-                calibratedRed: 0.58,
-                green: 0.70,
-                blue: 0.86,
+                calibratedRed: 0.57,
+                green: 0.46,
+                blue: 1.00,
                 alpha: 1
             )
         case .locked:
-            // Brick: deep and earthy. Quieter than listening on purpose —
-            // this is the state you sit inside during a long dictation, so it
-            // should settle rather than keep shouting.
             return NSColor(
-                calibratedRed: 0.80,
-                green: 0.34,
-                blue: 0.19,
+                calibratedRed: 0.68,
+                green: 0.78,
+                blue: 0.92,
                 alpha: 1
             )
         case .error:
-            // Crimson, pushed toward pink. A plain red would sit close enough
-            // to brick that a locked pill and a failed one could be confused
-            // at a glance.
             return NSColor(
-                calibratedRed: 0.97,
-                green: 0.28,
-                blue: 0.42,
+                calibratedRed: 1.00,
+                green: 0.26,
+                blue: 0.58,
                 alpha: 1
             )
         }
@@ -367,21 +356,22 @@ struct PillPresentation: Equatable {
     }
 }
 
-/// Renders the Triad, and owns the one thing a pure renderer cannot: the
+/// Renders Signal Blades, and owns the one thing a pure renderer cannot: the
 /// temporal smoothing of microphone level across frames.
-final class TriadGlyphView: NSView {
+final class SignalBladesGlyphView: NSView {
     private var smoothedEnergy: CGFloat = 0
     private var lastDrawnEnergy: CGFloat = -1
 
     var level: Float = 0 {
         didSet {
-            let target = TriadGlyph.Energy.condition(level)
-            smoothedEnergy = TriadGlyph.Energy.smooth(
+            let target = SignalBladesGlyph.Energy.condition(level)
+            smoothedEnergy = SignalBladesGlyph.Energy.smooth(
                 previous: smoothedEnergy,
                 target: target
             )
-            let quantized = TriadGlyph.Energy.quantize(smoothedEnergy)
-            if abs(quantized - lastDrawnEnergy) >= TriadGlyph.Energy.step {
+            let quantized = SignalBladesGlyph.Energy.quantize(smoothedEnergy)
+            if abs(quantized - lastDrawnEnergy)
+                >= SignalBladesGlyph.Energy.step {
                 needsDisplay = true
             }
         }
@@ -403,14 +393,14 @@ final class TriadGlyphView: NSView {
         context.setAllowsAntialiasing(true)
         context.setShouldAntialias(true)
 
-        let quantized = TriadGlyph.Energy.quantize(smoothedEnergy)
+        let quantized = SignalBladesGlyph.Energy.quantize(smoothedEnergy)
         lastDrawnEnergy = quantized
 
-        TriadGlyph.draw(
+        SignalBladesGlyph.draw(
             in: context,
             bounds: bounds,
             state: pillState,
-            metrics: TriadGlyph.Metrics.make(
+            metrics: SignalBladesGlyph.Metrics.make(
                 energy: quantized,
                 state: pillState
             )
@@ -432,16 +422,16 @@ final class PillChromeView: NSView {
 
         gradientLayer.colors = [
             NSColor(
-                calibratedRed: 0.13,
-                green: 0.14,
-                blue: 0.16,
-                alpha: 0.97
+                calibratedRed: 0.105,
+                green: 0.120,
+                blue: 0.150,
+                alpha: 0.98
             ).cgColor,
             NSColor(
-                calibratedRed: 0.068,
-                green: 0.075,
-                blue: 0.09,
-                alpha: 0.97
+                calibratedRed: 0.040,
+                green: 0.048,
+                blue: 0.065,
+                alpha: 0.985
             ).cgColor,
         ]
         gradientLayer.startPoint = CGPoint(x: 0.5, y: 1)
@@ -457,7 +447,7 @@ final class PillChromeView: NSView {
         layer?.cornerCurve = .continuous
         layer?.borderWidth = 0.75
         layer?.borderColor = NSColor.white
-            .withAlphaComponent(0.16)
+            .withAlphaComponent(0.14)
             .cgColor
     }
 
@@ -481,10 +471,10 @@ final class PillChromeView: NSView {
     }
 
     private func updateAccent() {
-        let tone = TriadGlyph.rim(accentColor, 1)
+        let tone = SignalBladesGlyph.rim(accentColor, 1)
         accentLayer.colors = [
             tone.withAlphaComponent(0).cgColor,
-            tone.withAlphaComponent(0.40).cgColor,
+            tone.withAlphaComponent(0.30).cgColor,
             tone.withAlphaComponent(0).cgColor,
         ]
         accentLayer.locations = [0, 0.5, 1]

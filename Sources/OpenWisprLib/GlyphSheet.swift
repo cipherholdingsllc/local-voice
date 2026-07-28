@@ -7,7 +7,7 @@ import Foundation
 /// This exists because visual QA that depends on someone screenshotting a
 /// floating window is not reproducible, and a QA image that does not come from
 /// the shipping renderer proves nothing. The glyph here is painted by
-/// `TriadGlyph.draw` — the same call the live overlay makes — so the sheet
+/// `SignalBladesGlyph.draw` — the same call the live overlay makes — so the sheet
 /// cannot drift from what users see. Only the surrounding chrome is redrawn,
 /// because `PillChromeView` is layer-backed and has no offscreen path.
 ///
@@ -88,7 +88,7 @@ public enum GlyphSheet {
         NSRect(x: 0, y: 0, width: sheetWidth, height: sheetHeight).fill()
 
         NSAttributedString(
-            string: "LOCAL VOICE \(OpenWispr.version) — TRIAD GLYPH",
+            string: "LOCAL VOICE \(OpenWispr.version) — SIGNAL BLADES",
             attributes: [
                 .font: NSFont.systemFont(ofSize: 14, weight: .bold),
                 .foregroundColor: NSColor(calibratedWhite: 0.92, alpha: 1),
@@ -162,16 +162,16 @@ public enum GlyphSheet {
             colorsSpace: space,
             colors: [
                 NSColor(
-                    calibratedRed: 0.13,
-                    green: 0.14,
-                    blue: 0.16,
-                    alpha: 0.97
+                    calibratedRed: 0.105,
+                    green: 0.120,
+                    blue: 0.150,
+                    alpha: 0.98
                 ).cgColor,
                 NSColor(
-                    calibratedRed: 0.068,
-                    green: 0.075,
-                    blue: 0.09,
-                    alpha: 0.97
+                    calibratedRed: 0.040,
+                    green: 0.048,
+                    blue: 0.065,
+                    alpha: 0.985
                 ).cgColor,
             ] as CFArray,
             locations: [0, 1]
@@ -191,7 +191,7 @@ public enum GlyphSheet {
         context.saveGState()
         context.addPath(body)
         context.setStrokeColor(
-            NSColor.white.withAlphaComponent(0.16).cgColor
+            NSColor.white.withAlphaComponent(0.14).cgColor
         )
         context.setLineWidth(0.75)
         context.strokePath()
@@ -203,12 +203,12 @@ public enum GlyphSheet {
             width: pillWidth - 28,
             height: 1
         )
-        let tone = TriadGlyph.rim(state.accentColor, 1)
+        let tone = SignalBladesGlyph.rim(state.accentColor, 1)
         if let accent = CGGradient(
             colorsSpace: space,
             colors: [
                 tone.withAlphaComponent(0).cgColor,
-                tone.withAlphaComponent(0.40).cgColor,
+                tone.withAlphaComponent(0.30).cgColor,
                 tone.withAlphaComponent(0).cgColor,
             ] as CFArray,
             locations: [0, 0.5, 1]
@@ -232,11 +232,14 @@ public enum GlyphSheet {
             width: glyphSide,
             height: glyphSide
         )
-        TriadGlyph.draw(
+        SignalBladesGlyph.draw(
             in: context,
             bounds: glyphBounds,
             state: state,
-            metrics: TriadGlyph.Metrics.make(level: level, state: state)
+            metrics: SignalBladesGlyph.Metrics.make(
+                level: level,
+                state: state
+            )
         )
 
         let label = NSMutableAttributedString(
