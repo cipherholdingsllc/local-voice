@@ -277,37 +277,38 @@ enum PillState: String, CaseIterable {
         [title, detail].compactMap { $0 }.joined(separator: ", ")
     }
 
-    /// A restrained cold-spectrum system: ion blue for live capture, titanium
-    /// for commitment, ultraviolet for processing, and plasma magenta only
-    /// when attention is required.
+    /// Concept C's metallic signal-blade system, unified around a restrained
+    /// nickel-to-mint spectrum. Listening carries a small neon-green charge;
+    /// finishing and locked step back toward metal. Error alone leaves the
+    /// family for a warm alert tone.
     var accentColor: NSColor {
         switch self {
         case .listening:
             return NSColor(
-                calibratedRed: 0.28,
-                green: 0.82,
-                blue: 1.00,
+                calibratedRed: 0.46,
+                green: 0.96,
+                blue: 0.62,
                 alpha: 1
             )
         case .transcribing:
             return NSColor(
-                calibratedRed: 0.57,
-                green: 0.46,
-                blue: 1.00,
+                calibratedRed: 0.62,
+                green: 0.82,
+                blue: 0.68,
                 alpha: 1
             )
         case .locked:
             return NSColor(
-                calibratedRed: 0.68,
-                green: 0.78,
-                blue: 0.92,
+                calibratedRed: 0.72,
+                green: 0.88,
+                blue: 0.76,
                 alpha: 1
             )
         case .error:
             return NSColor(
                 calibratedRed: 1.00,
-                green: 0.26,
-                blue: 0.58,
+                green: 0.34,
+                blue: 0.36,
                 alpha: 1
             )
         }

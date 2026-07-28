@@ -184,4 +184,31 @@ final class PillOverlayTests: XCTestCase {
         XCTAssertNotNil(body)
         XCTAssertGreaterThan(rim!.brightnessComponent, body!.brightnessComponent)
     }
+
+    func testConceptCUsesRestrainedMintForNormalStates() {
+        for state in [PillState.listening, .transcribing, .locked] {
+            let color = state.accentColor.usingColorSpace(.deviceRGB)
+            XCTAssertNotNil(color)
+            XCTAssertGreaterThan(color!.greenComponent, color!.redComponent)
+            XCTAssertGreaterThan(color!.greenComponent, color!.blueComponent)
+        }
+
+        let listening = PillState.listening.accentColor
+            .usingColorSpace(.deviceRGB)!
+        XCTAssertGreaterThan(
+            listening.redComponent,
+            0.4,
+            "mint should retain metallic white rather than read primary green"
+        )
+        XCTAssertGreaterThan(
+            listening.blueComponent,
+            0.55,
+            "mint should stay cool and restrained"
+        )
+
+        let error = PillState.error.accentColor
+            .usingColorSpace(.deviceRGB)!
+        XCTAssertGreaterThan(error.redComponent, error.greenComponent)
+        XCTAssertGreaterThan(error.redComponent, error.blueComponent)
+    }
 }

@@ -13,9 +13,10 @@ Private, system-wide dictation for macOS with a native iPhone companion. Local V
 - Native SwiftUI command center with History, Files, Modes, Dictionary, Models, Privacy, and Settings
 - Menu-bar push-to-talk with configurable global hotkeys, live Fn readiness,
   guided permission repair, and an optional Launch at Login control
-- Signal Blades floating state surface with a sound-reactive Listening
-  formation, an interlocked Locked seal, distinct finishing/error states, and
-  a microphone-free visual QA harness driven by the shipping renderer
+- Concept C Signal Blades floating state surface with a restrained metallic-
+  mint Listening formation, an interlocked Locked seal, distinct
+  finishing/error states, and a microphone-free visual QA harness driven by
+  the shipping renderer
 - Persistent `whisper-server` pool on a private ephemeral loopback port to
   avoid model reloads between dictations
 - Automatic Core Audio re-arm and local-model re-warm after system wake
