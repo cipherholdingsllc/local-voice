@@ -1,6 +1,6 @@
 # Local Voice remote-network isolation receipt
 
-Measured 2026-07-28 PDT against the installed, ad-hoc-signed v0.54.0 bundle:
+Measured 2026-07-28 PDT against the installed, ad-hoc-signed v0.57.1 bundle:
 
 `/Users/ciphercowork/Applications/Local Voice.app`
 
@@ -36,12 +36,14 @@ enforcement.
 
 | Preference | Actual engine | Route | Warmup | Median | p95 | Realtime factor | WER | Gate |
 |---|---|---|---:|---:|---:|---:|---:|---|
-| `auto` | Parakeet TDT 0.6b v3 | local process | 1,512.2 ms | 99.8 ms | 111.5 ms | 0.034x | 6.25% | PASS |
-| `whisper base.en` | persistent whisper-server | private loopback | 326.4 ms | 54.2 ms | 63.1 ms | 0.019x | 9.38% | PASS |
+| `auto` | Parakeet TDT 0.6b v3 | local process | 4,337.4 ms | 106.6 ms | 276.6 ms | 0.041x | 6.25% | PASS |
+| `whisper base.en` | persistent whisper-server | private loopback | 460.4 ms | 55.6 ms | 63.3 ms | 0.019x | 9.38% | PASS |
 
 The gate also verified eight samples per route, a single expected route and
 engine for every sample, the existing p95/WER limits, and clean child-process
-shutdown.
+shutdown. A detailed Parakeet rerun immediately after the isolated gate
+measured 105.5 ms median / 120.3 ms p95 / 6.25% WER, so the isolated run's
+276.6 ms tail was not repeatable.
 
 The v2 gate also generated a bounded 3.5-second AIFF fixture and exercised the
 installed `transcribe-file` path under the same external-egress denial. It
@@ -51,7 +53,7 @@ The receipt contained neither a source path nor retained temporary audio.
 
 Durable JSON receipt:
 
-`/Users/ciphercowork/Artifacts/local-voice/network-isolation-v0.54.0.json`
+`/Users/ciphercowork/Artifacts/local-voice/network-isolation-v0.57.1.json`
 
 ## Decision
 

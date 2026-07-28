@@ -15,9 +15,9 @@ Verified snapshot: 2026-07-28
 | macOS automated checks | Passing | 172 Swift tests, including Concept C metallic-mint palette invariants, Signal Blades geometry, bounded incremental preview audio, long-form cleanup routing, app-launch resolution, permission readiness, file normalization/export, routing failover, canonical voice contracts, bounded subprocesses, benchmark math, cache migration, and live model URL availability |
 | macOS release artifact | Passing | Installed v0.57.1, strict local code-signature verification, installed/artifact SHA-256 match (`ecc52b8abbae7b1eeb6a68c023632cd18966c19f01073e08c40043e6ccaf261a`) |
 | macOS shared contract | Passing | Installed runtime pair passes 4 schemas, 6 profiles, 8 fixtures, and 9 negative gates |
-| macOS synthetic performance gate | Passing | Installed v0.57.0 under the isolation gate: Parakeet 114.9 ms p95 / 6.25% WER; base Whisper 58.6 ms p95 / 9.38% WER; earlier large-turbo baseline remains 715.4 ms p95 / 7.81% WER |
-| macOS long-form finalization | Passing synthetic gate | Release v0.57.0 finalized a 147.4-second synthetic fixture in 2,423.4 ms total; adaptive cleanup used 0.016 ms and the JSON report omitted transcript content |
-| macOS OS-enforced external-egress gate | Passing | Installed v0.57.0 Parakeet, private-loopback Whisper, and timestamped file transcription pass while external outbound IP is denied |
+| macOS synthetic performance gate | Passing | Installed v0.57.1: Parakeet detailed rerun 120.3 ms p95 / 6.25% WER; isolated run 276.6 ms p95; base Whisper isolated run 63.3 ms p95 / 9.38% WER; earlier large-turbo baseline remains 715.4 ms p95 / 7.81% WER |
+| macOS long-form finalization | Passing synthetic gate | Installed v0.57.1 finalized a 147.4-second synthetic fixture in 3,015.9 ms total; adaptive cleanup used 0.023 ms and the JSON report omitted transcript content |
+| macOS OS-enforced external-egress gate | Passing | Installed v0.57.1 Parakeet, private-loopback Whisper, and timestamped file transcription pass while external outbound IP is denied |
 | macOS Launch at Login | Implemented; release identity pending | Native Service Management control is present, but the current ad-hoc development bundle reports the service unavailable; a stable Apple signing identity remains required |
 | iPhone app | Implemented, simulator and arm64 build verified | Native UI, branded app icon, Apple on-device Speech path |
 | iPhone keyboard | Implemented, simulator-verified | Inserts the most recent App Group transcript; no microphone claim |

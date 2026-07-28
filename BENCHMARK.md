@@ -19,16 +19,16 @@ Passing thresholds:
 
 | Preference | Actual engine | Route | Process warmup | Median | p95 | Realtime factor | WER | Gate |
 |---|---|---|---:|---:|---:|---:|---:|---|
-| `auto` | Parakeet TDT 0.6b v3 | local process | 2,313 ms | 106.7 ms | 131.0 ms | 0.036x | 6.25% | PASS |
-| `whisper base.en` | persistent whisper-server | private loopback | 424 ms | 58.7 ms | 64.5 ms | 0.020x | 9.38% | PASS |
+| `auto` | Parakeet TDT 0.6b v3 | local process | 2,751 ms | 105.5 ms | 120.3 ms | 0.035x | 6.25% | PASS |
+| `whisper base.en` | persistent whisper-server | private loopback | 460 ms | 55.6 ms | 63.3 ms | 0.019x | 9.38% | PASS |
 | `whisper large-v3-turbo-q5_0` | persistent whisper-server | private loopback | 1,049 ms | 699.6 ms | 715.4 ms | 0.238x | 7.81% | PASS |
 
 ### Long-form finalization
 
-The release v0.57.0 long-form gate synthesized 147.4 seconds of speech,
+The installed v0.57.1 long-form gate synthesized 147.4 seconds of speech,
 warmed Parakeet, and exercised the same adaptive cleanup decision used after
-hotkey release. Inference completed in 2,423.4 ms; the fast long-form cleanup
-decision completed in 0.016 ms; total finalization was 2,423.4 ms against a
+hotkey release. Inference completed in 3,015.9 ms; the fast long-form cleanup
+decision completed in 0.023 ms; total finalization was 3,015.9 ms against a
 5,000 ms target. The gate passed.
 
 This closes the measured regression shape in which a 119.3-second operator
@@ -42,12 +42,14 @@ The process-warmup figures were measured from fresh benchmark processes, but
 operating-system file caches may already have been warm. They are not
 post-reboot cold-start claims.
 
-The final installed, ad-hoc-signed v0.57.0 bundle passed the OS-enforced
-external-egress gate. Parakeet completed at 102.0 ms median / 114.9 ms p95 /
-6.25% WER, and persistent Whisper `base.en` completed at 53.3 ms median /
-58.6 ms p95 / 9.38% WER while external outbound IP connections were denied.
-The same v2 gate also passed the installed timestamped file-transcription path.
-See [NETWORK_ISOLATION.md](NETWORK_ISOLATION.md).
+The final installed, ad-hoc-signed v0.57.1 bundle passed the OS-enforced
+external-egress gate. In that isolated run, Parakeet completed at 106.6 ms
+median / 276.6 ms p95 / 6.25% WER, and persistent Whisper `base.en` completed
+at 55.6 ms median / 63.3 ms p95 / 9.38% WER while external outbound IP
+connections were denied. An immediate detailed Parakeet rerun returned to
+120.3 ms p95, so the isolated tail was not repeatable. The same v2 gate also
+passed the installed timestamped file-transcription path. See
+[NETWORK_ISOLATION.md](NETWORK_ISOLATION.md).
 
 ## Decision
 
