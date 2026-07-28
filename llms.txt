@@ -17,12 +17,18 @@ Local Voice is a desktop voice workspace and push-to-talk dictation app. Speech 
 
 - Native control-room GUI with engine, model, route, separate microphone/Fn/text-insertion readiness, guided permission repair, and optional Launch at Login.
 - Microphone-free `hotkey-diagnose` probe for the real Fn event tap.
+- Microphone-free `pill-preview` harness for the bespoke Voice Aperture
+  Listening and Locked state surface.
 - Push-to-talk system-wide cursor insertion on macOS.
 - Automatic Parakeet-to-persistent-Whisper routing with circuit-breaker fallbacks.
 - App-specific modes, custom dictionary, local transcript history, and retention controls.
 - Canonical v1 voice request/response receipts on default-private history records, with GUI JSON copy and a deterministic `contract-fixture` command.
 - Native private file-transcription workspace for bounded audio/video queues, timestamped chunks, cancellation, and TXT, Markdown, JSON, SRT, and WebVTT exports.
-- Repeatable command-line performance benchmark with a machine-readable JSON receipt.
+- Repeatable short-corpus and long-form command-line performance benchmarks
+  with machine-readable JSON receipts.
+- Incremental live-preview audio with bounded overlap plus adaptive long-form
+  cleanup so cumulative preview and synchronous Ollama regeneration do not
+  dominate hotkey-release latency.
 - Repeatable external-egress gate that preserves private loopback and emits a machine-readable receipt.
 - Native iPhone companion project and Personal Team installation script.
 

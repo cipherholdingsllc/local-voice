@@ -95,6 +95,44 @@ public final class OllamaCleanup {
     }
 }
 
+enum DictationCleanupRoute: String, Equatable {
+    case disabled
+    case tooShort
+    case synchronousOllama
+    case fastLongForm
+}
+
+/// Keeps optional prose refinement inside a predictable interaction budget.
+///
+/// Parakeet already returns punctuated text. For long-form dictation, waiting
+/// for a second model to regenerate the entire transcript dominates perceived
+/// latency, so Local Voice preserves the local STT result and returns it
+/// immediately. Short messages still receive the configured Ollama pass.
+enum DictationCleanupPolicy {
+    static let minimumPolishCharacters = 20
+    static let maximumSynchronousCharacters = 700
+    static let maximumSynchronousRecordingMilliseconds = 45_000.0
+
+    static func route(
+        enabled: Bool,
+        characterCount: Int,
+        recordingMilliseconds: Double
+    ) -> DictationCleanupRoute {
+        guard enabled else { return .disabled }
+        guard characterCount >= minimumPolishCharacters else {
+            return .tooShort
+        }
+        guard
+            characterCount <= maximumSynchronousCharacters,
+            recordingMilliseconds
+                <= maximumSynchronousRecordingMilliseconds
+        else {
+            return .fastLongForm
+        }
+        return .synchronousOllama
+    }
+}
+
 enum OllamaCleanupError: LocalizedError {
     case unavailable
     case parseFailed

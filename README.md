@@ -13,9 +13,14 @@ Private, system-wide dictation for macOS with a native iPhone companion. Local V
 - Native SwiftUI command center with History, Files, Modes, Dictionary, Models, Privacy, and Settings
 - Menu-bar push-to-talk with configurable global hotkeys, live Fn readiness,
   guided permission repair, and an optional Launch at Login control
+- Voice Aperture floating state surface with a sound-reactive Listening glyph,
+  a coherent Locked voice seal, and a microphone-free visual QA harness
 - Persistent `whisper-server` pool on a private ephemeral loopback port to
   avoid model reloads between dictations
 - Optional Parakeet MLX English fast path with Whisper fallback
+- Bounded incremental live-preview chunks and an adaptive long-form cleanup
+  route that avoids retranscribing cumulative audio or regenerating an entire
+  long transcript through Ollama before insertion
 - App-aware prompt profiles and secure-field blocking
 - Raw/polished output, voice commands, and local vocabulary learning
 - Local-only transcript history with explicit retention controls
@@ -69,6 +74,9 @@ Useful commands:
 .build/release/local-voice set-language auto
 .build/release/local-voice set-model large-v3-turbo-q5_0
 .build/release/local-voice benchmark auto base.en
+.build/release/local-voice long-form-benchmark auto base.en
+.build/release/local-voice pill-preview listening
+.build/release/local-voice pill-preview locked
 .build/release/local-voice contract-fixture
 .build/release/local-voice transcribe-file recording.m4a json
 ```
@@ -120,6 +128,11 @@ fixtures, transcribes them through the selected real engine, and reports
 word-error rate, median/p95 finish latency, realtime factor, cold process
 warmup, engine, and privacy route as JSON. It exits nonzero when p95 exceeds
 1,000 ms or synthetic WER exceeds 15%.
+
+`local-voice long-form-benchmark` reproduces the warm post-release path with a
+long synthetic fixture and exits nonzero if total finalization exceeds 5,000
+ms or the fixture fails to select the bounded fast long-form route. The JSON
+report omits transcript content.
 
 See [BENCHMARK.md](BENCHMARK.md) for the current measured matrix and its
 limitations. Synthetic speech is a regression fixture; it is not a substitute

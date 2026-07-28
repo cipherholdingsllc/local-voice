@@ -1,6 +1,6 @@
 # Local Voice remote-network isolation receipt
 
-Measured 2026-07-25 PDT against the installed, ad-hoc-signed v0.53.0 bundle:
+Measured 2026-07-28 PDT against the installed, ad-hoc-signed v0.54.0 bundle:
 
 `/Users/ciphercowork/Applications/Local Voice.app`
 
@@ -36,8 +36,8 @@ enforcement.
 
 | Preference | Actual engine | Route | Warmup | Median | p95 | Realtime factor | WER | Gate |
 |---|---|---|---:|---:|---:|---:|---:|---|
-| `auto` | Parakeet TDT 0.6b v3 | local process | 3,367.8 ms | 109.7 ms | 123.3 ms | 0.035x | 6.25% | PASS |
-| `whisper base.en` | persistent whisper-server | private loopback | 447.5 ms | 53.6 ms | 59.3 ms | 0.018x | 9.38% | PASS |
+| `auto` | Parakeet TDT 0.6b v3 | local process | 1,512.2 ms | 99.8 ms | 111.5 ms | 0.034x | 6.25% | PASS |
+| `whisper base.en` | persistent whisper-server | private loopback | 326.4 ms | 54.2 ms | 63.1 ms | 0.019x | 9.38% | PASS |
 
 The gate also verified eight samples per route, a single expected route and
 engine for every sample, the existing p95/WER limits, and clean child-process
@@ -51,7 +51,7 @@ The receipt contained neither a source path nor retained temporary audio.
 
 Durable JSON receipt:
 
-`/Users/ciphercowork/Artifacts/local-voice/network-isolation-v0.53.0.json`
+`/Users/ciphercowork/Artifacts/local-voice/network-isolation-v0.54.0.json`
 
 ## Decision
 

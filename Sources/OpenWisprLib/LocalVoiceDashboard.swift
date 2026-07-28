@@ -777,7 +777,7 @@ private struct SettingsView: View {
                     SettingDivider()
                     SettingToggle(
                         title: "Local refinement",
-                        detail: "Use Ollama when it is already running",
+                        detail: "Polish short dictations with Ollama; long-form stays on the fast path",
                         value: Binding(
                             get: { config.ollamaEnabled?.value ?? true },
                             set: { value in update { $0.ollamaEnabled = FlexBool(value) } }

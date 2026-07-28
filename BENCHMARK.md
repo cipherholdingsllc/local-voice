@@ -1,7 +1,8 @@
 # Local Voice benchmark receipt
 
 Measured 2026-07-25 PDT on the current development Mac with the committed
-`local-voice-benchmark.v1` harness.
+`local-voice-benchmark.v1` and
+`local-voice-long-form-latency.v1` harnesses.
 
 ## Gate
 
@@ -22,14 +23,29 @@ Passing thresholds:
 | `whisper base.en` | persistent whisper-server | private loopback | 424 ms | 58.7 ms | 64.5 ms | 0.020x | 9.38% | PASS |
 | `whisper large-v3-turbo-q5_0` | persistent whisper-server | private loopback | 1,049 ms | 699.6 ms | 715.4 ms | 0.238x | 7.81% | PASS |
 
+### Long-form finalization
+
+The installed v0.54.0 long-form gate synthesized 147.4 seconds of speech,
+warmed Parakeet, and exercised the same adaptive cleanup decision used after
+hotkey release. Inference completed in 2,016.3 ms; the fast long-form cleanup
+decision completed in 0.017 ms; total finalization was 2,016.3 ms against a
+5,000 ms target. The gate passed.
+
+This closes the measured regression shape in which a 119.3-second operator
+dictation spent 3,176.2 ms in local inference but another 11,536.9 ms
+regenerating the transcript through optional Ollama refinement. Long-form
+dictation now preserves Parakeet's punctuated result instead of synchronously
+regenerating the entire transcript. Short dictations still use local
+refinement when enabled.
+
 The process-warmup figures were measured from fresh benchmark processes, but
 operating-system file caches may already have been warm. They are not
 post-reboot cold-start claims.
 
-The final installed, ad-hoc-signed v0.53.0 bundle passed the OS-enforced
-external-egress gate. Parakeet completed at 109.7 ms median / 123.3 ms p95 /
-6.25% WER, and persistent Whisper `base.en` completed at 53.6 ms median /
-59.3 ms p95 / 9.38% WER while external outbound IP connections were denied.
+The final installed, ad-hoc-signed v0.54.0 bundle passed the OS-enforced
+external-egress gate. Parakeet completed at 99.8 ms median / 111.5 ms p95 /
+6.25% WER, and persistent Whisper `base.en` completed at 54.2 ms median /
+63.1 ms p95 / 9.38% WER while external outbound IP connections were denied.
 The same v2 gate also passed the installed timestamped file-transcription path.
 See [NETWORK_ISOLATION.md](NETWORK_ISOLATION.md).
 
@@ -43,6 +59,9 @@ See [NETWORK_ISOLATION.md](NETWORK_ISOLATION.md).
   the latency gate but is not the best everyday choice on this corpus.
 - Startup warmup includes a real silent Parakeet inference so the first user
   utterance does not pay an MLX compile-on-first-use penalty.
+- live preview now transcribes bounded incremental PCM chunks with a 250 ms
+  boundary overlap; a two-minute fixture schedules 134.75 seconds of preview
+  audio rather than about 3,660 seconds of cumulative retranscription
 
 ## Defects closed by the run
 
@@ -67,7 +86,7 @@ This is a deterministic synthetic regression corpus, not a validated
 human-speech performance study. It does not cover:
 
 - the operator's microphone and natural delivery
-- accents, background noise, crosstalk, or long-form dictation
+- accents, background noise, crosstalk, or natural long-form delivery
 - cursor insertion across target apps or secure-field behavior
 - independent packet capture beyond the OS-enforced process-tree egress gate
 - iPhone recognition, first partial, finalization, or keyboard insertion
@@ -78,4 +97,5 @@ Run:
 .build/release/local-voice benchmark auto base.en
 .build/release/local-voice benchmark whisper base.en
 .build/release/local-voice benchmark whisper large-v3-turbo-q5_0
+.build/release/local-voice long-form-benchmark auto base.en
 ```

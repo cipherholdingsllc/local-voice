@@ -16,6 +16,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     public var lastTranscription: String?
     private var streamingPartial = ""
     private let streamingQueue = DispatchQueue(label: "local-voice.streaming", qos: .userInitiated)
+    private let streamingSessionGate = StreamingSessionGate()
     private var dashboardCaptureMode = false
     private var captureApplicationName = "Unknown app"
     private var captureBundleIdentifier: String?
@@ -500,6 +501,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             : frontmost?.bundleIdentifier
         captureModeName = AppPromptProfiles.profile(for: captureBundleIdentifier).name
         captureRequestID = UUID()
+        streamingSessionGate.begin(captureRequestID)
         captureProfileID = VoiceContractProfileID.localVoiceProfile(
             bundleIdentifier: captureBundleIdentifier,
             modeName: captureModeName
@@ -520,8 +522,12 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
         let streamingOn = config.streamingEnabled?.value ?? true
         if streamingOn {
+            let streamingRequestID = captureRequestID
             recorder.onChunkReady = { [weak self] chunkURL in
-                self?.transcribeChunk(url: chunkURL)
+                self?.transcribeChunk(
+                    url: chunkURL,
+                    requestID: streamingRequestID
+                )
             }
         } else {
             recorder.onChunkReady = nil
@@ -555,6 +561,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 silenceTimeoutSeconds: silenceTimeout
             )
         } catch {
+            streamingSessionGate.end(captureRequestID)
             let msg = FailurePresenter.message(for: error)
             print("Error: \(msg)")
             isPressed = false
@@ -566,10 +573,13 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func transcribeChunk(url: URL) {
+    private func transcribeChunk(url: URL, requestID: UUID) {
         streamingQueue.async { [weak self] in
             guard let self = self else { return }
             defer { try? FileManager.default.removeItem(at: url) }
+            guard self.streamingSessionGate.isActive(requestID) else {
+                return
+            }
             let partial: String?
             if let engine = self.sttRouter.chunkEngine() {
                 partial = try? engine.transcribe(audioURL: url)
@@ -577,10 +587,19 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 let tiny = Transcriber(modelSize: "tiny.en", language: self.config.language)
                 partial = try? tiny.transcribe(audioURL: url)
             }
-            guard let text = partial, !text.isEmpty else { return }
+            guard
+                self.streamingSessionGate.isActive(requestID),
+                let text = partial,
+                !text.isEmpty
+            else { return }
             DispatchQueue.main.async {
-                if !self.streamingPartial.isEmpty { self.streamingPartial += " " }
-                self.streamingPartial += text
+                guard self.streamingSessionGate.isActive(requestID) else {
+                    return
+                }
+                self.streamingPartial = StreamingTranscriptAssembler.merge(
+                    existing: self.streamingPartial,
+                    incoming: text
+                )
                 self.pillOverlay.updatePartial(self.streamingPartial)
             }
         }
@@ -590,6 +609,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         guard isPressed else { return }
         isPressed = false
         isLockMode = false
+        streamingSessionGate.end(captureRequestID)
         for m in hotkeyManagers { m.resetLockState() }
         LatencyInstrumentation.shared.end("record")
 
@@ -629,11 +649,21 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 let raw = try self.sttRouter.transcribe(audioURL: audioURL)
                 LatencyInstrumentation.shared.end("stt")
 
-                var text = (self.config.spokenPunctuation?.value ?? false) ? TextPostProcessor.process(raw) : raw
+                var text = (self.config.spokenPunctuation?.value ?? false)
+                    ? TextPostProcessor.process(raw)
+                    : raw
 
                 LatencyInstrumentation.shared.mark("llm")
                 let vocab = VocabularyLearner.shared.merged(with: self.config.customVocabulary ?? [])
-                if self.ollamaCleanup.enabled, OllamaCleanup.isReachable() {
+                let recordingMs =
+                    LatencyInstrumentation.shared.lastSession["record"] ?? 0
+                let cleanupRoute = DictationCleanupPolicy.route(
+                    enabled: self.ollamaCleanup.enabled,
+                    characterCount: text.count,
+                    recordingMilliseconds: recordingMs
+                )
+                if cleanupRoute == .synchronousOllama,
+                   OllamaCleanup.isReachable() {
                     DispatchQueue.main.async {
                         LocalVoiceStore.shared.setState(.refining, detail: "Applying your local writing mode")
                     }
@@ -644,6 +674,11 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                         vocabulary: vocab
                     )
                     VocabularyLearner.shared.learnFromDiff(raw: raw, polished: text)
+                } else if cleanupRoute == .fastLongForm {
+                    fputs(
+                        "Cleanup: fast long-form route (\(Int(recordingMs))ms, \(text.count) characters)\n",
+                        stderr
+                    )
                 }
                 LatencyInstrumentation.shared.end("llm")
 

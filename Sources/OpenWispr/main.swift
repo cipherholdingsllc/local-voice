@@ -14,12 +14,15 @@ func printUsage() {
     USAGE:
         local-voice start               Start Local Voice
         local-voice dashboard-preview   Open the fixture-backed GUI preview
+        local-voice pill-preview <state> Preview Listening/Locked without recording
         local-voice set-hotkey <key>    Set the push-to-talk hotkey
         local-voice get-hotkey          Show current hotkey
         local-voice set-model <size>    Set the Whisper model
         local-voice set-language <code> Set the language (e.g. en, fr, auto)
         local-voice download-model [size] Download a Whisper model
         local-voice benchmark [engine] [model] Run the local synthetic quality gate
+        local-voice long-form-benchmark [engine] [model]
+                                       Reproduce the long-dictation release gate
         local-voice hotkey-diagnose      Test the real Fn event tap without recording
         local-voice contract-fixture    Emit a canonical request/response pair
         local-voice transcribe-file <path> [txt|md|json|srt|vtt]
@@ -58,6 +61,38 @@ func cmdDashboardPreview() {
     app.setActivationPolicy(.regular)
     DashboardWindowController.shared.showPreview()
     app.run()
+}
+
+func cmdPillPreview(stateName: String?) {
+    guard
+        let stateName,
+        let state = PillPreviewState(rawValue: stateName.lowercased())
+    else {
+        let names = PillPreviewState.allCases
+            .map(\.rawValue)
+            .joined(separator: ", ")
+        fputs(
+            "Usage: local-voice pill-preview <\(names)>\n",
+            stderr
+        )
+        exit(2)
+    }
+
+    let app = NSApplication.shared
+    app.setActivationPolicy(.accessory)
+    let preview = PillOverlayPreviewSession()
+    guard preview.show(state: state) else {
+        fputs("Could not present the \(state.rawValue) pill.\n", stderr)
+        exit(1)
+    }
+
+    signal(SIGINT) { _ in
+        DispatchQueue.main.async {
+            NSApplication.shared.terminate(nil)
+        }
+    }
+    app.run()
+    withExtendedLifetime(preview) {}
 }
 
 func cmdSetHotkey(_ keyString: String) {
@@ -196,6 +231,45 @@ func cmdBenchmark(engine: String?, model: String?) {
     }
 }
 
+func cmdLongFormBenchmark(engine: String?, model: String?) {
+    let config = Config.load()
+    let preference: STTEngineKind
+    if let engine {
+        guard let parsed = STTEngineKind(rawValue: engine) else {
+            print(
+                "Error: benchmark engine must be auto, parakeet, or whisper"
+            )
+            exit(1)
+        }
+        preference = parsed
+    } else {
+        preference = config.sttEngine ?? .auto
+    }
+    let selectedModel = model ?? config.modelSize
+    guard Config.supportedModels.contains(selectedModel) else {
+        print("Error: Unknown model '\(selectedModel)'")
+        exit(1)
+    }
+
+    do {
+        let report = try LongFormLatencyBenchmark.run(
+            preferredEngine: preference,
+            modelSize: selectedModel,
+            language: "en"
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(report)
+        print(String(data: data, encoding: .utf8) ?? "{}")
+        if !report.passed { exit(2) }
+    } catch {
+        print(
+            "Long-form benchmark failed: \(error.localizedDescription)"
+        )
+        exit(1)
+    }
+}
+
 func cmdContractFixture() {
     do {
         print(try LocalVoiceContract.samplePair().jsonString())
@@ -287,6 +361,8 @@ case "start":
     cmdStart()
 case "dashboard-preview":
     cmdDashboardPreview()
+case "pill-preview":
+    cmdPillPreview(stateName: args.count > 2 ? args[2] : nil)
 case "set-hotkey":
     guard args.count > 2 else {
         print("Usage: local-voice set-hotkey <key>")
@@ -313,6 +389,11 @@ case "download-model":
     cmdDownloadModel(size)
 case "benchmark":
     cmdBenchmark(
+        engine: args.count > 2 ? args[2] : nil,
+        model: args.count > 3 ? args[3] : nil
+    )
+case "long-form-benchmark":
+    cmdLongFormBenchmark(
         engine: args.count > 2 ? args[2] : nil,
         model: args.count > 3 ? args[3] : nil
     )

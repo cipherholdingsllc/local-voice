@@ -3,7 +3,7 @@ set -euo pipefail
 
 BINARY="${1:-.build/release/local-voice}"
 APP_DIR="${2:-Local Voice.app}"
-VERSION="${3:-0.53.0}"
+VERSION="${3:-0.54.0}"
 CODESIGN_IDENTITY="${LOCAL_VOICE_CODESIGN_IDENTITY:--}"
 
 rm -rf "$APP_DIR"
