@@ -15,6 +15,8 @@ func printUsage() {
         local-voice start               Start Local Voice
         local-voice dashboard-preview   Open the fixture-backed GUI preview
         local-voice pill-preview <state> Preview Listening/Locked without recording
+        local-voice glyph-sheet <out.png> [scale] [states...]
+                                       Render the state glyph offscreen for review
         local-voice set-hotkey <key>    Set the push-to-talk hotkey
         local-voice get-hotkey          Show current hotkey
         local-voice set-model <size>    Set the Whisper model
@@ -93,6 +95,32 @@ func cmdPillPreview(stateName: String?) {
     }
     app.run()
     withExtendedLifetime(preview) {}
+}
+
+func cmdGlyphSheet(path: String?, scale: String?, states: [String]) {
+    guard let path, !path.isEmpty else {
+        fputs(
+            "Usage: local-voice glyph-sheet <out.png> [scale] [states...]\n",
+            stderr
+        )
+        exit(2)
+    }
+    let expanded = (path as NSString).expandingTildeInPath
+    let url = URL(fileURLWithPath: expanded).standardizedFileURL
+    let resolved = scale.flatMap { Double($0) }.map { CGFloat($0) } ?? 3
+    do {
+        try GlyphSheet.render(
+            to: url,
+            options: GlyphSheet.Options(scale: resolved, states: states)
+        )
+        print("Wrote \(url.path)")
+    } catch {
+        fputs(
+            "Glyph sheet failed: \(error.localizedDescription)\n",
+            stderr
+        )
+        exit(1)
+    }
 }
 
 func cmdSetHotkey(_ keyString: String) {
@@ -363,6 +391,12 @@ case "dashboard-preview":
     cmdDashboardPreview()
 case "pill-preview":
     cmdPillPreview(stateName: args.count > 2 ? args[2] : nil)
+case "glyph-sheet":
+    cmdGlyphSheet(
+        path: args.count > 2 ? args[2] : nil,
+        scale: args.count > 3 ? args[3] : nil,
+        states: args.count > 4 ? Array(args[4...]) : []
+    )
 case "set-hotkey":
     guard args.count > 2 else {
         print("Usage: local-voice set-hotkey <key>")

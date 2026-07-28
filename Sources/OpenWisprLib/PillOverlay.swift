@@ -4,9 +4,9 @@ import QuartzCore
 /// A fixed, non-activating state surface for system-wide dictation.
 ///
 /// The glyph deliberately avoids literal microphones, equalizer bars, and
-/// padlocks. Listening is represented by an open, sound-reactive aperture.
-/// Lock mode closes the same geometry into a voice seal, so the state change is
-/// visible without introducing a second visual language.
+/// padlocks. Capture is represented by a sound-reactive triad whose kerf
+/// closes as you speak. Lock mode seats the same geometry rather than
+/// introducing a second visual language — see `TriadGlyph`.
 final class PillOverlay {
     enum Anchor: String, Codable {
         case bottomRight
@@ -21,7 +21,7 @@ final class PillOverlay {
 
     private var panel: NSPanel?
     private var chromeView: PillChromeView?
-    private var apertureView: VoiceApertureView?
+    private var glyphView: TriadGlyphView?
     private var statusLabel: NSTextField?
     private var anchor: Anchor = .bottomRight
     private var followsCursor = false
@@ -56,7 +56,7 @@ final class PillOverlay {
 
     func updateLevel(_ level: Float) {
         DispatchQueue.main.async { [weak self] in
-            self?.apertureView?.level = level
+            self?.glyphView?.level = level
         }
     }
 
@@ -83,8 +83,8 @@ final class PillOverlay {
         guard let panel else { return }
 
         currentState = state
-        apertureView?.pillState = state
-        apertureView?.setAccessibilityLabel(state.accessibilityLabel)
+        glyphView?.pillState = state
+        glyphView?.setAccessibilityLabel(state.accessibilityLabel)
         chromeView?.accentColor = state.accentColor
 
         let trimmedPartial = partialText?
@@ -132,12 +132,12 @@ final class PillOverlay {
         )
         chrome.autoresizingMask = [.width, .height]
 
-        let aperture = VoiceApertureView(
-            frame: NSRect(x: 14, y: 12, width: 24, height: 24)
+        let glyph = TriadGlyphView(
+            frame: NSRect(x: 13, y: 11, width: 26, height: 26)
         )
-        aperture.setAccessibilityRole(.image)
-        aperture.setAccessibilityLabel(PillState.listening.accessibilityLabel)
-        chrome.addSubview(aperture)
+        glyph.setAccessibilityRole(.image)
+        glyph.setAccessibilityLabel(PillState.listening.accessibilityLabel)
+        chrome.addSubview(glyph)
 
         let label = NSTextField(labelWithString: "")
         label.frame = NSRect(
@@ -154,7 +154,7 @@ final class PillOverlay {
         newPanel.contentView = chrome
         panel = newPanel
         chromeView = chrome
-        apertureView = aperture
+        glyphView = glyph
         statusLabel = label
     }
 
@@ -280,31 +280,35 @@ enum PillState: String, CaseIterable {
     var accentColor: NSColor {
         switch self {
         case .listening:
+            // Ember: one step redder than gold, and alive.
             return NSColor(
-                calibratedRed: 0.98,
-                green: 0.43,
-                blue: 0.36,
+                calibratedRed: 0.99,
+                green: 0.58,
+                blue: 0.30,
                 alpha: 1
             )
         case .transcribing:
+            // Straw: desaturated, cooler, still inside the warm family.
             return NSColor(
-                calibratedRed: 0.43,
-                green: 0.68,
-                blue: 0.98,
+                calibratedRed: 0.94,
+                green: 0.90,
+                blue: 0.66,
                 alpha: 1
             )
         case .locked:
+            // Gold: brightest of the four. The committed state.
             return NSColor(
-                calibratedRed: 0.98,
-                green: 0.72,
-                blue: 0.31,
+                calibratedRed: 1.00,
+                green: 0.78,
+                blue: 0.36,
                 alpha: 1
             )
         case .error:
+            // Flare: far from ember in both value and saturation.
             return NSColor(
-                calibratedRed: 0.98,
-                green: 0.32,
-                blue: 0.38,
+                calibratedRed: 0.99,
+                green: 0.36,
+                blue: 0.33,
                 alpha: 1
             )
         }
@@ -353,69 +357,30 @@ struct PillPresentation: Equatable {
     }
 }
 
-struct VoiceApertureMetrics: Equatable {
-    let normalizedLevel: CGFloat
-    let coreRadius: CGFloat
-    let innerRadius: CGFloat
-    let outerRadius: CGFloat
-    let glowRadius: CGFloat
+/// Renders the Triad, and owns the one thing a pure renderer cannot: the
+/// temporal smoothing of microphone level across frames.
+final class TriadGlyphView: NSView {
+    private var smoothedEnergy: CGFloat = 0
+    private var lastDrawnEnergy: CGFloat = -1
 
-    static func make(
-        level: Float,
-        state: PillState
-    ) -> VoiceApertureMetrics {
-        let raw = level.isFinite ? CGFloat(level) : 0
-        let normalized = min(1, max(0, raw))
-
-        switch state {
-        case .listening:
-            return VoiceApertureMetrics(
-                normalizedLevel: normalized,
-                coreRadius: 2.25 + (normalized * 0.45),
-                innerRadius: 4.7 + (normalized * 0.55),
-                outerRadius: 7.4 + (normalized * 1.2),
-                glowRadius: 5.2 + (normalized * 2.4)
-            )
-        case .locked:
-            return VoiceApertureMetrics(
-                normalizedLevel: normalized,
-                coreRadius: 2.35 + (normalized * 0.25),
-                innerRadius: 4.85,
-                outerRadius: 8.25,
-                glowRadius: 6.6 + (normalized * 1.2)
-            )
-        case .transcribing:
-            return VoiceApertureMetrics(
-                normalizedLevel: normalized,
-                coreRadius: 2.2,
-                innerRadius: 4.9,
-                outerRadius: 7.9,
-                glowRadius: 5.8
-            )
-        case .error:
-            return VoiceApertureMetrics(
-                normalizedLevel: normalized,
-                coreRadius: 2.2,
-                innerRadius: 4.7,
-                outerRadius: 7.9,
-                glowRadius: 5.5
-            )
-        }
-    }
-}
-
-/// The Voice Aperture: one continuous visual grammar for every capture state.
-final class VoiceApertureView: NSView {
     var level: Float = 0 {
         didSet {
-            if abs(level - oldValue) > 0.01 {
+            let target = TriadGlyph.Energy.condition(level)
+            smoothedEnergy = TriadGlyph.Energy.smooth(
+                previous: smoothedEnergy,
+                target: target
+            )
+            let quantized = TriadGlyph.Energy.quantize(smoothedEnergy)
+            if abs(quantized - lastDrawnEnergy) >= TriadGlyph.Energy.step {
                 needsDisplay = true
             }
         }
     }
 
     var pillState: PillState = .listening {
-        didSet { needsDisplay = true }
+        didSet {
+            if pillState != oldValue { needsDisplay = true }
+        }
     }
 
     override var isOpaque: Bool { false }
@@ -425,290 +390,21 @@ final class VoiceApertureView: NSView {
         guard let context = NSGraphicsContext.current?.cgContext else {
             return
         }
-
-        context.saveGState()
         context.setAllowsAntialiasing(true)
         context.setShouldAntialias(true)
 
-        let metrics = VoiceApertureMetrics.make(
-            level: level,
-            state: pillState
-        )
-        let center = NSPoint(x: bounds.midX, y: bounds.midY)
-        let accent = pillState.accentColor
+        let quantized = TriadGlyph.Energy.quantize(smoothedEnergy)
+        lastDrawnEnergy = quantized
 
-        drawGlow(
-            center: center,
-            radius: metrics.glowRadius,
-            color: accent,
-            intensity: 0.12 + (metrics.normalizedLevel * 0.1)
-        )
-
-        switch pillState {
-        case .listening:
-            drawListening(
-                center: center,
-                metrics: metrics,
-                accent: accent
-            )
-        case .locked:
-            drawLocked(
-                center: center,
-                metrics: metrics,
-                accent: accent
-            )
-        case .transcribing:
-            drawTranscribing(
-                center: center,
-                metrics: metrics,
-                accent: accent
-            )
-        case .error:
-            drawError(
-                center: center,
-                metrics: metrics,
-                accent: accent
-            )
-        }
-
-        drawPearl(
-            center: center,
-            radius: metrics.coreRadius,
-            color: accent
-        )
-        context.restoreGState()
-    }
-
-    private func drawListening(
-        center: NSPoint,
-        metrics: VoiceApertureMetrics,
-        accent: NSColor
-    ) {
-        let energy = metrics.normalizedLevel
-        strokeArc(
-            center: center,
-            radius: metrics.innerRadius,
-            startAngle: 116,
-            endAngle: 244,
-            color: accent.withAlphaComponent(0.42 + (energy * 0.22)),
-            width: 1.15
-        )
-        strokeArc(
-            center: center,
-            radius: metrics.innerRadius,
-            startAngle: -64,
-            endAngle: 64,
-            color: accent.withAlphaComponent(0.42 + (energy * 0.22)),
-            width: 1.15
-        )
-        strokeArc(
-            center: center,
-            radius: metrics.outerRadius,
-            startAngle: 108,
-            endAngle: 252,
-            color: accent.withAlphaComponent(0.76 + (energy * 0.18)),
-            width: 1.45
-        )
-        strokeArc(
-            center: center,
-            radius: metrics.outerRadius,
-            startAngle: -72,
-            endAngle: 72,
-            color: accent.withAlphaComponent(0.76 + (energy * 0.18)),
-            width: 1.45
-        )
-    }
-
-    private func drawLocked(
-        center: NSPoint,
-        metrics: VoiceApertureMetrics,
-        accent: NSColor
-    ) {
-        strokeCircle(
-            center: center,
-            radius: metrics.outerRadius,
-            color: accent.withAlphaComponent(0.94),
-            width: 1.45
-        )
-        strokeCircle(
-            center: center,
-            radius: metrics.innerRadius,
-            color: accent.withAlphaComponent(0.28),
-            width: 1
-        )
-
-        let closure = NSBezierPath()
-        closure.move(
-            to: NSPoint(
-                x: center.x,
-                y: center.y + metrics.outerRadius - 1.1
+        TriadGlyph.draw(
+            in: context,
+            bounds: bounds,
+            state: pillState,
+            metrics: TriadGlyph.Metrics.make(
+                energy: quantized,
+                state: pillState
             )
         )
-        closure.line(
-            to: NSPoint(
-                x: center.x,
-                y: center.y + metrics.outerRadius + 1.6
-            )
-        )
-        closure.lineWidth = 1.45
-        closure.lineCapStyle = .round
-        accent.withAlphaComponent(0.94).setStroke()
-        closure.stroke()
-    }
-
-    private func drawTranscribing(
-        center: NSPoint,
-        metrics: VoiceApertureMetrics,
-        accent: NSColor
-    ) {
-        strokeArc(
-            center: center,
-            radius: metrics.outerRadius,
-            startAngle: 34,
-            endAngle: 326,
-            color: accent.withAlphaComponent(0.9),
-            width: 1.45
-        )
-        strokeCircle(
-            center: center,
-            radius: metrics.innerRadius,
-            color: accent.withAlphaComponent(0.26),
-            width: 1
-        )
-    }
-
-    private func drawError(
-        center: NSPoint,
-        metrics: VoiceApertureMetrics,
-        accent: NSColor
-    ) {
-        strokeArc(
-            center: center,
-            radius: metrics.outerRadius,
-            startAngle: 22,
-            endAngle: 146,
-            color: accent.withAlphaComponent(0.92),
-            width: 1.45
-        )
-        strokeArc(
-            center: center,
-            radius: metrics.outerRadius,
-            startAngle: 202,
-            endAngle: 326,
-            color: accent.withAlphaComponent(0.92),
-            width: 1.45
-        )
-
-        let slash = NSBezierPath()
-        slash.move(
-            to: NSPoint(
-                x: center.x - 4.4,
-                y: center.y + 4.4
-            )
-        )
-        slash.line(
-            to: NSPoint(
-                x: center.x + 4.4,
-                y: center.y - 4.4
-            )
-        )
-        slash.lineWidth = 1.25
-        slash.lineCapStyle = .round
-        accent.withAlphaComponent(0.72).setStroke()
-        slash.stroke()
-    }
-
-    private func drawPearl(
-        center: NSPoint,
-        radius: CGFloat,
-        color: NSColor
-    ) {
-        color.setFill()
-        NSBezierPath(
-            ovalIn: NSRect(
-                x: center.x - radius,
-                y: center.y - radius,
-                width: radius * 2,
-                height: radius * 2
-            )
-        ).fill()
-
-        let highlightRadius = max(0.65, radius * 0.32)
-        NSColor.white.withAlphaComponent(0.68).setFill()
-        NSBezierPath(
-            ovalIn: NSRect(
-                x: center.x - (radius * 0.38) - highlightRadius,
-                y: center.y + (radius * 0.28),
-                width: highlightRadius * 2,
-                height: highlightRadius * 2
-            )
-        ).fill()
-    }
-
-    private func drawGlow(
-        center: NSPoint,
-        radius: CGFloat,
-        color: NSColor,
-        intensity: CGFloat
-    ) {
-        let glow = color.withAlphaComponent(intensity)
-        let clear = color.withAlphaComponent(0)
-        guard let gradient = NSGradient(
-            starting: glow,
-            ending: clear
-        ) else { return }
-
-        gradient.draw(
-            in: NSBezierPath(
-                ovalIn: NSRect(
-                    x: center.x - radius,
-                    y: center.y - radius,
-                    width: radius * 2,
-                    height: radius * 2
-                )
-            ),
-            relativeCenterPosition: .zero
-        )
-    }
-
-    private func strokeArc(
-        center: NSPoint,
-        radius: CGFloat,
-        startAngle: CGFloat,
-        endAngle: CGFloat,
-        color: NSColor,
-        width: CGFloat
-    ) {
-        let path = NSBezierPath()
-        path.appendArc(
-            withCenter: center,
-            radius: radius,
-            startAngle: startAngle,
-            endAngle: endAngle
-        )
-        path.lineWidth = width
-        path.lineCapStyle = .round
-        color.setStroke()
-        path.stroke()
-    }
-
-    private func strokeCircle(
-        center: NSPoint,
-        radius: CGFloat,
-        color: NSColor,
-        width: CGFloat
-    ) {
-        let path = NSBezierPath(
-            ovalIn: NSRect(
-                x: center.x - radius,
-                y: center.y - radius,
-                width: radius * 2,
-                height: radius * 2
-            )
-        )
-        path.lineWidth = width
-        color.setStroke()
-        path.stroke()
     }
 }
 
@@ -775,10 +471,11 @@ final class PillChromeView: NSView {
     }
 
     private func updateAccent() {
+        let tone = TriadGlyph.rim(accentColor, 1)
         accentLayer.colors = [
-            accentColor.withAlphaComponent(0).cgColor,
-            accentColor.withAlphaComponent(0.36).cgColor,
-            accentColor.withAlphaComponent(0).cgColor,
+            tone.withAlphaComponent(0).cgColor,
+            tone.withAlphaComponent(0.40).cgColor,
+            tone.withAlphaComponent(0).cgColor,
         ]
         accentLayer.locations = [0, 0.5, 1]
     }
