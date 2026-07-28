@@ -277,38 +277,48 @@ enum PillState: String, CaseIterable {
         [title, detail].compactMap { $0 }.joined(separator: ", ")
     }
 
+    /// Capture runs hot and bright; commitment cools and deepens. The four
+    /// states are separated by hue first so they survive the squint test,
+    /// rather than by brightness alone.
     var accentColor: NSColor {
         switch self {
         case .listening:
-            // Ember: one step redder than gold, and alive.
+            // Citrine: warm yellow, gold-adjacent. Live and electric without
+            // tipping into highlighter, which is where a cooler yellow lands.
             return NSColor(
-                calibratedRed: 0.99,
-                green: 0.58,
-                blue: 0.30,
+                calibratedRed: 1.00,
+                green: 0.84,
+                blue: 0.32,
                 alpha: 1
             )
         case .transcribing:
-            // Straw: desaturated, cooler, still inside the warm family.
+            // Slate: the one deliberate break from the warm family. With
+            // listening now yellow, a warm straw would collide with it, and
+            // this state needs to read as work rather than as capture.
             return NSColor(
-                calibratedRed: 0.94,
-                green: 0.90,
-                blue: 0.66,
+                calibratedRed: 0.58,
+                green: 0.70,
+                blue: 0.86,
                 alpha: 1
             )
         case .locked:
-            // Gold: brightest of the four. The committed state.
+            // Brick: deep and earthy. Quieter than listening on purpose —
+            // this is the state you sit inside during a long dictation, so it
+            // should settle rather than keep shouting.
             return NSColor(
-                calibratedRed: 1.00,
-                green: 0.78,
-                blue: 0.36,
+                calibratedRed: 0.80,
+                green: 0.34,
+                blue: 0.19,
                 alpha: 1
             )
         case .error:
-            // Flare: far from ember in both value and saturation.
+            // Crimson, pushed toward pink. A plain red would sit close enough
+            // to brick that a locked pill and a failed one could be confused
+            // at a glance.
             return NSColor(
-                calibratedRed: 0.99,
-                green: 0.36,
-                blue: 0.33,
+                calibratedRed: 0.97,
+                green: 0.28,
+                blue: 0.42,
                 alpha: 1
             )
         }
