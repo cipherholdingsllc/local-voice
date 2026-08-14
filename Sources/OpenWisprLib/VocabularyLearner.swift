@@ -49,55 +49,26 @@ public final class VocabularyLearner {
         }
     }
 
-    /// Whisper initial prompt — manual terms first, bounded to avoid dilution.
+    /// Dictionary terms do not go into the Whisper initial prompt. Feeding a
+    /// comma-separated word list with `--carry-initial-prompt` strongly biases
+    /// the model to hallucinate those tokens (e.g. "are" -> "OGrE"). Use only
+    /// explicit post-STT replacement rules instead.
     public func promptString(configTerms: [String], maxCharacters: Int = 224) -> String {
-        let terms = merged(with: configTerms)
-        guard !terms.isEmpty else { return "" }
-        var out = ""
-        for term in terms {
-            let piece = out.isEmpty ? term : ", \(term)"
-            if out.count + piece.count > maxCharacters { break }
-            out += piece
-        }
-        return out
+        _ = configTerms
+        _ = maxCharacters
+        return ""
     }
 
     public func postProcess(
         _ text: String,
         configTerms: [String] = []
     ) -> String {
-        let terms = merged(with: configTerms)
-        let outcome = VocabularyPostProcessor.apply(
+        _ = configTerms
+        return VocabularyPostProcessor.apply(
             text,
             replacements: replacementRules(),
-            boostTerms: terms
-        )
-        promoteFiredCorrections(outcome.corrections)
-        return outcome.text
-    }
-
-    /// A fuzzy dictionary correction that actually fired is graduated into a
-    /// permanent, exact `Replacement` rule — the next occurrence no longer
-    /// depends on the fuzzy matcher guessing correctly again. Mirrors the
-    /// "misspelling correction is more reliable than just adding the word"
-    /// guidance from comparable dictation products.
-    private func promoteFiredCorrections(_ corrections: [VocabularyPostProcessor.AppliedCorrection]) {
-        guard !corrections.isEmpty else { return }
-        queue.async { [weak self] in
-            guard let self = self else { return }
-            var changed = false
-            for correction in corrections {
-                guard Self.isValidManualTerm(correction.heard), Self.isValidManualTerm(correction.term) else { continue }
-                guard !self.store.replacements.contains(where: {
-                    $0.from.caseInsensitiveCompare(correction.heard) == .orderedSame
-                }) else { continue }
-                self.store.replacements.append(.init(from: correction.heard, to: correction.term))
-                changed = true
-            }
-            guard changed else { return }
-            self.persist()
-            self.notifyChanged()
-        }
+            boostTerms: []
+        ).text
     }
 
     @discardableResult
@@ -139,7 +110,7 @@ public final class VocabularyLearner {
     public func addReplacement(from: String, to: String) -> Bool {
         let source = from.trimmingCharacters(in: .whitespacesAndNewlines)
         let target = to.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard Self.isValidManualTerm(source), Self.isValidManualTerm(target) else { return false }
+        guard Self.isValidReplacementSource(source), Self.isValidManualTerm(target) else { return false }
         return queue.sync {
             store.replacements.removeAll { $0.from.caseInsensitiveCompare(source) == .orderedSame }
             store.replacements.append(.init(from: source, to: target))
@@ -265,12 +236,13 @@ public final class VocabularyLearner {
 
     private static let commonDictationTokens: Set<String> = [
         "a", "an", "and", "are", "as", "at", "be", "but", "by", "do", "for", "go",
-        "he", "if", "in", "is", "it", "me", "my", "no", "of", "oh", "ok", "on", "or",
+        "he", "if", "in", "is", "it", "man", "me", "my", "no", "of", "oh", "ok", "on", "or",
         "our", "so", "the", "to", "up", "we", "you", "add", "again", "all", "also",
         "always", "and", "ask", "can", "come", "did", "for", "get", "had", "has",
         "have", "here", "hey", "how", "just", "like", "make", "not", "now", "one",
         "say", "see", "she", "that", "them", "then", "there", "they", "this", "use",
         "was", "what", "when", "will", "with", "work", "would", "yeah", "your",
+        "about", "talking",
     ]
 
     /// Older builds promoted auto-learned session junk into `manual`. When the
@@ -307,9 +279,17 @@ public final class VocabularyLearner {
             manual: store.manual.filter(isValidManualTerm),
             autoLearned: store.autoLearned.filter(isValidAutoLearnedTerm),
             replacements: store.replacements.filter {
-                isValidManualTerm($0.from) && isValidManualTerm($0.to)
+                isValidReplacementSource($0.from) && isValidManualTerm($0.to)
             }
         )
+    }
+
+    /// Replacement sources must be deliberate misspellings, not common English.
+    static func isValidReplacementSource(_ term: String) -> Bool {
+        let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard isValidManualTerm(trimmed) else { return false }
+        if trimmed.contains(" ") { return true }
+        return !commonDictationTokens.contains(trimmed.lowercased())
     }
 
     static func isValidManualTerm(_ term: String) -> Bool {

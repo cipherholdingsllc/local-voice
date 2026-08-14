@@ -13,17 +13,21 @@ final class VocabularyLearnerTests: XCTestCase {
         XCTAssertTrue(VocabularyLearner.isValidAutoLearnedTerm("Kun"))
     }
 
-    func testPromptStringIsBounded() {
-        let learner = VocabularyLearner.shared
-        let terms = (1...50).map { "Term\($0)" }
-        let prompt = learner.promptString(configTerms: terms, maxCharacters: 40)
-        XCTAssertLessThanOrEqual(prompt.count, 40)
-        // NOTE: does not assert a "Term1" prefix. `VocabularyLearner.shared`
-        // is a real, file-backed singleton (this device's actual dictionary
-        // at ~/.config/local-voice/learned-vocabulary.json); user-added
-        // manual terms now intentionally lead the prompt ahead of config
-        // seed terms (see `merged`), so whatever this device has already
-        // learned may legitimately appear before "Term1".
+    func testPromptStringIsDisabledToAvoidWhisperBias() {
+        let prompt = VocabularyLearner.shared.promptString(
+            configTerms: ["OGrE", "Kun", "CipherOS"],
+            maxCharacters: 224
+        )
+        XCTAssertEqual(prompt, "")
+    }
+
+    func testCommonEnglishIsNotCorruptedByDictionary() {
+        let rules = VocabularyLearner.shared.replacementRules()
+        let result = VocabularyPostProcessor.apply(
+            "What are you talking about man",
+            replacements: rules
+        )
+        XCTAssertEqual(result.text, "What are you talking about man")
     }
 }
 

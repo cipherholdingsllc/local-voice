@@ -66,7 +66,7 @@ public final class WhisperServerPool: STTEngine {
                 "-nt",
             ]
             if let prompt = initialPrompt, !prompt.isEmpty {
-                args += ["--prompt", prompt, "--carry-initial-prompt"]
+                args += ["--prompt", prompt]
             }
             return args
         }()
