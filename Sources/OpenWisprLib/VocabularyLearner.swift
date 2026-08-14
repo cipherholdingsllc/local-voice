@@ -248,18 +248,58 @@ public final class VocabularyLearner {
         }
 
         let sanitized = sanitize(loaded)
-        if sanitized.manual != loaded.manual
-            || sanitized.autoLearned != loaded.autoLearned
-            || sanitized.replacements != loaded.replacements {
+        let pruned = prunePollutedManualTerms(sanitized)
+        if pruned.manual != loaded.manual
+            || pruned.autoLearned != loaded.autoLearned
+            || pruned.replacements != loaded.replacements {
             try? FileManager.default.createDirectory(
                 at: url.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
-            if let encoded = try? JSONEncoder().encode(sanitized) {
+            if let encoded = try? JSONEncoder().encode(pruned) {
                 try? encoded.write(to: url)
             }
         }
-        return sanitized
+        return pruned
+    }
+
+    private static let commonDictationTokens: Set<String> = [
+        "a", "an", "and", "are", "as", "at", "be", "but", "by", "do", "for", "go",
+        "he", "if", "in", "is", "it", "me", "my", "no", "of", "oh", "ok", "on", "or",
+        "our", "so", "the", "to", "up", "we", "you", "add", "again", "all", "also",
+        "always", "and", "ask", "can", "come", "did", "for", "get", "had", "has",
+        "have", "here", "hey", "how", "just", "like", "make", "not", "now", "one",
+        "say", "see", "she", "that", "them", "then", "there", "they", "this", "use",
+        "was", "what", "when", "will", "with", "work", "would", "yeah", "your",
+    ]
+
+    /// Older builds promoted auto-learned session junk into `manual`. When the
+    /// list is obviously polluted, keep only high-confidence human vocabulary.
+    private static func prunePollutedManualTerms(_ store: Store) -> Store {
+        guard store.manual.count > 32 else { return store }
+        let kept = store.manual.filter(isHighConfidenceManualTerm)
+        guard kept.count < store.manual.count else { return store }
+        return Store(
+            manual: kept.sorted(),
+            autoLearned: store.autoLearned.filter(isValidAutoLearnedTerm),
+            replacements: store.replacements
+        )
+    }
+
+    static func isHighConfidenceManualTerm(_ term: String) -> Bool {
+        guard isValidManualTerm(term) else { return false }
+        if term.contains(" ") { return true }
+        if term.rangeOfCharacter(from: .decimalDigits) != nil { return true }
+        if term.dropFirst().contains(where: \.isUppercase) { return true }
+        let lower = term.lowercased()
+        if commonDictationTokens.contains(lower) { return false }
+        if term == term.uppercased(), term.count <= 8 { return false }
+        if term.count <= 8,
+           term.first?.isUppercase == true,
+           term.dropFirst().allSatisfy({ $0.isLowercase || !$0.isLetter }) {
+            return true
+        }
+        return false
     }
 
     private static func sanitize(_ store: Store) -> Store {
