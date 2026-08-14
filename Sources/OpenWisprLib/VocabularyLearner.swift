@@ -34,7 +34,25 @@ public final class VocabularyLearner {
     }
 
     public func replacementRules() -> [VocabularyPostProcessor.Replacement] {
-        queue.sync { store.replacements }
+        queue.sync { mergedReplacementRulesLocked() }
+    }
+
+    private func mergedReplacementRules() -> [VocabularyPostProcessor.Replacement] {
+        queue.sync { mergedReplacementRulesLocked() }
+    }
+
+    /// User rules win on the same `from` key so a bad operator seed can be
+    /// overridden from Dictionary without a rebuild.
+    private func mergedReplacementRulesLocked() -> [VocabularyPostProcessor.Replacement] {
+        var byFrom: [String: VocabularyPostProcessor.Replacement] = [:]
+        for rule in OperatorVocabulary.replacements {
+            guard Self.isValidReplacementSource(rule.from) else { continue }
+            byFrom[rule.from.lowercased()] = rule
+        }
+        for rule in store.replacements {
+            byFrom[rule.from.lowercased()] = rule
+        }
+        return Array(byFrom.values)
     }
 
     public func merged(with configTerms: [String]) -> [String] {
@@ -66,12 +84,11 @@ public final class VocabularyLearner {
         let boost = safeBoostTerms(configTerms: configTerms)
         let applied = VocabularyPostProcessor.apply(
             text,
-            replacements: replacementRules(),
+            replacements: mergedReplacementRules(),
             boostTerms: boost
         )
-        // Do not auto-promote fuzzy corrections: false positives like
-        // "in the" -> "Kun Chen" become permanent and corrupt all speech.
-        return applied.text
+        let cleaned = DictationCohesion.polish(applied.text)
+        return cleaned
     }
 
     /// Multi-word manual dictionary entries only. Single-word fuzzy boost
@@ -89,7 +106,7 @@ public final class VocabularyLearner {
     private func mergedBoostTerms(manual: [String], configTerms: [String]) -> [String] {
         var seen = Set<String>()
         var out: [String] = []
-        for term in manual + configTerms where term.contains(" ") {
+        for term in OperatorVocabulary.terms + manual + configTerms where term.contains(" ") {
             let key = term.lowercased()
             guard !key.isEmpty, !seen.contains(key) else { continue }
             seen.insert(key)
@@ -249,18 +266,40 @@ public final class VocabularyLearner {
 
         let sanitized = sanitize(loaded)
         let pruned = prunePollutedManualTerms(sanitized)
-        if pruned.manual != loaded.manual
-            || pruned.autoLearned != loaded.autoLearned
-            || pruned.replacements != loaded.replacements {
+        let seeded = seedOperatorTerms(pruned)
+        if seeded.manual != loaded.manual
+            || seeded.autoLearned != loaded.autoLearned
+            || seeded.replacements != loaded.replacements {
             try? FileManager.default.createDirectory(
                 at: url.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
-            if let encoded = try? JSONEncoder().encode(pruned) {
+            if let encoded = try? JSONEncoder().encode(seeded) {
                 try? encoded.write(to: url)
             }
         }
-        return pruned
+        return seeded
+    }
+
+    private static func seedOperatorTerms(_ store: Store) -> Store {
+        var next = store
+        for term in OperatorVocabulary.terms where isValidManualTerm(term) {
+            let exists = next.manual.contains {
+                $0.caseInsensitiveCompare(term) == .orderedSame
+            }
+            if !exists { next.manual.append(term) }
+        }
+        next.manual.sort()
+        for rule in OperatorVocabulary.replacements {
+            guard isValidReplacementSource(rule.from), isValidManualTerm(rule.to) else {
+                continue
+            }
+            let exists = next.replacements.contains {
+                $0.from.caseInsensitiveCompare(rule.from) == .orderedSame
+            }
+            if !exists { next.replacements.append(rule) }
+        }
+        return next
     }
 
     /// True when every word in the span is high-frequency English that must

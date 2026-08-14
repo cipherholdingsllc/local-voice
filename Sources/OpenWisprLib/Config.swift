@@ -160,7 +160,10 @@ public struct Config: Codable {
         streamingChunkSeconds: Double? = 2.0,
         ollamaEnabled: FlexBool? = FlexBool(false),
         ollamaModel: String? = "llama3.2:latest",
-        customVocabulary: [String]? = ["OGrE", "2OPMD", "CipherOS"],
+        customVocabulary: [String]? = [
+            "2OPMD", "CipherOS", "OGrE", "ENTEXS", "Kun Chen",
+            "FirstMate", "NoteCamp", "Exploit Poker", "Laird's",
+        ],
         showPrivacyBadge: FlexBool? = FlexBool(true),
         sessionCapSeconds: Double? = 600,
         silenceTimeoutSeconds: Double? = nil,
