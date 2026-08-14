@@ -844,15 +844,19 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let captureMetrics = recorder.captureMetricsSnapshot()
-        guard captureMetrics.containsLikelySpeech else {
+        guard captureMetrics.shouldAttemptTranscription else {
             try? FileManager.default.removeItem(at: audioURL)
             streamingPartial = ""
             statusBar.state = .idle
             statusBar.buildMenu()
-            LocalVoiceStore.shared.setState(
-                .ready,
-                detail: "No speech detected; nothing was inserted"
-            )
+            let detail = "No audio captured — check microphone input in System Settings"
+            LocalVoiceStore.shared.setState(.ready, detail: detail)
+            if config.showCursorHUD?.value ?? true {
+                pillOverlay.show(state: .error, partialText: detail)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                    self.pillOverlay.hide()
+                }
+            }
             pillOverlay.hide()
             dashboardCaptureMode = false
             refreshPermissionState(force: true)

@@ -17,12 +17,20 @@ class AudioRecorder {
     private var chunkIndex = 0
     private var streamingChunker: StreamingAudioChunker?
     private var sessionCapTimer: Timer?
+    private var sessionCapGeneration: UInt64 = 0
     private var silenceTimer: Timer?
     private var lastLoudTime: Date = Date()
     private var silenceThreshold: Float = 0.02
     private var silenceTimeout: TimeInterval = 3.0
     var onSessionCap: (() -> Void)?
     var onSilenceTimeout: (() -> Void)?
+    private let speechActivityLock = NSLock()
+    private var speechActivity = SpeechActivityAccumulator()
+
+    /// Apple's Voice Processing I/O can zero-out some external/USB mics.
+    /// Default off; enable only when verified on the operator's hardware.
+    var voiceProcessingRequested = false
+    private(set) var voiceProcessingActive = false
 
     func prewarm() {
         guard audioEngine == nil else { return }
@@ -34,7 +42,19 @@ class AudioRecorder {
             setInputDevice(deviceID, on: engine)
         }
 
-        _ = engine.inputNode
+        let inputNode = engine.inputNode
+        voiceProcessingActive = false
+        if voiceProcessingRequested {
+            do {
+                try inputNode.setVoiceProcessingEnabled(true)
+                voiceProcessingActive = inputNode.isVoiceProcessingEnabled
+            } catch {
+                fputs(
+                    "AudioRecorder: voice processing unavailable; using raw input (\(error.localizedDescription))\n",
+                    stderr
+                )
+            }
+        }
         engine.prepare()
         audioEngine = engine
     }
@@ -48,6 +68,7 @@ class AudioRecorder {
         }
         audioEngine?.stop()
         audioEngine = nil
+        voiceProcessingActive = false
     }
 
     /// Re-prewarm with the current preferredDeviceID. Use after a config change.
@@ -72,9 +93,10 @@ class AudioRecorder {
         }
 
         lastLoudTime = Date()
+        speechActivityLock.withLock {
+            speechActivity.reset()
+        }
         if let s = silenceTimeoutSeconds { silenceTimeout = s }
-
-        try engine.start()
 
         let inputFmt = engine.inputNode.outputFormat(forBus: 0)
 
@@ -136,39 +158,70 @@ class AudioRecorder {
 
             if error == nil && convertedBuffer.frameLength > 0 {
                 try? file.write(from: convertedBuffer)
-                if streamPreviewEnabled,
-                   let streamCallback,
-                   let channel = convertedBuffer.floatChannelData?[0] {
+                if let channel = convertedBuffer.floatChannelData?[0] {
                     let samples = Array(
                         UnsafeBufferPointer(
                             start: channel,
                             count: Int(convertedBuffer.frameLength)
                         )
                     )
-                    self.enqueueStreamingSamples(
-                        samples,
-                        outputURL: outputURL,
-                        onChunkReady: streamCallback
-                    )
+                    self.speechActivityLock.withLock {
+                        self.speechActivity.observe(samples)
+                    }
+                    if streamPreviewEnabled, let streamCallback {
+                        self.enqueueStreamingSamples(
+                            samples,
+                            outputURL: outputURL,
+                            onChunkReady: streamCallback
+                        )
+                    }
                 }
             }
+        }
+
+        do {
+            try engine.start()
+        } catch {
+            engine.inputNode.removeTap(onBus: 0)
+            throw error
         }
 
         currentOutputURL = outputURL
         isRecording = true
-
-        if let cap = sessionCapSeconds, cap > 0 {
-            DispatchQueue.main.async { [weak self] in
-                self?.sessionCapTimer = Timer.scheduledTimer(withTimeInterval: cap, repeats: false) { _ in
-                    self?.onSessionCap?()
-                }
-            }
-        }
+        updateSessionCap(seconds: sessionCapSeconds)
 
         if silenceTimeoutSeconds != nil {
             DispatchQueue.main.async { [weak self] in
                 self?.scheduleSilenceTimer()
             }
+        }
+    }
+
+    /// Replaces the active session limit. Passing nil removes the limit.
+    /// A generation token prevents an asynchronously scheduled timer from a
+    /// cancelled speculative fn tap from arming a later locked recording.
+    func updateSessionCap(seconds: TimeInterval?) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.updateSessionCap(seconds: seconds)
+            }
+            return
+        }
+
+        sessionCapGeneration &+= 1
+        let generation = sessionCapGeneration
+        sessionCapTimer?.invalidate()
+        sessionCapTimer = nil
+
+        guard isRecording, let seconds, seconds > 0 else { return }
+        sessionCapTimer = Timer.scheduledTimer(
+            withTimeInterval: seconds,
+            repeats: false
+        ) { [weak self] _ in
+            guard let self,
+                  self.isRecording,
+                  self.sessionCapGeneration == generation else { return }
+            self.onSessionCap?()
         }
     }
 
@@ -234,6 +287,7 @@ class AudioRecorder {
         guard isRecording else { return nil }
         isRecording = false
 
+        sessionCapGeneration &+= 1
         sessionCapTimer?.invalidate()
         sessionCapTimer = nil
         silenceTimer?.invalidate()
@@ -246,6 +300,12 @@ class AudioRecorder {
         audioEngine?.stop()
 
         return url
+    }
+
+    func captureMetricsSnapshot() -> AudioCaptureMetrics {
+        speechActivityLock.withLock {
+            speechActivity.metrics
+        }
     }
 
     private func setInputDevice(_ deviceID: AudioDeviceID, on engine: AVAudioEngine) {
@@ -266,6 +326,98 @@ class AudioRecorder {
         if status != noErr {
             print("Warning: failed to set audio input device (status: \(status))")
         }
+    }
+}
+
+struct AudioCaptureMetrics: Equatable {
+    let totalFrames: Int
+    let activeFrames: Int
+    let peakAmplitude: Float
+    let sampleRate: Double
+
+    var activeDuration: TimeInterval {
+        guard sampleRate > 0 else { return 0 }
+        return Double(activeFrames) / sampleRate
+    }
+
+    /// Reject only clearly empty captures. Quiet microphones often sit below
+    /// the old peak gate even while the user is speaking, which caused
+    /// listening UI with zero transcription.
+    var containsLikelySpeech: Bool {
+        guard totalFrames > 0 else { return false }
+        if peakAmplitude < 0.0005, activeDuration < 0.05 { return false }
+        return peakAmplitude >= 0.006 || activeDuration >= 0.02
+    }
+
+    /// When the user held the hotkey long enough, always attempt STT even if
+    /// level detection is uncertain. Whisper handles silence better than we
+    /// handle silently dropping real speech.
+    var shouldAttemptTranscription: Bool {
+        guard totalFrames > 0 else { return false }
+        let duration = Double(totalFrames) / max(sampleRate, 1)
+        if duration < 0.15 { return false }
+        if duration >= 0.25 { return true }
+        return containsLikelySpeech
+    }
+}
+
+struct SpeechActivityAccumulator {
+    private(set) var totalFrames = 0
+    private(set) var activeFrames = 0
+    private(set) var peakAmplitude: Float = 0
+    let sampleRate: Double
+    let rmsThreshold: Float
+    let peakThreshold: Float
+
+    init(
+        sampleRate: Double = 16_000,
+        rmsThreshold: Float = 0.004,
+        peakThreshold: Float = 0.006
+    ) {
+        self.sampleRate = sampleRate
+        self.rmsThreshold = rmsThreshold
+        self.peakThreshold = peakThreshold
+    }
+
+    mutating func observe(_ samples: [Float]) {
+        guard !samples.isEmpty else { return }
+        var bufferPeak: Float = 0
+        var bufferActiveFrames = 0
+        for sample in samples {
+            let magnitude = abs(sample)
+            bufferPeak = max(bufferPeak, magnitude)
+            if magnitude >= peakThreshold {
+                bufferActiveFrames += 1
+            }
+        }
+        totalFrames += samples.count
+        peakAmplitude = max(peakAmplitude, bufferPeak)
+        if bufferPeak >= peakThreshold {
+            activeFrames += bufferActiveFrames
+        }
+    }
+
+    mutating func reset() {
+        totalFrames = 0
+        activeFrames = 0
+        peakAmplitude = 0
+    }
+
+    var metrics: AudioCaptureMetrics {
+        AudioCaptureMetrics(
+            totalFrames: totalFrames,
+            activeFrames: activeFrames,
+            peakAmplitude: peakAmplitude,
+            sampleRate: sampleRate
+        )
+    }
+}
+
+private extension NSLock {
+    func withLock<T>(_ operation: () -> T) -> T {
+        lock()
+        defer { unlock() }
+        return operation()
     }
 }
 
