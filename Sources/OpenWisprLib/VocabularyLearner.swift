@@ -64,11 +64,48 @@ public final class VocabularyLearner {
         configTerms: [String] = []
     ) -> String {
         _ = configTerms
-        return VocabularyPostProcessor.apply(
+        let boost = safeBoostTerms()
+        let applied = VocabularyPostProcessor.apply(
             text,
             replacements: replacementRules(),
-            boostTerms: []
-        ).text
+            boostTerms: boost
+        )
+        if !applied.corrections.isEmpty {
+            promoteCorrections(applied.corrections)
+        }
+        return applied.text
+    }
+
+    /// Multi-word manual dictionary entries only. Single-word fuzzy boost
+    /// corrupts common English ("man" -> "Kun"); single-word fixes use
+    /// explicit `replacements` instead.
+    func safeBoostTerms() -> [String] {
+        queue.sync {
+            store.manual.filter { $0.contains(" ") }
+        }
+    }
+
+    /// When fuzzy boost corrects a multi-word mishear, persist it as an exact
+    /// replacement so the next take is deterministic (Wispr-style learning).
+    private func promoteCorrections(_ corrections: [VocabularyPostProcessor.AppliedCorrection]) {
+        queue.sync {
+            var changed = false
+            for correction in corrections {
+                guard correction.term.contains(" ") else { continue }
+                guard Self.isValidReplacementSource(correction.heard) else { continue }
+                let duplicate = store.replacements.contains {
+                    $0.from.caseInsensitiveCompare(correction.heard) == .orderedSame
+                }
+                guard !duplicate else { continue }
+                store.replacements.append(
+                    .init(from: correction.heard, to: correction.term)
+                )
+                changed = true
+            }
+            guard changed else { return }
+            persist()
+            notifyChanged()
+        }
     }
 
     @discardableResult

@@ -93,4 +93,36 @@ final class VocabularyPostProcessorTests: XCTestCase {
             VocabularyPostProcessor.AppliedCorrection(heard: "Kuhn Chan", term: "Kun Chen"),
         ])
     }
+
+    func testFuzzyBoostFixesKoonChan() {
+        let result = VocabularyPostProcessor.apply(
+            "Testing, testing one, two, three. Koon Chan.",
+            replacements: [],
+            boostTerms: ["Kun Chen"]
+        )
+        XCTAssertEqual(result.text, "Testing, testing one, two, three. Kun Chen.")
+        XCTAssertEqual(result.corrections.first?.heard, "Koon Chan")
+    }
+
+    func testSingleWordFuzzyBoostCorruptsCommonEnglish() {
+        let result = VocabularyPostProcessor.apply(
+            "What are you talking about man",
+            replacements: [],
+            boostTerms: ["Kun"]
+        )
+        XCTAssertNotEqual(
+            result.text,
+            "What are you talking about man",
+            "Single-word fuzzy boost must not be used in production"
+        )
+    }
+
+    func testMultiWordBoostLeavesCommonEnglishUntouched() {
+        let result = VocabularyPostProcessor.apply(
+            "What are you talking about man",
+            replacements: [],
+            boostTerms: ["Kun Chen"]
+        )
+        XCTAssertEqual(result.text, "What are you talking about man")
+    }
 }
