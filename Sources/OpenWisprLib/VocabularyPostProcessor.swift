@@ -89,8 +89,9 @@ public struct VocabularyPostProcessor {
         var best: (span: String, distance: Int)?
         for start in 0...(tokens.count - targetWords.count) {
             let window = Array(tokens[start..<(start + targetWords.count)])
-            guard let distance = windowDistance(window, targetWords) else { continue }
             let span = window.joined(separator: " ")
+            if VocabularyLearner.isCommonEnglishSpan(span) { continue }
+            guard let distance = windowDistance(window, targetWords) else { continue }
             if span.caseInsensitiveCompare(target) == .orderedSame { return nil }
             if let best, distance >= best.distance { continue }
             best = (span, distance)

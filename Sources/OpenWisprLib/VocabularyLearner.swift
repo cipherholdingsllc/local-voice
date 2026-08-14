@@ -69,9 +69,8 @@ public final class VocabularyLearner {
             replacements: replacementRules(),
             boostTerms: boost
         )
-        if !applied.corrections.isEmpty {
-            promoteCorrections(applied.corrections)
-        }
+        // Do not auto-promote fuzzy corrections: false positives like
+        // "in the" -> "Kun Chen" become permanent and corrupt all speech.
         return applied.text
     }
 
@@ -100,30 +99,6 @@ public final class VocabularyLearner {
     }
 
     private static let maxReplacementRules = 64
-
-    /// When fuzzy boost corrects a multi-word mishear, persist it as an exact
-    /// replacement so the next take is deterministic (Wispr-style learning).
-    private func promoteCorrections(_ corrections: [VocabularyPostProcessor.AppliedCorrection]) {
-        queue.sync {
-            var changed = false
-            for correction in corrections {
-                guard store.replacements.count < Self.maxReplacementRules else { break }
-                guard correction.term.contains(" ") else { continue }
-                guard Self.isValidReplacementSource(correction.heard) else { continue }
-                let duplicate = store.replacements.contains {
-                    $0.from.caseInsensitiveCompare(correction.heard) == .orderedSame
-                }
-                guard !duplicate else { continue }
-                store.replacements.append(
-                    .init(from: correction.heard, to: correction.term)
-                )
-                changed = true
-            }
-            guard changed else { return }
-            persist()
-            notifyChanged()
-        }
-    }
 
     @discardableResult
     public func addTerm(_ value: String) -> Bool {
@@ -288,6 +263,17 @@ public final class VocabularyLearner {
         return pruned
     }
 
+    /// True when every word in the span is high-frequency English that must
+    /// never be rewritten by dictionary correction.
+    static func isCommonEnglishSpan(_ span: String) -> Bool {
+        let words = span
+            .lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+        guard !words.isEmpty else { return false }
+        return words.allSatisfy { commonDictationTokens.contains($0) }
+    }
+
     private static let commonDictationTokens: Set<String> = [
         "a", "an", "and", "are", "as", "at", "be", "but", "by", "do", "for", "go",
         "he", "if", "in", "is", "it", "man", "me", "my", "no", "of", "oh", "ok", "on", "or",
@@ -342,7 +328,15 @@ public final class VocabularyLearner {
     static func isValidReplacementSource(_ term: String) -> Bool {
         let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
         guard isValidManualTerm(trimmed) else { return false }
-        if trimmed.contains(" ") { return true }
+        if isCommonEnglishSpan(trimmed) { return false }
+        if trimmed.contains(" ") {
+            let words = trimmed
+                .lowercased()
+                .components(separatedBy: .whitespaces)
+                .filter { !$0.isEmpty }
+            let nonCommon = words.filter { !commonDictationTokens.contains($0) }
+            return !nonCommon.isEmpty
+        }
         return !commonDictationTokens.contains(trimmed.lowercased())
     }
 

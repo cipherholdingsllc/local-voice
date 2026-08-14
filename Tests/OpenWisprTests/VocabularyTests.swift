@@ -29,6 +29,12 @@ final class VocabularyLearnerTests: XCTestCase {
         )
         XCTAssertEqual(result.text, "What are you talking about man")
     }
+
+    func testInTheReplacementSourceIsRejected() {
+        XCTAssertFalse(VocabularyLearner.isValidReplacementSource("in the"))
+        XCTAssertFalse(VocabularyLearner.isValidReplacementSource("of the"))
+        XCTAssertTrue(VocabularyLearner.isValidReplacementSource("koon chan"))
+    }
 }
 
 final class VocabularyPostProcessorTests: XCTestCase {
@@ -104,16 +110,16 @@ final class VocabularyPostProcessorTests: XCTestCase {
         XCTAssertEqual(result.corrections.first?.heard, "Koon Chan")
     }
 
-    func testSingleWordFuzzyBoostCorruptsCommonEnglish() {
+    func testSingleWordFuzzyBoostSkipsCommonEnglishTokens() {
         let result = VocabularyPostProcessor.apply(
             "What are you talking about man",
             replacements: [],
             boostTerms: ["Kun"]
         )
-        XCTAssertNotEqual(
+        XCTAssertEqual(
             result.text,
             "What are you talking about man",
-            "Single-word fuzzy boost must not be used in production"
+            "Common English tokens must never be fuzzy-corrected"
         )
     }
 
@@ -124,5 +130,40 @@ final class VocabularyPostProcessorTests: XCTestCase {
             boostTerms: ["Kun Chen"]
         )
         XCTAssertEqual(result.text, "What are you talking about man")
+    }
+
+    func testInTheIsNeverReplacedByKunChen() {
+        let toxic = [
+            VocabularyPostProcessor.Replacement(from: "in the", to: "Kun Chen"),
+        ]
+        let withRule = VocabularyPostProcessor.apply(
+            "Would it land in the real ledger as well as Laird getting a text?",
+            replacements: toxic
+        )
+        XCTAssertEqual(
+            withRule.text,
+            "Would it land Kun Chen real ledger as well as Laird getting a text?",
+            "Documents the toxic rule shape we must never persist"
+        )
+
+        let safe = VocabularyPostProcessor.apply(
+            "Would it land in the real ledger as well as Laird getting a text?",
+            replacements: [],
+            boostTerms: ["Kun Chen"]
+        )
+        XCTAssertEqual(
+            safe.text,
+            "Would it land in the real ledger as well as Laird getting a text?"
+        )
+    }
+
+    func testFuzzyBoostDoesNotPromoteInThe() {
+        let result = VocabularyPostProcessor.apply(
+            "Would it land in the real ledger",
+            replacements: [],
+            boostTerms: ["Kun Chen"]
+        )
+        XCTAssertTrue(result.corrections.isEmpty)
+        XCTAssertEqual(result.text, "Would it land in the real ledger")
     }
 }
