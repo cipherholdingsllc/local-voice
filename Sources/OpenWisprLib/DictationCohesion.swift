@@ -10,6 +10,7 @@ public struct DictationCohesion {
         guard !text.isEmpty else { return text }
         var result = applySelfCorrections(text)
         result = stripFillers(result)
+        result = collapseRepeatedWords(result)
         result = collapseWhitespace(result)
         return result
     }
@@ -59,6 +60,20 @@ public struct DictationCohesion {
             .replacingOccurrences(of: #"\s+,+"#, with: ",", options: .regularExpression)
             .replacingOccurrences(of: #",{2,}"#, with: ",", options: .regularExpression)
         return result
+    }
+
+    /// Dictation stutters land as "our, our, our GitHub". Keep the first token.
+    private static func collapseRepeatedWords(_ text: String) -> String {
+        guard let regex = try? NSRegularExpression(
+            pattern: #"\b(\w+)(?:\s*,?\s+\1\b)+"# ,
+            options: [.caseInsensitive]
+        ) else { return text }
+        let range = NSRange(text.startIndex..., in: text)
+        return regex.stringByReplacingMatches(
+            in: text,
+            range: range,
+            withTemplate: "$1"
+        )
     }
 
     private static func collapseWhitespace(_ text: String) -> String {

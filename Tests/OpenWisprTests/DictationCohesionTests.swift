@@ -52,6 +52,17 @@ final class DictationCohesionTests: XCTestCase {
             "Would it land in the real ledger as well as Laird getting a text?"
         XCTAssertEqual(DictationCohesion.polish(sentence), sentence)
     }
+
+    func testCollapsesStutteredRepeats() {
+        XCTAssertEqual(
+            DictationCohesion.polish("our, our, our GitHub"),
+            "Our GitHub"
+        )
+        XCTAssertEqual(
+            DictationCohesion.polish("the the give me the final delivery"),
+            "The give me the final delivery"
+        )
+    }
 }
 
 final class OperatorVocabularyTests: XCTestCase {
@@ -65,10 +76,26 @@ final class OperatorVocabularyTests: XCTestCase {
 
     func testGetHubsBecomesGitHub() {
         let result = VocabularyPostProcessor.apply(
-            "smelt these get hubs",
+            "smelt these get-hubs",
             replacements: OperatorVocabulary.replacements
         )
         XCTAssertEqual(result.text, "smelt these GitHub")
+    }
+
+    func testKunchanBecomesKunChen() {
+        let result = VocabularyPostProcessor.apply(
+            "the same way as Kunchan",
+            replacements: OperatorVocabulary.replacements
+        )
+        XCTAssertEqual(result.text, "the same way as Kun Chen")
+    }
+
+    func testAtomicVaultBecomesAutomicVault() {
+        let result = VocabularyPostProcessor.apply(
+            "open the atomic vault app",
+            replacements: OperatorVocabulary.replacements
+        )
+        XCTAssertEqual(result.text, "open the Automic Vault app")
     }
 
     func testOgreBecomesOGrE() {
