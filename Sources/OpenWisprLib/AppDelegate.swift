@@ -668,7 +668,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleKeyDown() {
-        guard isReady else { return }
+        guard isReady, permissionCoordinator.hotkeyMonitorReady else { return }
 
         let isToggle = config.toggleMode?.value ?? false
 

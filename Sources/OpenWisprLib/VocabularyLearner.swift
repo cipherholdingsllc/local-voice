@@ -229,25 +229,37 @@ public final class VocabularyLearner {
 
     private static func load(from url: URL) -> Store {
         guard let data = try? Data(contentsOf: url) else { return .empty }
+        let loaded: Store
         if let store = try? JSONDecoder().decode(Store.self, from: data) {
-            return sanitize(store)
+            loaded = store
+        } else if let legacy = try? JSONDecoder().decode([String].self, from: data) {
+            var manual: [String] = []
+            var autoLearned: [String] = []
+            for term in legacy {
+                if isValidManualTerm(term) {
+                    manual.append(term)
+                } else if isValidAutoLearnedTerm(term) {
+                    autoLearned.append(term)
+                }
+            }
+            loaded = Store(manual: manual, autoLearned: autoLearned, replacements: [])
+        } else {
+            return .empty
         }
-        guard let legacy = try? JSONDecoder().decode([String].self, from: data) else { return .empty }
-        var manual: [String] = []
-        var autoLearned: [String] = []
-        for term in legacy {
-            if isValidManualTerm(term) {
-                manual.append(term)
-            } else if isValidAutoLearnedTerm(term) {
-                autoLearned.append(term)
+
+        let sanitized = sanitize(loaded)
+        if sanitized.manual != loaded.manual
+            || sanitized.autoLearned != loaded.autoLearned
+            || sanitized.replacements != loaded.replacements {
+            try? FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            if let encoded = try? JSONEncoder().encode(sanitized) {
+                try? encoded.write(to: url)
             }
         }
-        let migrated = sanitize(Store(manual: manual, autoLearned: autoLearned, replacements: []))
-        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if let encoded = try? JSONEncoder().encode(migrated) {
-            try? encoded.write(to: url)
-        }
-        return migrated
+        return sanitized
     }
 
     private static func sanitize(_ store: Store) -> Store {
@@ -264,15 +276,28 @@ public final class VocabularyLearner {
         let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
         guard (1...60).contains(trimmed.count) else { return false }
         guard trimmed.rangeOfCharacter(from: .letters) != nil else { return false }
-        return !isGarbage(trimmed)
+        return !isGarbage(trimmed) && looksLikeHumanVocabulary(trimmed)
     }
 
     static func isValidAutoLearnedTerm(_ term: String) -> Bool {
         let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
         guard (3...60).contains(trimmed.count) else { return false }
         guard trimmed.rangeOfCharacter(from: .letters) != nil else { return false }
-        guard trimmed.first?.isUppercase == true || trimmed.contains(where: { $0.isNumber }) else { return false }
-        return !isGarbage(trimmed)
+        guard trimmed.first?.isUppercase == true || trimmed.contains(" ") else { return false }
+        return !isGarbage(trimmed) && looksLikeHumanVocabulary(trimmed)
+    }
+
+    private static func looksLikeHumanVocabulary(_ term: String) -> Bool {
+        if term.range(of: #"^\d"#, options: .regularExpression) != nil { return false }
+        if term.range(of: #"^\d+[a-z]{0,2}$"#, options: .regularExpression) != nil { return false }
+        if term.range(of: #"\d+(ms|s|k|p|M)$"#, options: .regularExpression) != nil { return false }
+        if term.range(of: #"^[A-F0-9]{6,}$"#, options: .regularExpression) != nil { return false }
+        if term.range(of: #"^[A-Za-z0-9+/]{12,}$"#, options: .regularExpression) != nil { return false }
+        if term.count <= 3, term == term.uppercased(), term.rangeOfCharacter(from: .decimalDigits) != nil {
+            return false
+        }
+        let letters = term.filter(\.isLetter).count
+        return letters >= max(1, term.count / 3)
     }
 
     private static func isGarbage(_ term: String) -> Bool {
