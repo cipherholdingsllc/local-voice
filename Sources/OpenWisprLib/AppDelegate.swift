@@ -1,9 +1,15 @@
 import AppKit
 import AVFoundation
 
+private enum RecordingStopReason {
+    case user
+    case sessionLimit
+}
+
 public class AppDelegate: NSObject, NSApplicationDelegate {
     var statusBar: StatusBarController!
     var hotkeyManagers: [CGEventHotkeyManager] = []
+    private var shortcutCaptureActive = false
     var recorder: AudioRecorder!
     var sttRouter: STTRouter!
     var inserter: TextInserter!
@@ -23,15 +29,23 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     private var captureModeName = "Default"
     private var captureRequestID = UUID()
     private var captureProfileID = VoiceContractProfileID.generalDefault
-    private var permissionTimer: Timer?
-    private var lastPermissionSnapshot: LocalVoicePermissionSnapshot?
-    private var hotkeyMonitorReady = false
+    private let permissionCoordinator = PermissionCoordinator()
+    private var permissionRepairTimer: Timer?
+    private var permissionRepairDeadline: Date?
+    private var permissionRepairOpenedCapability:
+        LocalVoicePermissionCapability?
     private var wakeObserver: NSObjectProtocol?
+    private var vocabularyObserver: NSObjectProtocol?
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
+        guard LocalVoiceSingleInstanceGuard.claimCurrentProcess() else {
+            NSApp.terminate(nil)
+            return
+        }
         statusBar = StatusBarController()
         recorder = AudioRecorder()
         startWakeMonitoring()
+        showDashboard()
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             self?.setup()
@@ -58,9 +72,16 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             RecordingStore.deleteAllRecordings()
         }
         rebuildSTTRouter()
+        vocabularyObserver = NotificationCenter.default.addObserver(
+            forName: VocabularyLearner.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.refreshVocabularyPrompt()
+        }
         ollamaCleanup = OllamaCleanup(
             model: config.ollamaModel ?? "llama3.2:latest",
-            enabled: config.ollamaEnabled?.value ?? true
+            enabled: config.ollamaEnabled?.value ?? false
         )
 
         DispatchQueue.main.async {
@@ -93,7 +114,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        Permissions.ensureMicrophone()
+        Permissions.ensureMicrophone { [weak self] _ in
+            self?.refreshPermissionState(force: true)
+        }
 
         if !AXIsProcessTrusted() {
             print("Accessibility: not granted")
@@ -150,11 +173,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             LocalVoiceStore.shared.updateRuntime {
                 $0.privacyVerified = privacy.passed
                 $0.whisperReady = Transcriber.findWhisperBinary() != nil
-                $0.accessibilityReady = AXIsProcessTrusted()
-                $0.microphoneReady = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
-                $0.inputMonitoringReady = CGPreflightListenEventAccess()
-                $0.hotkeyReady = false
             }
+            self.refreshPermissionState(force: true)
         }
 
         DispatchQueue.main.async { [weak self] in
@@ -165,17 +185,27 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func rebuildSTTRouter() {
-        let vocab = VocabularyLearner.shared.merged(with: config.customVocabulary ?? [])
+        let prompt = VocabularyLearner.shared.promptString(
+            configTerms: config.customVocabulary ?? []
+        )
         sttRouter = STTRouter(
             language: config.language,
             modelSize: config.modelSize,
             preferredEngine: config.sttEngine ?? .auto,
             spokenPunctuation: config.spokenPunctuation?.value ?? false,
-            initialPrompt: vocab.joined(separator: ", ")
+            initialPrompt: prompt.isEmpty ? nil : prompt
         )
     }
 
+    private func refreshVocabularyPrompt() {
+        let prompt = VocabularyLearner.shared.promptString(
+            configTerms: config.customVocabulary ?? []
+        )
+        sttRouter?.updateInitialPrompt(prompt.isEmpty ? nil : prompt)
+    }
+
     func runPrivacySelfTest() {
+        guard isReady else { return }
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             let result = PrivacySelfTest.run(router: self.sttRouter)
@@ -183,11 +213,18 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 self.statusBar.state = result.passed ? .idle : .error(result.message)
                 self.statusBar.privacyStatus = result.message
                 self.statusBar.buildMenu()
-                LocalVoiceStore.shared.updateRuntime {
-                    $0.privacyVerified = result.passed
-                    $0.statusDetail = result.message
-                    $0.state = result.passed ? .ready : .error
-                }
+            LocalVoiceStore.shared.updateRuntime {
+                $0.privacyVerified = result.passed
+                $0.statusDetail = result.message
+            }
+            if result.passed {
+                self.refreshPermissionState(force: true)
+            } else {
+                LocalVoiceStore.shared.setState(
+                    .error,
+                    detail: result.message
+                )
+            }
             }
         }
     }
@@ -208,6 +245,13 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 },
                 repairPermissions: { [weak self] in
                     self?.repairPermissions()
+                },
+                shortcutCaptureChanged: { [weak self] active in
+                    self?.setShortcutCaptureActive(active)
+                },
+                setShortcut: { [weak self] hotkey in
+                    self?.setShortcut(hotkey)
+                        ?? "Local Voice is not available to update the shortcut."
                 }
             )
         )
@@ -218,9 +262,18 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         refreshPermissionState()
     }
 
+    public func applicationShouldHandleReopen(
+        _ sender: NSApplication,
+        hasVisibleWindows flag: Bool
+    ) -> Bool {
+        showDashboard()
+        return true
+    }
+
     public func applicationWillTerminate(_ notification: Notification) {
-        permissionTimer?.invalidate()
-        permissionTimer = nil
+        permissionRepairTimer?.invalidate()
+        permissionRepairTimer = nil
+        permissionRepairDeadline = nil
         if let wakeObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
             self.wakeObserver = nil
@@ -260,6 +313,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func toggleDashboardCapture() {
+        guard isReady else { return }
         if isPressed {
             handleRecordingStop()
         } else {
@@ -282,9 +336,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     private func startListening() {
         for m in hotkeyManagers { m.stop() }
         hotkeyManagers = []
-        hotkeyMonitorReady = false
+        permissionCoordinator.updateHotkeyMonitorReady(false)
 
-        let permissions = Permissions.snapshot()
+        let permissions = permissionCoordinator.refresh().current
         let globalToggle = config.toggleMode?.value ?? false
         if permissions.inputMonitoring {
             for hk in config.hotkeys {
@@ -295,10 +349,24 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     activationMode: mode
                 )
                 manager.onLockChanged = { [weak self] locked in
-                    self?.isLockMode = locked
+                    guard let self else { return }
+                    self.isLockMode = locked
+                    if locked {
+                        // Promote the already-running take to a matching
+                        // long-form recorder + contract policy. This prevents
+                        // Terminal/Codex's two-minute hold cap from silently
+                        // ending a deliberately locked session.
+                        self.captureProfileID = RecordingSessionPolicy.lockedProfile
+                        self.recorder.updateSessionCap(
+                            seconds: RecordingSessionPolicy.capSeconds(
+                                for: self.captureProfileID,
+                                configuredCapSeconds: self.config.sessionCapSeconds
+                            )
+                        )
+                    }
                     DispatchQueue.main.async {
                         if locked {
-                            self?.pillOverlay.show(state: .locked)
+                            self.pillOverlay.show(state: .locked)
                         }
                     }
                 }
@@ -308,6 +376,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     },
                     onKeyUp: { [weak self] in
                         self?.handleKeyUp()
+                    },
+                    onKeyCancel: { [weak self] in
+                        self?.handleRecordingCancel()
                     }
                 )
                 if started {
@@ -315,9 +386,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
-        hotkeyMonitorReady =
+        permissionCoordinator.updateHotkeyMonitorReady(
             !config.hotkeys.isEmpty
             && hotkeyManagers.count == config.hotkeys.count
+        )
 
         isReady = true
         statusBar.sttEngineName = sttRouter.activeEngineName()
@@ -339,36 +411,35 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         print("Hotkey: \(hotkeyDesc)")
         print("STT: \(sttRouter.activeEngineName())")
         print("Model: \(config.modelSize)")
-        if hotkeyMonitorReady {
+        if permissionCoordinator.hotkeyMonitorReady {
             print("Hotkey monitor: active")
         } else {
             print("Hotkey monitor: unavailable")
         }
-        print(permissions.dictationReady && hotkeyMonitorReady ? "Ready." : "Needs permission.")
+        print(permissionCoordinator.runtimeReady ? "Ready." : "Needs permission.")
     }
 
     private func startPermissionMonitoring() {
-        permissionTimer?.invalidate()
-        permissionTimer = Timer.scheduledTimer(
-            withTimeInterval: 1,
-            repeats: true
-        ) { [weak self] _ in
-            self?.refreshPermissionState()
-        }
-        if let permissionTimer {
-            RunLoop.main.add(permissionTimer, forMode: .common)
-        }
         refreshPermissionState()
     }
 
-    private func refreshPermissionState() {
-        guard isReady else { return }
-        let snapshot = Permissions.snapshot()
-        if snapshot.inputMonitoring != lastPermissionSnapshot?.inputMonitoring {
+    private func refreshPermissionState(force: Bool = false) {
+        let refresh = permissionCoordinator.refresh()
+        let snapshot = refresh.current
+        guard isReady else {
+            LocalVoiceStore.shared.updateRuntime {
+                $0.accessibilityReady = snapshot.accessibility
+                $0.microphoneReady = snapshot.microphone
+                $0.inputMonitoringReady = snapshot.inputMonitoring
+                $0.hotkeyReady = false
+            }
+            return
+        }
+        if refresh.inputMonitoringChanged {
             startListening()
             return
         }
-        if snapshot != lastPermissionSnapshot {
+        if refresh.changed || force {
             applyPermissionSnapshot(snapshot)
         }
     }
@@ -376,58 +447,155 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     private func applyPermissionSnapshot(
         _ snapshot: LocalVoicePermissionSnapshot
     ) {
-        lastPermissionSnapshot = snapshot
         LocalVoiceStore.shared.updateRuntime {
-            $0.accessibilityReady = snapshot.accessibility
-            $0.microphoneReady = snapshot.microphone
-            $0.inputMonitoringReady = snapshot.inputMonitoring
-            $0.hotkeyReady = self.hotkeyMonitorReady
-            if snapshot.dictationReady && self.hotkeyMonitorReady {
-                $0.state = .ready
-                $0.statusDetail =
-                    "Hold \(self.config.hotkeySummary()) to dictate anywhere"
-            } else {
-                $0.state = .error
-                $0.statusDetail =
-                    snapshot.blockingSummary
-                    ?? "The fn hotkey monitor could not start"
-            }
+            $0.applyPermissionReadiness(
+                snapshot,
+                hotkeyMonitorReady:
+                    self.permissionCoordinator.hotkeyMonitorReady,
+                hotkeySummary: self.config.hotkeySummary()
+            )
         }
 
         guard !isPressed else { return }
-        if snapshot.dictationReady && hotkeyMonitorReady {
+        if permissionCoordinator.runtimeReady {
             statusBar.state = .idle
         } else {
             statusBar.permissionDetail =
                 snapshot.blockingSummary
-                ?? "The fn hotkey monitor could not start"
+                ?? "The \(config.hotkeySummary()) shortcut monitor could not start"
             statusBar.state = .waitingForPermission
         }
         statusBar.buildMenu()
     }
 
     func repairPermissions() {
-        let snapshot = Permissions.snapshot()
-        if !snapshot.inputMonitoring {
-            _ = Permissions.requestInputMonitoring(openSettings: true)
-        } else if !snapshot.microphone {
-            Permissions.ensureMicrophone()
-            if AVCaptureDevice.authorizationStatus(for: .audio) != .authorized {
-                Permissions.openMicrophoneSettings()
+        let snapshot = permissionCoordinator.refresh().current
+        let plan = permissionCoordinator.repairPlan(for: snapshot)
+
+        guard plan.primaryAction != nil else {
+            permissionRepairOpenedCapability = nil
+            LocalVoiceStore.shared.updateRuntime {
+                $0.permissionRepairDetail = nil
             }
-        } else if !snapshot.accessibility {
-            Permissions.promptAccessibility()
-            Permissions.openAccessibilitySettings()
-        } else {
-            startListening()
+            if isReady {
+                startListening()
+                refreshPermissionState(force: true)
+            } else {
+                LocalVoiceStore.shared.setState(
+                    .preparing,
+                    detail: "Permissions are available. Local Voice is finishing speech-engine setup."
+                )
+            }
+            showDashboard()
+            return
         }
+
+        permissionRepairOpenedCapability = nil
         showDashboard()
-        refreshPermissionState()
+        startBoundedPermissionRepairMonitoring()
+        advancePermissionRepair(plan)
+    }
+
+    private func startBoundedPermissionRepairMonitoring() {
+        permissionRepairTimer?.invalidate()
+        permissionRepairDeadline = Date().addingTimeInterval(180)
+        permissionRepairTimer = Timer.scheduledTimer(
+            withTimeInterval: 0.5,
+            repeats: true
+        ) { [weak self] timer in
+            guard let self,
+                  let deadline = self.permissionRepairDeadline,
+                  Date() < deadline else {
+                timer.invalidate()
+                self?.permissionRepairTimer = nil
+                self?.permissionRepairDeadline = nil
+                return
+            }
+
+            self.refreshPermissionState()
+            let plan = self.permissionCoordinator.repairPlan()
+            if self.permissionCoordinator.runtimeReady {
+                timer.invalidate()
+                self.permissionRepairTimer = nil
+                self.permissionRepairDeadline = nil
+                self.permissionRepairOpenedCapability = nil
+                LocalVoiceStore.shared.updateRuntime {
+                    $0.permissionRepairDetail = nil
+                }
+                NSApp.activate(ignoringOtherApps: true)
+                self.showDashboard()
+                return
+            }
+            self.advancePermissionRepair(plan)
+        }
+        if let permissionRepairTimer {
+            RunLoop.main.add(permissionRepairTimer, forMode: .common)
+        }
+    }
+
+    private func advancePermissionRepair(
+        _ plan: LocalVoicePermissionRepairPlan
+    ) {
+        let detail = [plan.instruction, plan.signingWarning]
+            .compactMap { $0 }
+            .joined(separator: " ")
+        LocalVoiceStore.shared.updateRuntime {
+            $0.state = .error
+            $0.permissionRepairDetail = detail
+        }
+
+        guard let capability = plan.primaryCapability,
+              capability != permissionRepairOpenedCapability,
+              let action = plan.primaryAction else {
+            return
+        }
+        permissionRepairOpenedCapability = capability
+
+        switch action {
+        case .requestMicrophone:
+            Permissions.ensureMicrophone { [weak self] granted in
+                self?.refreshPermissionState(force: true)
+                if !granted {
+                    Permissions.openSettings(for: .microphone)
+                }
+            }
+        case .openSettings(let capability):
+            Permissions.openSettings(for: capability)
+        }
     }
 
     public func reloadConfig() {
+        guard isReady else { return }
         let newConfig = Config.load()
         applyConfigChange(newConfig)
+    }
+
+    private func setShortcutCaptureActive(_ active: Bool) {
+        guard active != shortcutCaptureActive else { return }
+        shortcutCaptureActive = active
+        if active {
+            for manager in hotkeyManagers { manager.stop() }
+            hotkeyManagers = []
+        } else if isReady, hotkeyManagers.isEmpty {
+            startListening()
+        }
+    }
+
+    private func setShortcut(_ hotkey: HotkeyConfig) -> String? {
+        guard var newConfig = config else {
+            setShortcutCaptureActive(false)
+            return "Local Voice is still starting. Try changing the shortcut again in a moment."
+        }
+        newConfig.hotkey = hotkey
+        do {
+            try newConfig.save()
+            shortcutCaptureActive = false
+            applyConfigChange(newConfig)
+            return nil
+        } catch {
+            setShortcutCaptureActive(false)
+            return "The shortcut could not be saved: \(error.localizedDescription)"
+        }
     }
 
     /// Configs written by older versions store only the numeric AudioDeviceID,
@@ -462,7 +630,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         rebuildSTTRouter()
         ollamaCleanup = OllamaCleanup(
             model: config.ollamaModel ?? "llama3.2:latest",
-            enabled: config.ollamaEnabled?.value ?? true
+            enabled: config.ollamaEnabled?.value ?? false
         )
         inserter = TextInserter()
 
@@ -545,12 +713,6 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         LatencyInstrumentation.shared.reset()
         LatencyInstrumentation.shared.mark("record")
 
-        statusBar.state = .recording
-        LocalVoiceStore.shared.setState(.listening, detail: "Speak naturally. Click stop when finished.")
-        if config.showCursorHUD?.value ?? true {
-            pillOverlay.show(state: .listening)
-        }
-
         recorder.onLevel = { [weak self] level in
             self?.pillOverlay.updateLevel(level)
         }
@@ -569,13 +731,14 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         recorder.onSessionCap = { [weak self] in
-            self?.handleRecordingStop()
+            self?.handleRecordingStop(reason: .sessionLimit)
         }
         recorder.onSilenceTimeout = {
             // Lock mode ends only via double-tap fn or session cap — never silence.
         }
 
-        // Hold and lock: no silence auto-stop. Session cap (default 10 min) is the only auto-end.
+        // Silence never auto-stops a take. Hold recordings retain the profile
+        // safety cap; double-tap lock removes it until the user unlocks.
         let silenceTimeout: Double? = nil
 
         do {
@@ -585,16 +748,22 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 outputURL = RecordingStore.newRecordingURL()
             }
+            LatencyInstrumentation.shared.mark("capture-start")
             try recorder.startRecording(
                 to: outputURL,
                 streamingChunkSeconds: streamingOn ? (config.streamingChunkSeconds ?? 2.0) : nil,
-                sessionCapSeconds: Double(
-                    effectiveMaximumDurationMilliseconds(
-                        for: captureProfileID
-                    )
-                ) / 1_000,
+                sessionCapSeconds: RecordingSessionPolicy.capSeconds(
+                    for: captureProfileID,
+                    configuredCapSeconds: config.sessionCapSeconds
+                ),
                 silenceTimeoutSeconds: silenceTimeout
             )
+            LatencyInstrumentation.shared.end("capture-start")
+            statusBar.state = .recording
+            LocalVoiceStore.shared.setState(.listening, detail: "Speak naturally. Click stop when finished.")
+            if config.showCursorHUD?.value ?? true {
+                pillOverlay.show(state: .listening)
+            }
         } catch {
             streamingSessionGate.end(captureRequestID)
             let msg = FailurePresenter.message(for: error)
@@ -606,6 +775,26 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             pillOverlay.hide()
             dashboardCaptureMode = false
         }
+    }
+
+    /// Discards the speculative recording made by the first short fn tap.
+    /// The hotkey manager deliberately keeps its gesture state so a second tap
+    /// can engage lock mode without sacrificing instant audio onset.
+    private func handleRecordingCancel() {
+        guard isPressed else { return }
+        isPressed = false
+        streamingSessionGate.end(captureRequestID)
+        LatencyInstrumentation.shared.end("record")
+
+        if let audioURL = recorder.stopRecording() {
+            try? FileManager.default.removeItem(at: audioURL)
+        }
+
+        streamingPartial = ""
+        statusBar.state = .idle
+        pillOverlay.hide()
+        dashboardCaptureMode = false
+        refreshPermissionState(force: true)
     }
 
     private func transcribeChunk(url: URL, requestID: UUID) {
@@ -640,7 +829,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func handleRecordingStop() {
+    private func handleRecordingStop(reason: RecordingStopReason = .user) {
         guard isPressed else { return }
         isPressed = false
         isLockMode = false
@@ -654,8 +843,27 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        let captureMetrics = recorder.captureMetricsSnapshot()
+        guard captureMetrics.containsLikelySpeech else {
+            try? FileManager.default.removeItem(at: audioURL)
+            streamingPartial = ""
+            statusBar.state = .idle
+            statusBar.buildMenu()
+            LocalVoiceStore.shared.setState(
+                .ready,
+                detail: "No speech detected; nothing was inserted"
+            )
+            pillOverlay.hide()
+            dashboardCaptureMode = false
+            refreshPermissionState(force: true)
+            return
+        }
+
         statusBar.state = .transcribing
-        LocalVoiceStore.shared.setState(.transcribing, detail: "Finishing locally with \(sttRouter.activeEngineName())")
+        let finishingDetail = reason == .sessionLimit
+            ? "One-hour locked-session safety limit reached; finishing locally"
+            : "Finishing locally with \(sttRouter.activeEngineName())"
+        LocalVoiceStore.shared.setState(.transcribing, detail: finishingDetail)
         if config.showCursorHUD?.value ?? true {
             pillOverlay.show(state: .transcribing, partialText: streamingPartial.isEmpty ? nil : streamingPartial)
         }
@@ -681,17 +889,24 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             }
             do {
                 LatencyInstrumentation.shared.mark("stt")
-                let raw = try self.sttRouter.transcribe(audioURL: audioURL)
+                let recordingMs =
+                    LatencyInstrumentation.shared.lastSession["record"] ?? 0
+                let raw = try self.sttRouter.transcribeInteractive(
+                    audioURL: audioURL,
+                    recordingMilliseconds: recordingMs
+                )
                 LatencyInstrumentation.shared.end("stt")
 
                 var text = (self.config.spokenPunctuation?.value ?? false)
                     ? TextPostProcessor.process(raw)
                     : raw
+                text = VocabularyLearner.shared.postProcess(
+                    text,
+                    configTerms: self.config.customVocabulary ?? []
+                )
 
                 LatencyInstrumentation.shared.mark("llm")
                 let vocab = VocabularyLearner.shared.merged(with: self.config.customVocabulary ?? [])
-                let recordingMs =
-                    LatencyInstrumentation.shared.lastSession["record"] ?? 0
                 let cleanupRoute = DictationCleanupPolicy.route(
                     enabled: self.ollamaCleanup.enabled,
                     characterCount: text.count,
@@ -716,6 +931,31 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     )
                 }
                 LatencyInstrumentation.shared.end("llm")
+
+                guard TranscriptAcceptanceGate.shouldAccept(
+                    raw: raw,
+                    polished: text,
+                    recordingMilliseconds: recordingMs,
+                    captureMetrics: captureMetrics
+                ) else {
+                    fputs(
+                        "Rejected low-confidence transcript: raw='\(raw)' polished='\(text)' recordingMs=\(Int(recordingMs))\n",
+                        stderr
+                    )
+                    DispatchQueue.main.async {
+                        self.streamingPartial = ""
+                        self.statusBar.state = .idle
+                        self.statusBar.buildMenu()
+                        self.pillOverlay.hide()
+                        self.dashboardCaptureMode = false
+                        LocalVoiceStore.shared.setState(
+                            .ready,
+                            detail: "Low-confidence transcript; nothing was inserted"
+                        )
+                        self.refreshPermissionState(force: true)
+                    }
+                    return
+                }
 
                 TranscriptStore.shared.store(raw: raw, polished: text)
                 let inferenceMs =
@@ -815,11 +1055,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     self.pillOverlay.hide()
                     self.dashboardCaptureMode = false
                     LocalVoiceStore.shared.updateRuntime {
-                        $0.state = .ready
                         $0.engineName = self.sttRouter.activeEngineName()
                         $0.modelName = self.config.modelSize
-                        $0.statusDetail = "Hold \(self.config.hotkeySummary()) to dictate anywhere"
                     }
+                    self.refreshPermissionState(force: true)
                 }
             } catch {
                 if maxRecordings > 0 {
@@ -848,13 +1087,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     private func effectiveMaximumDurationMilliseconds(
         for profile: VoiceContractProfileID
     ) -> Int {
-        let profileLimit = profile.maximumDurationMilliseconds
-        guard let configuredSeconds = config.sessionCapSeconds,
-              configuredSeconds > 0 else {
-            return profileLimit
-        }
-        let configured = Int((configuredSeconds * 1_000).rounded())
-        return min(profileLimit, max(1_000, configured))
+        RecordingSessionPolicy.maximumDurationMilliseconds(
+            for: profile,
+            configuredCapSeconds: config.sessionCapSeconds
+        )
     }
 
     public func reprocess(audioURL: URL) {
@@ -866,7 +1102,11 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self = self else { return }
             do {
                 let raw = try self.sttRouter.transcribe(audioURL: audioURL)
-                let text = (self.config.spokenPunctuation?.value ?? false) ? TextPostProcessor.process(raw) : raw
+                var text = (self.config.spokenPunctuation?.value ?? false) ? TextPostProcessor.process(raw) : raw
+                text = VocabularyLearner.shared.postProcess(
+                    text,
+                    configTerms: self.config.customVocabulary ?? []
+                )
                 DispatchQueue.main.async {
                     if !text.isEmpty {
                         self.lastTranscription = text

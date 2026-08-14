@@ -8,6 +8,8 @@ public struct LocalVoiceDashboardActions {
     public var reloadConfiguration: () -> Void
     public var openConfiguration: () -> Void
     public var repairPermissions: () -> Void
+    public var shortcutCaptureChanged: (Bool) -> Void
+    public var setShortcut: (HotkeyConfig) -> String?
 
     public init(
         toggleRecording: @escaping () -> Void = {},
@@ -15,7 +17,9 @@ public struct LocalVoiceDashboardActions {
         runPrivacyTest: @escaping () -> Void = {},
         reloadConfiguration: @escaping () -> Void = {},
         openConfiguration: @escaping () -> Void = {},
-        repairPermissions: @escaping () -> Void = {}
+        repairPermissions: @escaping () -> Void = {},
+        shortcutCaptureChanged: @escaping (Bool) -> Void = { _ in },
+        setShortcut: @escaping (HotkeyConfig) -> String? = { _ in nil }
     ) {
         self.toggleRecording = toggleRecording
         self.copyLast = copyLast
@@ -23,6 +27,8 @@ public struct LocalVoiceDashboardActions {
         self.reloadConfiguration = reloadConfiguration
         self.openConfiguration = openConfiguration
         self.repairPermissions = repairPermissions
+        self.shortcutCaptureChanged = shortcutCaptureChanged
+        self.setShortcut = setShortcut
     }
 }
 
@@ -35,11 +41,15 @@ public struct LocalVoiceDashboard: View {
     public init(
         store: LocalVoiceStore,
         actions: LocalVoiceDashboardActions,
-        fileStore: FileTranscriptionStore = .shared
+        fileStore: FileTranscriptionStore = .shared,
+        initialSection: String? = nil
     ) {
         self.store = store
         self.actions = actions
         self.fileStore = fileStore
+        _section = State(
+            initialValue: DashboardSection(rawValue: initialSection ?? "") ?? .home
+        )
     }
 
     public var body: some View {
@@ -228,31 +238,29 @@ private struct HomeView: View {
                     subtitle: "Your local voice stack is tuned, private, and ready across macOS."
                 )
 
-                HStack(alignment: .top, spacing: 16) {
-                    ReadyCard(store: store, actions: actions)
-                    RuntimeCard(store: store, actions: actions)
-                        .frame(width: 300)
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 16) {
+                        ReadyCard(store: store, actions: actions)
+                            .frame(minWidth: 380)
+                        RuntimeCard(store: store, actions: actions)
+                            .frame(width: 300)
+                    }
+
+                    VStack(spacing: 16) {
+                        ReadyCard(store: store, actions: actions)
+                            .frame(maxWidth: .infinity)
+                        RuntimeCard(store: store, actions: actions)
+                            .frame(maxWidth: .infinity)
+                    }
                 }
 
-                HStack(spacing: 14) {
-                    MetricCard(
-                        label: "WORDS TODAY",
-                        value: store.todayWordCount.formatted(),
-                        detail: "\(store.todayRecords.count) dictations",
-                        symbol: "text.word.spacing"
-                    )
-                    MetricCard(
-                        label: "VOICE TODAY",
-                        value: formatMinutes(store.todayVoiceMinutes),
-                        detail: "captured locally",
-                        symbol: "waveform"
-                    )
-                    MetricCard(
-                        label: "MEDIAN FINISH",
-                        value: formatLatency(store.medianFinishMilliseconds),
-                        detail: "after you stop",
-                        symbol: "timer"
-                    )
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 14) {
+                        metrics
+                    }
+                    VStack(spacing: 14) {
+                        metrics
+                    }
                 }
 
                 SectionHeader(title: "Recent dictations", detail: "Stored on this Mac")
@@ -260,7 +268,7 @@ private struct HomeView: View {
                     EmptyState(
                         symbol: "waveform.badge.plus",
                         title: "Your first dictation will appear here",
-                        detail: "Hold fn, speak naturally, and release."
+                        detail: "Hold \(Config.load().hotkeySummary()), speak naturally, and release."
                     )
                 } else {
                     VStack(spacing: 0) {
@@ -286,6 +294,28 @@ private struct HomeView: View {
         if hour < 12 { return "Good morning." }
         if hour < 18 { return "Good afternoon." }
         return "Good evening."
+    }
+
+    @ViewBuilder
+    private var metrics: some View {
+        MetricCard(
+            label: "WORDS TODAY",
+            value: store.todayWordCount.formatted(),
+            detail: "\(store.todayRecords.count) dictations",
+            symbol: "text.word.spacing"
+        )
+        MetricCard(
+            label: "VOICE TODAY",
+            value: formatMinutes(store.todayVoiceMinutes),
+            detail: "captured locally",
+            symbol: "waveform"
+        )
+        MetricCard(
+            label: "MEDIAN FINISH",
+            value: formatLatency(store.medianFinishMilliseconds),
+            detail: "after you stop",
+            symbol: "timer"
+        )
     }
 }
 
@@ -369,9 +399,13 @@ private struct ReadyCard: View {
             return "Listening now"
         }
         if !store.runtime.hotkeyReady {
-            return "Fn hotkey needs attention"
+            return "\(shortcutName) shortcut needs attention"
         }
-        return "Hold fn to speak"
+        return "Hold \(shortcutName) to speak"
+    }
+
+    private var shortcutName: String {
+        Config.load().hotkeySummary()
     }
 }
 
@@ -397,7 +431,7 @@ private struct RuntimeCard: View {
                 ready: store.runtime.microphoneReady
             )
             HealthRow(
-                title: "Fn hotkey",
+                title: "\(shortcutName) shortcut",
                 detail: hotkeyDetail,
                 ready: store.runtime.hotkeyReady
             )
@@ -411,6 +445,23 @@ private struct RuntimeCard: View {
                 detail: store.runtime.privacyVerified ? "Local route verified" : "Run self-test",
                 ready: store.runtime.privacyVerified
             )
+
+            if let repairDetail = store.runtime.permissionRepairDetail {
+                Text(repairDetail)
+                    .font(.system(size: 11))
+                    .foregroundColor(LocalVoiceTheme.secondary)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(
+                            cornerRadius: 10,
+                            style: .continuous
+                        )
+                        .fill(LocalVoiceTheme.selected)
+                    )
+            }
 
             Spacer(minLength: 0)
 
@@ -445,12 +496,16 @@ private struct RuntimeCard: View {
 
     private var hotkeyDetail: String {
         if store.runtime.hotkeyReady {
-            return "Listening for fn"
+            return "Listening for \(shortcutName)"
         }
         if !store.runtime.inputMonitoringReady {
             return "Input Monitoring required"
         }
         return "Monitor unavailable"
+    }
+
+    private var shortcutName: String {
+        Config.load().hotkeySummary()
     }
 }
 
@@ -555,19 +610,20 @@ private struct ModesView: View {
 }
 
 private struct DictionaryView: View {
-    @State private var terms = VocabularyLearner.shared.allTerms()
+    @State private var terms = VocabularyLearner.shared.manualTerms()
     @State private var newTerm = ""
+    @State private var statusMessage = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             PageHeader(
                 eyebrow: "PERSONAL LANGUAGE",
                 title: "Dictionary",
-                subtitle: "Teach names, acronyms, product terms, and phrases once."
+                subtitle: "Add names, acronyms, and multi-word phrases. They apply immediately to the next dictation."
             )
 
             HStack(spacing: 10) {
-                TextField("Add a word or phrase", text: $newTerm)
+                TextField("Add a word or phrase (e.g. Kun Chen)", text: $newTerm)
                     .textFieldStyle(.plain)
                     .padding(.horizontal, 13)
                     .frame(height: 42)
@@ -580,11 +636,30 @@ private struct DictionaryView: View {
                     .buttonStyle(AccentButtonStyle())
             }
 
+            if !statusMessage.isEmpty {
+                Text(statusMessage)
+                    .font(.system(size: 12))
+                    .foregroundColor(LocalVoiceTheme.secondary)
+            }
+
+            HStack(spacing: 10) {
+                Button("Clear auto-learned noise") {
+                    let removed = VocabularyLearner.shared.purgeAutoLearned()
+                    statusMessage = removed > 0
+                        ? "Removed \(removed) auto-learned entries."
+                        : "No auto-learned entries to remove."
+                    refresh()
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(LocalVoiceTheme.muted)
+            }
+
             if terms.isEmpty {
                 EmptyState(
                     symbol: "text.badge.plus",
-                    title: "No learned terms yet",
-                    detail: "Corrections and words added here stay on this Mac."
+                    title: "No dictionary terms yet",
+                    detail: "Manual entries stay on this Mac and take priority over auto-learned words."
                 )
             } else {
                 ScrollView {
@@ -616,16 +691,26 @@ private struct DictionaryView: View {
             }
         }
         .padding(32)
+        .onAppear(perform: refresh)
     }
 
     private func addTerm() {
-        guard VocabularyLearner.shared.addTerm(newTerm) else { return }
+        let candidate = newTerm.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !candidate.isEmpty else {
+            statusMessage = "Enter a word or phrase first."
+            return
+        }
+        guard VocabularyLearner.shared.addTerm(candidate) else {
+            statusMessage = "Could not add \"\(candidate)\". Use 1–60 characters with at least one letter."
+            return
+        }
         newTerm = ""
+        statusMessage = "Added \"\(candidate)\"."
         refresh()
     }
 
     private func refresh() {
-        terms = VocabularyLearner.shared.allTerms()
+        terms = VocabularyLearner.shared.manualTerms()
     }
 }
 
@@ -717,9 +802,358 @@ private struct PrivacyView: View {
                     .frame(width: 330)
                     .cardStyle()
                 }
+
+                PrivacySweepPanel()
             }
             .padding(32)
         }
+    }
+}
+
+private struct PrivacySweepPanel: View {
+    @ObservedObject private var caseStore: PrivacyCaseStore
+    @State private var fullName = ""
+    @State private var emailOrPhone = ""
+    @State private var location = ""
+    @State private var searches: [PrivacySweepSearch] = []
+    @State private var findingLabel = ""
+    @State private var findingURL = ""
+    @State private var feedback: String?
+
+    init(caseStore: PrivacyCaseStore = .shared) {
+        self.caseStore = caseStore
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(alignment: .top, spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(LocalVoiceTheme.accent.opacity(0.12))
+                    Image(systemName: "person.text.rectangle")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(LocalVoiceTheme.accent)
+                }
+                .frame(width: 44, height: 44)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Privacy Sweep")
+                        .font(.system(size: 18, weight: .semibold))
+                    Text("Find likely people-search exposures, verify each match yourself, and track removal work locally.")
+                        .font(.system(size: 12.5))
+                        .foregroundColor(LocalVoiceTheme.secondary)
+                }
+
+                Spacer()
+
+                Text("PREVIEW ONLY · LOCAL CASES")
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .tracking(0.8)
+                    .foregroundColor(LocalVoiceTheme.accent)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(LocalVoiceTheme.accent.opacity(0.1))
+                    )
+            }
+
+            Text("Search details stay in memory and are not saved by Local Voice. Opening a result sends that query to the search provider; nothing is scanned or submitted in the background.")
+                .font(.system(size: 11.5))
+                .foregroundColor(LocalVoiceTheme.muted)
+                .lineSpacing(3)
+
+            HStack(spacing: 10) {
+                SweepField(title: "Full legal name", text: $fullName)
+                SweepField(title: "Email or phone (optional)", text: $emailOrPhone)
+                SweepField(title: "City and state (optional)", text: $location)
+            }
+
+            HStack(spacing: 10) {
+                Button("Build exposure search", action: buildSearches)
+                    .buttonStyle(AccentButtonStyle())
+                    .disabled(fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                Button("Open California DROP") {
+                    NSWorkspace.shared.open(PrivacySweepPlanner.californiaDROPURL)
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundColor(LocalVoiceTheme.secondary)
+                .padding(.horizontal, 15)
+                .frame(height: 38)
+                .background(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(LocalVoiceTheme.panel)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .stroke(LocalVoiceTheme.line, lineWidth: 1)
+                )
+
+                Spacer()
+            }
+
+            if !searches.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(searches) { search in
+                        HStack(spacing: 12) {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(LocalVoiceTheme.accent)
+                                .frame(width: 20)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(search.title)
+                                    .font(.system(size: 12.5, weight: .semibold))
+                                Text(search.detail)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(LocalVoiceTheme.muted)
+                            }
+                            Spacer()
+                            Button("Open") {
+                                NSWorkspace.shared.open(search.url)
+                            }
+                            .buttonStyle(.borderless)
+                            .foregroundColor(LocalVoiceTheme.accent)
+                        }
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 54)
+
+                        if search.id != searches.last?.id {
+                            Divider().overlay(LocalVoiceTheme.line)
+                        }
+                    }
+                }
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(LocalVoiceTheme.panel.opacity(0.72))
+                )
+            }
+
+            Divider().overlay(LocalVoiceTheme.line)
+
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeader(
+                    title: "Removal tracker",
+                    detail: "\(caseStore.cases.count) versioned cases saved locally"
+                )
+
+                if let next = PrivacySchedule.queue(
+                    cases: caseStore.cases
+                ).first {
+                    HStack(spacing: 10) {
+                        Image(systemName: "calendar.badge.clock")
+                            .foregroundColor(LocalVoiceTheme.accent)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Next privacy action")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(LocalVoiceTheme.secondary)
+                            Text(next.action)
+                                .font(.system(size: 12.5, weight: .semibold))
+                        }
+                        Spacer()
+                        Text(next.dueAt.formatted(date: .abbreviated, time: .omitted))
+                            .font(.system(size: 11.5, weight: .medium))
+                            .foregroundColor(
+                                next.urgency == .upcoming
+                                    ? LocalVoiceTheme.muted
+                                    : LocalVoiceTheme.warning
+                            )
+                    }
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(LocalVoiceTheme.panel.opacity(0.72))
+                    )
+                }
+
+                HStack(spacing: 10) {
+                    SweepField(title: "Source label (optional)", text: $findingLabel)
+                    SweepField(title: "Exact exposure URL", text: $findingURL)
+                    Button("Save finding", action: saveFinding)
+                        .buttonStyle(AccentButtonStyle())
+                        .disabled(findingURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+
+                if let message = feedback ?? caseStore.lastError {
+                    Text(message)
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundColor(
+                            caseStore.lastError == nil
+                                ? LocalVoiceTheme.accent
+                                : LocalVoiceTheme.warning
+                        )
+                }
+
+                if caseStore.cases.isEmpty {
+                    Text("Confirm a result belongs to you, then paste its exact page here. Local Voice creates a local case and never submits a removal request automatically.")
+                        .font(.system(size: 11.5))
+                        .foregroundColor(LocalVoiceTheme.muted)
+                        .padding(.vertical, 6)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(caseStore.cases) { removalCase in
+                            PrivacyCaseRow(
+                                removalCase: removalCase,
+                                transition: {
+                                    caseStore.transition(
+                                        id: removalCase.id,
+                                        to: $0
+                                    )
+                                },
+                                copyDraft: {
+                                    copyRemovalDraft(for: removalCase)
+                                }
+                            )
+                            if removalCase.id != caseStore.cases.last?.id {
+                                Divider().overlay(LocalVoiceTheme.line)
+                            }
+                        }
+                    }
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(LocalVoiceTheme.panel.opacity(0.72))
+                    )
+                }
+            }
+        }
+        .padding(22)
+        .cardStyle()
+    }
+
+    private func buildSearches() {
+        searches = PrivacySweepPlanner.searches(
+            fullName: fullName,
+            emailOrPhone: emailOrPhone,
+            location: location
+        )
+        feedback = nil
+    }
+
+    private func saveFinding() {
+        guard caseStore.addCase(label: findingLabel, urlString: findingURL) else {
+            feedback = nil
+            return
+        }
+        findingLabel = ""
+        findingURL = ""
+        feedback = "Finding saved only on this Mac."
+    }
+
+    private func copyRemovalDraft(for removalCase: PrivacyRemovalCase) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(
+            caseStore.removalDraft(for: removalCase),
+            forType: .string
+        )
+        if removalCase.state == .identityConfirmed {
+            caseStore.transition(id: removalCase.id, to: .draftReady)
+        }
+        feedback = "Deletion-request draft copied. Review it before sending."
+    }
+}
+
+private struct SweepField: View {
+    let title: String
+    @Binding var text: String
+
+    var body: some View {
+        TextField(title, text: $text)
+            .textFieldStyle(.plain)
+            .font(.system(size: 12.5))
+            .padding(.horizontal, 12)
+            .frame(height: 38)
+            .background(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(LocalVoiceTheme.panel)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .stroke(LocalVoiceTheme.line, lineWidth: 1)
+            )
+    }
+}
+
+private struct PrivacyCaseRow: View {
+    let removalCase: PrivacyRemovalCase
+    let transition: (PrivacyCaseState) -> Void
+    let copyDraft: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(
+                systemName: removalCase.state == .removed
+                    ? "checkmark.seal.fill"
+                    : "shield.lefthalf.filled"
+            )
+                .foregroundColor(
+                    removalCase.state == .removed
+                        ? LocalVoiceTheme.accent
+                        : LocalVoiceTheme.secondary
+                )
+                .frame(width: 20)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(removalCase.label)
+                    .font(.system(size: 12.5, weight: .semibold))
+                Text(
+                    [
+                        removalCase.exposureURL.host
+                            ?? removalCase.exposureURL.absoluteString,
+                        "\(removalCase.events.count) timeline events",
+                    ]
+                    .joined(separator: " · ")
+                )
+                    .font(.system(size: 11))
+                    .foregroundColor(LocalVoiceTheme.muted)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            Button("Open") {
+                NSWorkspace.shared.open(removalCase.exposureURL)
+            }
+            .buttonStyle(.borderless)
+
+            if let brokerID = removalCase.brokerID,
+               let broker = PrivacyBrokerRegistry.broker(id: brokerID) {
+                Button("Official opt-out") {
+                    NSWorkspace.shared.open(broker.optOutURL)
+                }
+                .buttonStyle(.borderless)
+                .help(
+                    "Verified \(broker.workflowVerifiedAt.formatted(date: .abbreviated, time: .omitted)); requires \(broker.verificationMethods.map { $0.label }.joined(separator: ", "))"
+                )
+            }
+
+            Button("Copy draft", action: copyDraft)
+                .buttonStyle(.borderless)
+                .disabled(
+                    ![.identityConfirmed, .draftReady, .awaitingUserSubmission]
+                        .contains(removalCase.state)
+                )
+
+            Menu(removalCase.state.label) {
+                ForEach(
+                    PrivacyWorkflow.allowedTransitions(from: removalCase.state)
+                        .filter { $0 != .removed },
+                    id: \.self
+                ) { state in
+                    Button(state.label) {
+                        transition(state)
+                    }
+                }
+                if PrivacyWorkflow.allowedTransitions(
+                    from: removalCase.state
+                ).contains(.removed) {
+                    Text("Removal needs confirmation evidence")
+                }
+            }
+            .frame(width: 150)
+        }
+        .padding(.horizontal, 14)
+        .frame(minHeight: 56)
     }
 }
 
@@ -741,7 +1175,7 @@ private struct SettingsView: View {
                 VStack(spacing: 0) {
                     SettingToggle(
                         title: "Launch at login",
-                        detail: "Keep the fn hotkey available after you sign in",
+                        detail: "Keep the \(config.hotkeySummary()) shortcut available after you sign in",
                         value: Binding(
                             get: { launchAtLogin },
                             set: { setLaunchAtLogin($0) }
@@ -777,9 +1211,9 @@ private struct SettingsView: View {
                     SettingDivider()
                     SettingToggle(
                         title: "Local refinement",
-                        detail: "Polish short dictations with Ollama; long-form stays on the fast path",
+                        detail: "Optional Ollama rewrite. Leave off for the fastest insertion.",
                         value: Binding(
-                            get: { config.ollamaEnabled?.value ?? true },
+                            get: { config.ollamaEnabled?.value ?? false },
                             set: { value in update { $0.ollamaEnabled = FlexBool(value) } }
                         )
                     )
@@ -799,8 +1233,13 @@ private struct SettingsView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 14) {
-                    SectionHeader(title: "Current shortcut", detail: config.hotkeySummary())
-                    Text("Hold to speak. Double-tap fn to lock a longer recording, then tap again to finish.")
+                    SectionHeader(title: "Recording shortcut", detail: "Click, then press a key")
+                    ShortcutRecorderField(
+                        hotkey: config.hotkey,
+                        captureStateChanged: actions.shortcutCaptureChanged,
+                        commit: setShortcut
+                    )
+                    Text(shortcutGuidance)
                         .font(.system(size: 13))
                         .foregroundColor(LocalVoiceTheme.secondary)
                     HStack(spacing: 10) {
@@ -833,6 +1272,21 @@ private struct SettingsView: View {
             launchAtLoginError =
                 "Launch at login could not be updated: \(error.localizedDescription)"
         }
+    }
+
+    private func setShortcut(_ hotkey: HotkeyConfig) -> String? {
+        if let error = actions.setShortcut(hotkey) {
+            return error
+        }
+        config.hotkey = hotkey
+        return nil
+    }
+
+    private var shortcutGuidance: String {
+        if config.hotkey.keyCode == 63 {
+            return "Hold to speak. Double-tap fn to lock a longer recording, then tap again to finish."
+        }
+        return "Hold \(config.hotkeySummary()) to speak, then release to finish."
     }
 }
 

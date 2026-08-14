@@ -510,6 +510,9 @@ public final class LocalFileTranscriptionProcessor:
         }
 
         let config = Config.load()
+        let prompt = VocabularyLearner.shared.promptString(
+            configTerms: config.customVocabulary ?? []
+        )
         let vocabulary = VocabularyLearner.shared.merged(
             with: config.customVocabulary ?? []
         )
@@ -518,7 +521,7 @@ public final class LocalFileTranscriptionProcessor:
             modelSize: config.modelSize,
             preferredEngine: config.sttEngine ?? .auto,
             spokenPunctuation: config.spokenPunctuation?.value ?? false,
-            initialPrompt: vocabulary.joined(separator: ", ")
+            initialPrompt: prompt.isEmpty ? nil : prompt
         )
         defer {
             router.shutdown(
@@ -540,9 +543,13 @@ public final class LocalFileTranscriptionProcessor:
             let start = Date()
             let raw = try router.transcribe(audioURL: chunk)
             let inference = Date().timeIntervalSince(start) * 1_000
-            let text = (config.spokenPunctuation?.value ?? false)
+            var text = (config.spokenPunctuation?.value ?? false)
                 ? TextPostProcessor.process(raw)
                 : raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            text = VocabularyLearner.shared.postProcess(
+                text,
+                configTerms: config.customVocabulary ?? []
+            )
             guard !text.isEmpty else { continue }
 
             let startMilliseconds = offset

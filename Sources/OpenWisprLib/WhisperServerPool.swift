@@ -9,15 +9,25 @@ public final class WhisperServerPool: STTEngine {
     public let isPersistent = true
     public let modelSize: String
     private let language: String
+    private var initialPrompt: String?
     private var process: Process?
     private let port: Int
     private let queue = DispatchQueue(label: "local-flow.whisper-server")
     private var isWarmed = false
 
-    public init(modelSize: String, language: String, port: Int? = nil) {
+    public init(modelSize: String, language: String, port: Int? = nil, initialPrompt: String? = nil) {
         self.modelSize = modelSize
         self.language = language
         self.port = port ?? Self.availableLoopbackPort()
+        self.initialPrompt = initialPrompt
+    }
+
+    public func updateInitialPrompt(_ prompt: String?) {
+        let trimmed = prompt?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = (trimmed?.isEmpty ?? true) ? nil : trimmed
+        if normalized == initialPrompt { return }
+        initialPrompt = normalized
+        stop()
     }
 
     public func isAvailable() -> Bool {
@@ -46,13 +56,20 @@ public final class WhisperServerPool: STTEngine {
 
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: serverPath)
-        proc.arguments = [
-            "-m", modelPath,
-            "-l", language == "auto" ? "en" : language,
-            "--host", "127.0.0.1",
-            "--port", String(port),
-            "-nt",
-        ]
+        proc.arguments = {
+            var args = [
+                "-m", modelPath,
+                "-l", language == "auto" ? "en" : language,
+                "--host", "127.0.0.1",
+                "--port", String(port),
+                "--suppress-nst",
+                "-nt",
+            ]
+            if let prompt = initialPrompt, !prompt.isEmpty {
+                args += ["--prompt", prompt, "--carry-initial-prompt"]
+            }
+            return args
+        }()
         proc.standardOutput = Pipe()
         proc.standardError = Pipe()
         try proc.run()
@@ -116,7 +133,21 @@ public final class WhisperServerPool: STTEngine {
     }
 
     public func stop() {
-        process?.terminate()
+        if let process {
+            let pid = process.processIdentifier
+            process.terminate()
+            for _ in 0..<20 {
+                if !process.isRunning { break }
+                Thread.sleep(forTimeInterval: 0.05)
+            }
+            if process.isRunning {
+                Darwin.kill(pid, SIGKILL)
+                for _ in 0..<10 {
+                    if !process.isRunning { break }
+                    Thread.sleep(forTimeInterval: 0.02)
+                }
+            }
+        }
         process = nil
         isWarmed = false
     }
