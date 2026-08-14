@@ -383,6 +383,11 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 )
                 if started {
                     hotkeyManagers.append(manager)
+                } else {
+                    fputs(
+                        "Local Voice: failed to start \(config.hotkeySummary()) event tap — check Input Monitoring for ~/Applications/Local Voice.app\n",
+                        stderr
+                    )
                 }
             }
         }
@@ -668,7 +673,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleKeyDown() {
-        guard isReady, permissionCoordinator.hotkeyMonitorReady else { return }
+        // If this callback fires, an event tap is already delivering key events.
+        // Do not also require hotkeyMonitorReady — that flag is cleared during
+        // startListening() restarts and would silently swallow live Fn presses.
+        guard isReady, !hotkeyManagers.isEmpty else { return }
 
         let isToggle = config.toggleMode?.value ?? false
 
