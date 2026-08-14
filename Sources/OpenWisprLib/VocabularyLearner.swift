@@ -39,8 +39,11 @@ public final class VocabularyLearner {
 
     public func merged(with configTerms: [String]) -> [String] {
         queue.sync {
+            // User-added dictionary entries lead: they are the whole point of
+            // the Dictionary feature and must not be crowded out of the
+            // (length-bounded) prompt by generic seed vocabulary.
             mergedTerms(
-                manual: configTerms + store.manual,
+                manual: store.manual + configTerms,
                 autoLearned: store.autoLearned
             )
         }
@@ -64,11 +67,37 @@ public final class VocabularyLearner {
         configTerms: [String] = []
     ) -> String {
         let terms = merged(with: configTerms)
-        return VocabularyPostProcessor.apply(
+        let outcome = VocabularyPostProcessor.apply(
             text,
             replacements: replacementRules(),
             boostTerms: terms
         )
+        promoteFiredCorrections(outcome.corrections)
+        return outcome.text
+    }
+
+    /// A fuzzy dictionary correction that actually fired is graduated into a
+    /// permanent, exact `Replacement` rule — the next occurrence no longer
+    /// depends on the fuzzy matcher guessing correctly again. Mirrors the
+    /// "misspelling correction is more reliable than just adding the word"
+    /// guidance from comparable dictation products.
+    private func promoteFiredCorrections(_ corrections: [VocabularyPostProcessor.AppliedCorrection]) {
+        guard !corrections.isEmpty else { return }
+        queue.async { [weak self] in
+            guard let self = self else { return }
+            var changed = false
+            for correction in corrections {
+                guard Self.isValidManualTerm(correction.heard), Self.isValidManualTerm(correction.term) else { continue }
+                guard !self.store.replacements.contains(where: {
+                    $0.from.caseInsensitiveCompare(correction.heard) == .orderedSame
+                }) else { continue }
+                self.store.replacements.append(.init(from: correction.heard, to: correction.term))
+                changed = true
+            }
+            guard changed else { return }
+            self.persist()
+            self.notifyChanged()
+        }
     }
 
     @discardableResult
