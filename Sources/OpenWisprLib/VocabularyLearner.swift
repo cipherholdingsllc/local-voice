@@ -63,8 +63,7 @@ public final class VocabularyLearner {
         _ text: String,
         configTerms: [String] = []
     ) -> String {
-        _ = configTerms
-        let boost = safeBoostTerms()
+        let boost = safeBoostTerms(configTerms: configTerms)
         let applied = VocabularyPostProcessor.apply(
             text,
             replacements: replacementRules(),
@@ -79,11 +78,28 @@ public final class VocabularyLearner {
     /// Multi-word manual dictionary entries only. Single-word fuzzy boost
     /// corrupts common English ("man" -> "Kun"); single-word fixes use
     /// explicit `replacements` instead.
-    func safeBoostTerms() -> [String] {
+    func safeBoostTerms(configTerms: [String] = []) -> [String] {
         queue.sync {
-            store.manual.filter { $0.contains(" ") }
+            mergedBoostTerms(
+                manual: store.manual,
+                configTerms: configTerms
+            )
         }
     }
+
+    private func mergedBoostTerms(manual: [String], configTerms: [String]) -> [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        for term in manual + configTerms where term.contains(" ") {
+            let key = term.lowercased()
+            guard !key.isEmpty, !seen.contains(key) else { continue }
+            seen.insert(key)
+            out.append(term)
+        }
+        return out.sorted { $0.count > $1.count }
+    }
+
+    private static let maxReplacementRules = 64
 
     /// When fuzzy boost corrects a multi-word mishear, persist it as an exact
     /// replacement so the next take is deterministic (Wispr-style learning).
@@ -91,6 +107,7 @@ public final class VocabularyLearner {
         queue.sync {
             var changed = false
             for correction in corrections {
+                guard store.replacements.count < Self.maxReplacementRules else { break }
                 guard correction.term.contains(" ") else { continue }
                 guard Self.isValidReplacementSource(correction.heard) else { continue }
                 let duplicate = store.replacements.contains {

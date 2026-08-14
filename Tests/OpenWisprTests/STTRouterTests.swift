@@ -32,9 +32,175 @@ final class STTRouterTests: XCTestCase {
         XCTAssertEqual(text, "parakeet")
         XCTAssertEqual(parakeet.warmupCount, 1)
         XCTAssertEqual(parakeet.transcribeCount, 1)
-        XCTAssertEqual(whisper.warmupCount, 0)
+        XCTAssertEqual(whisper.warmupCount, 1)
         XCTAssertEqual(whisper.transcribeCount, 0)
         XCTAssertEqual(router.activeExecutionRoute(), .localProcess)
+    }
+
+    func testAutomaticEnglishUsesParakeetForShortInteractiveDictationWhenAccuracyFirst() throws {
+        let parakeet = EngineStub(
+            name: "parakeet",
+            route: .localProcess,
+            transcript: "parakeet"
+        )
+        let whisper = EngineStub(
+            name: "whisper-server",
+            route: .localLoopback,
+            transcript: "whisper"
+        )
+        let router = makeRouter(
+            preferred: .auto,
+            parakeet: parakeet,
+            whisper: whisper,
+            interactiveAccuracyFirst: true
+        )
+
+        let text = try router.transcribeInteractive(
+            audioURL: fixtureURL(),
+            recordingMilliseconds: 2_000
+        )
+
+        XCTAssertEqual(text, "parakeet")
+        XCTAssertEqual(parakeet.transcribeCount, 1)
+        XCTAssertEqual(whisper.transcribeCount, 0)
+        XCTAssertEqual(router.activeEngineName(), "parakeet")
+        XCTAssertEqual(router.activeExecutionRoute(), .localProcess)
+    }
+
+    func testAutomaticEnglishUsesWhisperForShortInteractiveDictationWhenFastPath() throws {
+        let parakeet = EngineStub(
+            name: "parakeet",
+            route: .localProcess,
+            transcript: "parakeet"
+        )
+        let whisper = EngineStub(
+            name: "whisper-server",
+            route: .localLoopback,
+            transcript: "whisper"
+        )
+        let router = makeRouter(
+            preferred: .auto,
+            parakeet: parakeet,
+            whisper: whisper,
+            interactiveAccuracyFirst: false
+        )
+
+        let text = try router.transcribeInteractive(
+            audioURL: fixtureURL(),
+            recordingMilliseconds: 2_000
+        )
+
+        XCTAssertEqual(text, "whisper")
+        XCTAssertEqual(whisper.transcribeCount, 1)
+        XCTAssertEqual(parakeet.transcribeCount, 0)
+        XCTAssertEqual(router.activeEngineName(), "whisper-server")
+        XCTAssertEqual(router.activeExecutionRoute(), .localLoopback)
+    }
+
+    func testAutomaticEnglishUsesParakeetForLongInteractiveDictation() throws {
+        let parakeet = EngineStub(
+            name: "parakeet",
+            route: .localProcess,
+            transcript: "parakeet"
+        )
+        let whisper = EngineStub(
+            name: "whisper-server",
+            route: .localLoopback,
+            transcript: "whisper"
+        )
+        let router = makeRouter(
+            preferred: .auto,
+            parakeet: parakeet,
+            whisper: whisper
+        )
+
+        let text = try router.transcribeInteractive(
+            audioURL: fixtureURL(),
+            recordingMilliseconds:
+                STTRouter.interactiveWhisperMaxMilliseconds + 1
+        )
+
+        XCTAssertEqual(text, "parakeet")
+        XCTAssertEqual(parakeet.transcribeCount, 1)
+        XCTAssertEqual(whisper.transcribeCount, 0)
+        XCTAssertEqual(router.activeEngineName(), "parakeet")
+        XCTAssertEqual(router.activeExecutionRoute(), .localProcess)
+    }
+
+    func testAutomaticEnglishUsesWhisperForPreviewChunks() {
+        let parakeet = EngineStub(
+            name: "parakeet",
+            route: .localProcess
+        )
+        let whisper = EngineStub(
+            name: "whisper-server",
+            route: .localLoopback
+        )
+        let router = makeRouter(
+            preferred: .auto,
+            parakeet: parakeet,
+            whisper: whisper
+        )
+
+        XCTAssertTrue(router.chunkEngine() === whisper)
+    }
+
+    func testShortInteractiveWhisperFailureFallsBackToParakeet() throws {
+        let parakeet = EngineStub(
+            name: "parakeet",
+            route: .localProcess,
+            transcript: "parakeet fallback"
+        )
+        let whisper = EngineStub(
+            name: "whisper-server",
+            route: .localLoopback,
+            transcribeError: TestError.expected
+        )
+        let router = makeRouter(
+            preferred: .auto,
+            parakeet: parakeet,
+            whisper: whisper,
+            interactiveAccuracyFirst: false
+        )
+
+        let text = try router.transcribeInteractive(
+            audioURL: fixtureURL(),
+            recordingMilliseconds: 2_000
+        )
+
+        XCTAssertEqual(text, "parakeet fallback")
+        XCTAssertEqual(whisper.transcribeCount, 1)
+        XCTAssertEqual(parakeet.transcribeCount, 1)
+        XCTAssertEqual(router.activeEngineName(), "parakeet")
+    }
+
+    func testShortInteractiveParakeetFailureFallsBackToWhisperWhenAccuracyFirst() throws {
+        let parakeet = EngineStub(
+            name: "parakeet",
+            route: .localProcess,
+            transcribeError: TestError.expected
+        )
+        let whisper = EngineStub(
+            name: "whisper-server",
+            route: .localLoopback,
+            transcript: "whisper fallback"
+        )
+        let router = makeRouter(
+            preferred: .auto,
+            parakeet: parakeet,
+            whisper: whisper,
+            interactiveAccuracyFirst: true
+        )
+
+        let text = try router.transcribeInteractive(
+            audioURL: fixtureURL(),
+            recordingMilliseconds: 2_000
+        )
+
+        XCTAssertEqual(text, "whisper fallback")
+        XCTAssertEqual(parakeet.transcribeCount, 1)
+        XCTAssertEqual(whisper.transcribeCount, 1)
+        XCTAssertEqual(router.activeEngineName(), "whisper-server")
     }
 
     func testAutomaticEnglishWarmsWhisperWhenParakeetIsUnavailable() throws {
@@ -287,11 +453,13 @@ final class STTRouterTests: XCTestCase {
             name: "whisper-cli",
             route: .localProcess,
             transcript: "cli"
-        )
+        ),
+        interactiveAccuracyFirst: Bool = true
     ) -> STTRouter {
         STTRouter(
             language: "en",
             preferredEngine: preferred,
+            interactiveAccuracyFirst: interactiveAccuracyFirst,
             parakeet: parakeet,
             whisper: whisper,
             whisperFallback: cli

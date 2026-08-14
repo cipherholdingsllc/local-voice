@@ -193,7 +193,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             modelSize: config.modelSize,
             preferredEngine: config.sttEngine ?? .auto,
             spokenPunctuation: config.spokenPunctuation?.value ?? false,
-            initialPrompt: prompt.isEmpty ? nil : prompt
+            initialPrompt: prompt.isEmpty ? nil : prompt,
+            interactiveAccuracyFirst: config.dictationAccuracyFirstEnabled
         )
     }
 

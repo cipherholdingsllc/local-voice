@@ -41,6 +41,7 @@ public final class STTRouter {
 
     public let language: String
     public let preferredEngine: STTEngineKind
+    private let interactiveAccuracyFirst: Bool
     private let parakeet: STTEngine
     private let whisper: STTEngine
     private let whisperFallback: STTEngine
@@ -55,12 +56,14 @@ public final class STTRouter {
         modelSize: String,
         preferredEngine: STTEngineKind = .auto,
         spokenPunctuation: Bool = false,
-        initialPrompt: String? = nil
+        initialPrompt: String? = nil,
+        interactiveAccuracyFirst: Bool = true
     ) {
         let fallback = Transcriber(modelSize: modelSize, language: language)
         fallback.spokenPunctuation = spokenPunctuation
         fallback.initialPrompt = initialPrompt
         self.initialPrompt = initialPrompt
+        self.interactiveAccuracyFirst = interactiveAccuracyFirst
         self.language = language
         self.preferredEngine = preferredEngine
         self.parakeet = ParakeetDaemon.shared
@@ -75,12 +78,14 @@ public final class STTRouter {
     init(
         language: String,
         preferredEngine: STTEngineKind,
+        interactiveAccuracyFirst: Bool = true,
         parakeet: STTEngine,
         whisper: STTEngine,
         whisperFallback: STTEngine
     ) {
         self.language = language
         self.preferredEngine = preferredEngine
+        self.interactiveAccuracyFirst = interactiveAccuracyFirst
         self.parakeet = parakeet
         self.whisper = whisper
         self.whisperFallback = whisperFallback
@@ -173,6 +178,7 @@ public final class STTRouter {
         recordingMilliseconds: Double
     ) throws -> String {
         guard usesHybridInteractiveRoute(),
+              !interactiveAccuracyFirst,
               recordingMilliseconds
                 <= Self.interactiveWhisperMaxMilliseconds,
               whisperCanRun() else {

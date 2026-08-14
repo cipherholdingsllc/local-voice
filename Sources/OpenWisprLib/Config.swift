@@ -26,6 +26,7 @@ public struct Config: Codable {
     public var sessionCapSeconds: Double?
     public var silenceTimeoutSeconds: Double?
     public var sttEngine: STTEngineKind?
+    public var dictationAccuracyFirst: FlexBool?
     public var saveTranscriptHistory: FlexBool?
     public var historyRetentionDays: Int?
 
@@ -36,7 +37,12 @@ public struct Config: Codable {
 
     public func hotkeySummary() -> String {
         hotkeys
-            .map { KeyCodes.describe(keyCode: $0.keyCode, modifiers: $0.modifiers) }
+            .map {
+                KeyCodes.displayName(
+                    keyCode: $0.keyCode,
+                    modifiers: $0.modifiers
+                )
+            }
             .joined(separator: " · ")
     }
 
@@ -70,6 +76,7 @@ public struct Config: Codable {
         case sessionCapSeconds
         case silenceTimeoutSeconds
         case sttEngine
+        case dictationAccuracyFirst
         case saveTranscriptHistory
         case historyRetentionDays
     }
@@ -104,6 +111,7 @@ public struct Config: Codable {
         self.sessionCapSeconds = try c.decodeIfPresent(Double.self, forKey: .sessionCapSeconds)
         self.silenceTimeoutSeconds = try c.decodeIfPresent(Double.self, forKey: .silenceTimeoutSeconds)
         self.sttEngine = try c.decodeIfPresent(STTEngineKind.self, forKey: .sttEngine)
+        self.dictationAccuracyFirst = try c.decodeIfPresent(FlexBool.self, forKey: .dictationAccuracyFirst)
         self.saveTranscriptHistory = try c.decodeIfPresent(FlexBool.self, forKey: .saveTranscriptHistory)
         self.historyRetentionDays = try c.decodeIfPresent(Int.self, forKey: .historyRetentionDays)
     }
@@ -131,6 +139,7 @@ public struct Config: Codable {
         try c.encodeIfPresent(sessionCapSeconds, forKey: .sessionCapSeconds)
         try c.encodeIfPresent(silenceTimeoutSeconds, forKey: .silenceTimeoutSeconds)
         try c.encodeIfPresent(sttEngine, forKey: .sttEngine)
+        try c.encodeIfPresent(dictationAccuracyFirst, forKey: .dictationAccuracyFirst)
         try c.encodeIfPresent(saveTranscriptHistory, forKey: .saveTranscriptHistory)
         try c.encodeIfPresent(historyRetentionDays, forKey: .historyRetentionDays)
     }
@@ -149,13 +158,14 @@ public struct Config: Codable {
         keepModelWarm: FlexBool? = FlexBool(true),
         streamingEnabled: FlexBool? = FlexBool(true),
         streamingChunkSeconds: Double? = 2.0,
-        ollamaEnabled: FlexBool? = FlexBool(true),
+        ollamaEnabled: FlexBool? = FlexBool(false),
         ollamaModel: String? = "llama3.2:latest",
         customVocabulary: [String]? = ["OGrE", "2OPMD", "CipherOS"],
         showPrivacyBadge: FlexBool? = FlexBool(true),
         sessionCapSeconds: Double? = 600,
         silenceTimeoutSeconds: Double? = nil,
         sttEngine: STTEngineKind? = .auto,
+        dictationAccuracyFirst: FlexBool? = FlexBool(true),
         saveTranscriptHistory: FlexBool? = FlexBool(true),
         historyRetentionDays: Int? = 30
     ) {
@@ -181,6 +191,7 @@ public struct Config: Codable {
         self.sessionCapSeconds = sessionCapSeconds
         self.silenceTimeoutSeconds = silenceTimeoutSeconds
         self.sttEngine = sttEngine
+        self.dictationAccuracyFirst = dictationAccuracyFirst
         self.saveTranscriptHistory = saveTranscriptHistory
         self.historyRetentionDays = historyRetentionDays
     }
@@ -313,6 +324,10 @@ public struct Config: Codable {
         return name.hasSuffix(".en") || name.contains(".en-")
     }
 
+    public var dictationAccuracyFirstEnabled: Bool {
+        dictationAccuracyFirst?.value ?? true
+    }
+
     public static let defaultMaxRecordings = 0
 
     public static func effectiveMaxRecordings(_ value: Int?) -> Int {
@@ -340,28 +355,18 @@ public struct Config: Codable {
         configDir.appendingPathComponent("config.json")
     }
 
-    public static var legacyConfigFile: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/open-wispr/config.json")
-    }
-
     public static func load() -> Config {
-        let sourceURL: URL
-        if FileManager.default.fileExists(atPath: configFile.path) {
-            sourceURL = configFile
-        } else if FileManager.default.fileExists(atPath: legacyConfigFile.path) {
-            sourceURL = legacyConfigFile
-        } else {
+        guard FileManager.default.fileExists(atPath: configFile.path) else {
             let config = Config.defaultConfig
             try? config.save()
             return config
         }
 
         do {
-            let data = try Data(contentsOf: sourceURL)
+            let data = try Data(contentsOf: configFile)
             var config = try JSONDecoder().decode(Config.self, from: data)
             let resolved = Config.resolveModelAlias(config.modelSize)
-            if resolved != config.modelSize || sourceURL == legacyConfigFile {
+            if resolved != config.modelSize {
                 config.modelSize = resolved
                 try? config.save()
             }
