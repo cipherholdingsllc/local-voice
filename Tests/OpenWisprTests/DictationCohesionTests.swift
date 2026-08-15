@@ -185,6 +185,61 @@ final class OperatorVocabularyTests: XCTestCase {
             "ELI5"
         )
     }
+
+    func testChatGptMishearsBecomeChatGPT() {
+        for heard in ["chat gpt", "chatgpt", "chat gee pee tee", "chat gbt", "chat gipity"] {
+            let result = VocabularyPostProcessor.apply(
+                "ask \(heard) to rewrite this",
+                replacements: OperatorVocabulary.replacements
+            )
+            XCTAssertEqual(result.text, "ask ChatGPT to rewrite this", heard)
+        }
+    }
+
+    func testClodBecomesClaude() {
+        let result = VocabularyPostProcessor.apply(
+            "ask clod to review this",
+            replacements: OperatorVocabulary.replacements
+        )
+        XCTAssertEqual(result.text, "ask Claude to review this")
+        let verb = VocabularyPostProcessor.apply(
+            "the cat clawed the sofa",
+            replacements: OperatorVocabulary.replacements
+        )
+        XCTAssertEqual(verb.text, "the cat clawed the sofa")
+    }
+
+    func testCloudCodeBecomesClaudeCode() {
+        for heard in ["cloud code", "clawed code", "clock code", "clod code", "cloudcode"] {
+            let result = VocabularyPostProcessor.apply(
+                "open \(heard) now",
+                replacements: OperatorVocabulary.replacements
+            )
+            XCTAssertEqual(result.text, "open Claude Code now", heard)
+        }
+    }
+
+    func testBareCloudDoesNotBecomeClaude() {
+        let result = VocabularyPostProcessor.apply(
+            "the cloud is dark over the ledger",
+            replacements: OperatorVocabulary.replacements
+        )
+        XCTAssertEqual(result.text, "the cloud is dark over the ledger")
+        XCTAssertFalse(
+            OperatorVocabulary.replacements.contains { $0.from.lowercased() == "cloud" }
+        )
+    }
+
+    func testJasonIsNotRewrittenToJSON() {
+        let result = VocabularyPostProcessor.apply(
+            "jason sent the package jason file",
+            replacements: OperatorVocabulary.replacements
+        )
+        XCTAssertEqual(result.text, "jason sent the package.json file")
+        XCTAssertFalse(
+            OperatorVocabulary.replacements.contains { $0.from.lowercased() == "jason" }
+        )
+    }
 }
 
 final class SpokenFigureNormalizerTests: XCTestCase {

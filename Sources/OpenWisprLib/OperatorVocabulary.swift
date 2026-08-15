@@ -5,18 +5,22 @@ import Foundation
 /// Seeded from CLAUDE.md lane terms plus Local Voice history takes.
 /// Proper nouns and acronyms only, never common English.
 public enum OperatorVocabulary {
-    public static let terms: [String] = [
+    public static let ownedTerms: [String] = [
         "2nd Opinion MD",
         "2OPMD",
         "Andras",
+        "Anthropic",
         "Automic Vault",
         "CipherOG",
         "CMUX",
+        "Cursor",
         "Cipher",
         "Cipher Holdings",
         "Cipher Lab",
         "CipherOS",
+        "ChatGPT",
         "Claude",
+        "Claude Code",
         "Codex",
         "Dylan",
         "ENTEXS",
@@ -47,6 +51,7 @@ public enum OperatorVocabulary {
         "Nemesis",
         "NoteCamp",
         "OGrE",
+        "OpenAI",
         "Oz",
         "oz-gauntlet",
         "oz-loop",
@@ -64,7 +69,7 @@ public enum OperatorVocabulary {
         "WizardOZ",
     ]
 
-    public static let replacements: [VocabularyPostProcessor.Replacement] = [
+    public static let ownedReplacements: [VocabularyPostProcessor.Replacement] = [
         .init(from: "cypher", to: "Cipher"),
         .init(from: "cypher os", to: "CipherOS"),
         .init(from: "cipher os", to: "CipherOS"),
@@ -140,4 +145,9 @@ public enum OperatorVocabulary {
         .init(from: "excali draw", to: "Excalidraw"),
         .init(from: "orgystrator", to: "orchestrator"),
     ]
+
+    public static let terms: [String] = ownedTerms + HeardWrittenPack.terms
+
+    public static let replacements: [VocabularyPostProcessor.Replacement] =
+        ownedReplacements + HeardWrittenPack.replacements
 }
