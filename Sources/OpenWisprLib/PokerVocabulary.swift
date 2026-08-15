@@ -265,8 +265,11 @@ public enum PokerVocabulary {
 }
 
 /// Spoken hand names to compact poker notation for training notes.
-/// Bare rank pairs ("ten five") are not rewritten; that collides with
-/// ordinary English ("ten five-gallon"). Pocket / suited / offsuit only.
+///
+/// `s` is spades, not "suited". "jack nine" -> `J9`. A named suit
+/// ("clubs", "spades", "hearts", "diamonds") appends `c`/`s`/`h`/`d`.
+/// Bare number-number pairs ("ten five") stay words so "ten five-gallon"
+/// is not rewritten. Offsuit still uses `o`. Pocket aces -> `AA`.
 public enum PokerHandNormalizer {
     private static let ranks: [(String, String)] = [
         ("aces", "A"), ("ace", "A"),
@@ -284,25 +287,80 @@ public enum PokerHandNormalizer {
         ("deuces", "2"), ("twos", "2"), ("deuce", "2"), ("two", "2"),
     ]
 
+    private static let suits: [(String, String)] = [
+        ("clubs", "c"), ("club", "c"),
+        ("spades", "s"), ("spade", "s"),
+        ("hearts", "h"), ("heart", "h"),
+        ("diamonds", "d"), ("diamond", "d"),
+    ]
+
+    private static let faceLetters: Set<String> = ["A", "K", "Q", "J"]
+
     public static func apply(_ text: String) -> String {
         guard !text.isEmpty else { return text }
         var result = text
         for (word, letter) in ranks {
-            let pocket = "(?i)\\bpocket \(word)\\b"
-            result = replace(pocket, with: letter + letter, in: result)
+            result = replace("(?i)\\bpocket \(word)\\b", with: letter + letter, in: result)
         }
         for left in ranks {
-            for right in ranks {
-                if left.1 == right.1 { continue }
-                let suited = "(?i)\\b\(left.0) \(right.0) suited\\b"
-                result = replace(suited, with: canonical(left.1, right.1, "s"), in: result)
-                let offsuit = "(?i)\\b\(left.0) \(right.0) offsuit\\b"
-                result = replace(offsuit, with: canonical(left.1, right.1, "o"), in: result)
-                let offSuitWords = "(?i)\\b\(left.0) \(right.0) off suit\\b"
-                result = replace(offSuitWords, with: canonical(left.1, right.1, "o"), in: result)
+            for right in ranks where left.1 != right.1 {
+                let hole = pair(left.1, right.1)
+                for (suitWord, suitLetter) in suits {
+                    result = replace(
+                        "(?i)\\b\(left.0) \(right.0) suited \(suitWord)\\b",
+                        with: hole + suitLetter,
+                        in: result
+                    )
+                    result = replace(
+                        "(?i)\\b\(left.0) \(right.0) of \(suitWord)\\b",
+                        with: hole + suitLetter,
+                        in: result
+                    )
+                    result = replace(
+                        "(?i)\\b\(left.0) \(right.0) \(suitWord)\\b",
+                        with: hole + suitLetter,
+                        in: result
+                    )
+                }
+            }
+        }
+        for left in ranks {
+            for right in ranks where left.1 != right.1 {
+                let hole = pair(left.1, right.1)
+                result = replace(
+                    "(?i)\\b\(left.0) \(right.0) offsuit\\b",
+                    with: hole + "o",
+                    in: result
+                )
+                result = replace(
+                    "(?i)\\b\(left.0) \(right.0) off suit\\b",
+                    with: hole + "o",
+                    in: result
+                )
+                result = replace(
+                    "(?i)\\b\(left.0) \(right.0) suited\\b",
+                    with: hole,
+                    in: result
+                )
+            }
+        }
+        for left in ranks {
+            for right in ranks where left.1 != right.1 {
+                guard faceLetters.contains(left.1) || faceLetters.contains(right.1) else {
+                    continue
+                }
+                result = replace(
+                    "(?i)\\b\(left.0) \(right.0)\\b",
+                    with: pair(left.1, right.1),
+                    in: result
+                )
             }
         }
         return result
+    }
+
+    private static func pair(_ a: String, _ b: String) -> String {
+        canonical(a, b, "")
     }
 
     private static func canonical(_ a: String, _ b: String, _ suffix: String) -> String {

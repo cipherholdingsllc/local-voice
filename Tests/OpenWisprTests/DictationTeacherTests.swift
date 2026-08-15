@@ -152,7 +152,7 @@ final class DictationTeacherTests: XCTestCase {
                     replacements: PokerVocabulary.replacements
                 ).text
             ),
-            "I had J9s"
+            "I had J9"
         )
     }
 
@@ -182,8 +182,36 @@ final class DictationTeacherTests: XCTestCase {
             "I had AA"
         )
         XCTAssertEqual(
+            PokerHandNormalizer.apply("jack nine"),
+            "J9"
+        )
+        XCTAssertEqual(
             PokerHandNormalizer.apply("jack nine suited"),
+            "J9"
+        )
+        XCTAssertEqual(
+            PokerHandNormalizer.apply("jack nine clubs"),
+            "J9c"
+        )
+        XCTAssertEqual(
+            PokerHandNormalizer.apply("jack nine of clubs"),
+            "J9c"
+        )
+        XCTAssertEqual(
+            PokerHandNormalizer.apply("jack nine suited clubs"),
+            "J9c"
+        )
+        XCTAssertEqual(
+            PokerHandNormalizer.apply("jack nine spades"),
             "J9s"
+        )
+        XCTAssertEqual(
+            PokerHandNormalizer.apply("jack nine hearts"),
+            "J9h"
+        )
+        XCTAssertEqual(
+            PokerHandNormalizer.apply("jack nine diamonds"),
+            "J9d"
         )
         XCTAssertEqual(
             PokerHandNormalizer.apply("ace king offsuit"),
@@ -192,6 +220,10 @@ final class DictationTeacherTests: XCTestCase {
         XCTAssertEqual(
             PokerHandNormalizer.apply("ten five-gallon buckets"),
             "ten five-gallon buckets"
+        )
+        XCTAssertEqual(
+            PokerHandNormalizer.apply("ten five"),
+            "ten five"
         )
     }
 
