@@ -45,7 +45,7 @@ public final class VocabularyLearner {
     /// overridden from Dictionary without a rebuild.
     private func mergedReplacementRulesLocked() -> [VocabularyPostProcessor.Replacement] {
         var byFrom: [String: VocabularyPostProcessor.Replacement] = [:]
-        for rule in OperatorVocabulary.replacements {
+        for rule in OperatorVocabulary.replacements + PokerVocabulary.replacements {
             guard Self.isValidReplacementSource(rule.from) else { continue }
             byFrom[rule.from.lowercased()] = rule
         }
@@ -89,10 +89,11 @@ public final class VocabularyLearner {
             boostTerms: boost
         )
         let cleaned = DictationCohesion.polish(applied.text)
-        return NearbyContextSampler.applyVisibleSpellings(
+        let spelled = NearbyContextSampler.applyVisibleSpellings(
             cleaned,
             names: visibleSpellings
         )
+        return PokerHandNormalizer.apply(spelled)
     }
 
     /// Multi-word manual dictionary entries only. Single-word fuzzy boost
@@ -110,7 +111,7 @@ public final class VocabularyLearner {
     private func mergedBoostTerms(manual: [String], configTerms: [String]) -> [String] {
         var seen = Set<String>()
         var out: [String] = []
-        for term in OperatorVocabulary.terms + manual + configTerms where term.contains(" ") {
+        for term in OperatorVocabulary.terms + PokerVocabulary.terms + manual + configTerms where term.contains(" ") {
             let key = term.lowercased()
             guard !key.isEmpty, !seen.contains(key) else { continue }
             seen.insert(key)
@@ -187,6 +188,11 @@ public final class VocabularyLearner {
             guard let self = self else { return }
             guard let current = Self.readFocusedText(), !current.isEmpty else { return }
             guard current != polished, current != inserted else { return }
+            if let pair = DictationTeacher.proposedReplacement(inserted: polished, edited: current)
+                ?? DictationTeacher.proposedReplacement(inserted: inserted, edited: current) {
+                _ = self.addReplacement(from: pair.from, to: pair.to)
+                return
+            }
             let newTerms = Self.extractNewTerms(from: polished, to: current)
             guard !newTerms.isEmpty else { return }
             self.queue.sync {
@@ -287,14 +293,14 @@ public final class VocabularyLearner {
 
     private static func seedOperatorTerms(_ store: Store) -> Store {
         var next = store
-        for term in OperatorVocabulary.terms where isValidManualTerm(term) {
+        for term in OperatorVocabulary.terms + PokerVocabulary.terms where isValidManualTerm(term) {
             let exists = next.manual.contains {
                 $0.caseInsensitiveCompare(term) == .orderedSame
             }
             if !exists { next.manual.append(term) }
         }
         next.manual.sort()
-        for rule in OperatorVocabulary.replacements {
+        for rule in OperatorVocabulary.replacements + PokerVocabulary.replacements {
             guard isValidReplacementSource(rule.from), isValidManualTerm(rule.to) else {
                 continue
             }
@@ -348,6 +354,11 @@ public final class VocabularyLearner {
         if term.dropFirst().contains(where: \.isUppercase) { return true }
         let lower = term.lowercased()
         if commonDictationTokens.contains(lower) { return false }
+        if term == term.uppercased(),
+           (2...5).contains(term.filter(\.isLetter).count),
+           term.unicodeScalars.allSatisfy({ CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "+-")).contains($0) }) {
+            return true
+        }
         if term == term.uppercased(), term.count <= 8 { return false }
         if term.count <= 8,
            term.first?.isUppercase == true,
@@ -399,6 +410,15 @@ public final class VocabularyLearner {
     }
 
     private static func looksLikeHumanVocabulary(_ term: String) -> Bool {
+        if term.range(of: #"^\d-bet$"#, options: [.regularExpression, .caseInsensitive]) != nil {
+            return true
+        }
+        if term.range(of: #"^\dbet$"#, options: [.regularExpression, .caseInsensitive]) != nil {
+            return true
+        }
+        if term.range(of: #"^\d[A-Z]{1,3}$"#, options: .regularExpression) != nil {
+            return true
+        }
         if term.range(of: #"^\d"#, options: .regularExpression) != nil { return false }
         if term.range(of: #"^\d+[a-z]{0,2}$"#, options: .regularExpression) != nil { return false }
         if term.range(of: #"\d+(ms|s|k|p|M)$"#, options: .regularExpression) != nil { return false }

@@ -612,6 +612,8 @@ private struct ModesView: View {
 private struct DictionaryView: View {
     @State private var terms = VocabularyLearner.shared.manualTerms()
     @State private var newTerm = ""
+    @State private var fromPhrase = ""
+    @State private var toPhrase = ""
     @State private var statusMessage = ""
 
     var body: some View {
@@ -619,7 +621,7 @@ private struct DictionaryView: View {
             PageHeader(
                 eyebrow: "PERSONAL LANGUAGE",
                 title: "Dictionary",
-                subtitle: "Add names, acronyms, and multi-word phrases. They apply immediately to the next dictation."
+                subtitle: "Add names, acronyms, and when-I-say → write-this rules. They apply on the next take. You can also say: remember that koon chan is Kun Chen."
             )
 
             HStack(spacing: 10) {
@@ -633,6 +635,28 @@ private struct DictionaryView: View {
                     )
                     .onSubmit(addTerm)
                 Button("Add", action: addTerm)
+                    .buttonStyle(AccentButtonStyle())
+            }
+
+            HStack(spacing: 10) {
+                TextField("When I say", text: $fromPhrase)
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 13)
+                    .frame(height: 42)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(LocalVoiceTheme.panel)
+                    )
+                TextField("write", text: $toPhrase)
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 13)
+                    .frame(height: 42)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(LocalVoiceTheme.panel)
+                    )
+                    .onSubmit(addReplacement)
+                Button("Learn", action: addReplacement)
                     .buttonStyle(AccentButtonStyle())
             }
 
@@ -706,6 +730,23 @@ private struct DictionaryView: View {
         }
         newTerm = ""
         statusMessage = "Added \"\(candidate)\"."
+        refresh()
+    }
+
+    private func addReplacement() {
+        let from = fromPhrase.trimmingCharacters(in: .whitespacesAndNewlines)
+        let to = toPhrase.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !from.isEmpty, !to.isEmpty else {
+            statusMessage = "Enter both what you say and what to write."
+            return
+        }
+        guard VocabularyLearner.shared.addReplacement(from: from, to: to) else {
+            statusMessage = "Could not learn that pair. Common English cannot be a source."
+            return
+        }
+        fromPhrase = ""
+        toPhrase = ""
+        statusMessage = "Learned \"\(from)\" → \"\(to)\"."
         refresh()
     }
 

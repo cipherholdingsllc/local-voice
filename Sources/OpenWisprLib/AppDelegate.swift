@@ -928,8 +928,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 if self.config.spokenPunctuation?.value ?? false {
                     text = TextPostProcessor.process(text)
                 }
+                let taught = DictationTeacher.consume(text)
                 text = VocabularyLearner.shared.postProcess(
-                    text,
+                    taught.text,
                     configTerms: self.config.customVocabulary ?? [],
                     visibleSpellings: visibleSpellings
                 )
@@ -961,7 +962,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 LatencyInstrumentation.shared.end("llm")
 
-                guard TranscriptAcceptanceGate.shouldAccept(
+                let teachOnly = taught.learned
+                    && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                guard teachOnly || TranscriptAcceptanceGate.shouldAccept(
                     raw: raw,
                     polished: text,
                     recordingMilliseconds: recordingMs,
@@ -1005,6 +1008,15 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
                 DispatchQueue.main.async {
                     LatencyInstrumentation.shared.mark("inject")
+                    if let message = taught.message {
+                        LocalVoiceStore.shared.setState(.ready, detail: message)
+                        if self.config.showCursorHUD?.value ?? true {
+                            self.pillOverlay.show(state: .transcribing, partialText: message)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
+                                self.pillOverlay.hide()
+                            }
+                        }
+                    }
                     if !text.isEmpty {
                         self.lastTranscription = text
                         if self.dashboardCaptureMode {
@@ -1020,6 +1032,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                             VoiceCommandExecutor.shared.flush()
                         }
                         self.captureVisibleSpellings = []
+                    } else if taught.message != nil {
+                        self.liveComposer.cancel()
+                        self.captureVisibleSpellings = []
+                        self.statusBar.state = .idle
                     } else {
                         let msg = "Empty transcript — speak louder or check mic"
                         self.statusBar.state = .error(msg)
