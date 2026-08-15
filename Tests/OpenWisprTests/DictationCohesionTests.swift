@@ -164,11 +164,17 @@ final class OperatorVocabularyTests: XCTestCase {
     }
 
     func testEliFiveBecomesELI5() {
-        let result = VocabularyPostProcessor.apply(
-            "give me an eli five of the PR",
-            replacements: OperatorVocabulary.replacements
+        for heard in ["eli five", "ellie five", "eli 5", "eli5"] {
+            let result = VocabularyPostProcessor.apply(
+                "give me an \(heard) of the PR",
+                replacements: OperatorVocabulary.replacements
+            )
+            XCTAssertEqual(result.text, "give me an ELI5 of the PR", heard)
+        }
+        XCTAssertEqual(
+            VocabularyLearner.shared.postProcess("ellie five"),
+            "ELI5"
         )
-        XCTAssertEqual(result.text, "give me an ELI5 of the PR")
     }
 }
 
