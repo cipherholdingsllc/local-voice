@@ -11,6 +11,7 @@ public struct DictationCohesion {
         var result = applySelfCorrections(text)
         result = stripFillers(result)
         result = collapseRepeatedWords(result)
+        result = formatSpokenLists(result)
         result = collapseWhitespace(result)
         return result
     }
@@ -59,6 +60,47 @@ public struct DictationCohesion {
             .replacingOccurrences(of: #"^[,;:\s]+"#, with: "", options: .regularExpression)
             .replacingOccurrences(of: #"\s+,+"#, with: ",", options: .regularExpression)
             .replacingOccurrences(of: #",{2,}"#, with: ",", options: .regularExpression)
+        return result
+    }
+
+    /// Spoken lists, only when two or more markers are present.
+    /// Leaves "he's my number one guy" alone.
+    private static func formatSpokenLists(_ text: String) -> String {
+        let ordinals = [
+            "one": "1", "two": "2", "three": "3", "four": "4", "five": "5",
+            "six": "6", "seven": "7", "eight": "8", "nine": "9", "ten": "10",
+        ]
+        let numberedCount = ordinals.keys.reduce(0) { count, word in
+            let pattern = "\\bnumber \(word)\\b"
+            let range = text.range(of: pattern, options: [.regularExpression, .caseInsensitive])
+            return count + (range == nil ? 0 : 1)
+        }
+        var result = text
+        if numberedCount >= 2 {
+            for (word, digit) in ordinals.sorted(by: { $0.key.count > $1.key.count }) {
+                let pattern = "(?i)\\bnumber \(word)\\b[,:]?"
+                guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+                result = regex.stringByReplacingMatches(
+                    in: result,
+                    range: NSRange(result.startIndex..., in: result),
+                    withTemplate: "\n\(digit). "
+                )
+            }
+        }
+        let bulletPattern = #"(?i)\bbullet\b"#
+        if let bulletRegex = try? NSRegularExpression(pattern: bulletPattern) {
+            let bullets = bulletRegex.numberOfMatches(
+                in: result,
+                range: NSRange(result.startIndex..., in: result)
+            )
+            if bullets >= 2 {
+                result = bulletRegex.stringByReplacingMatches(
+                    in: result,
+                    range: NSRange(result.startIndex..., in: result),
+                    withTemplate: "\n- "
+                )
+            }
+        }
         return result
     }
 

@@ -63,6 +63,29 @@ final class DictationCohesionTests: XCTestCase {
             "The give me the final delivery"
         )
     }
+
+    func testFormatsSpokenNumberedListsWhenTwoMarkersPresent() {
+        let polished = DictationCohesion.polish("number one buy milk number two call Kun")
+        XCTAssertTrue(polished.contains("1."))
+        XCTAssertTrue(polished.contains("2."))
+        XCTAssertFalse(polished.lowercased().contains("number one"))
+        XCTAssertTrue(polished.lowercased().contains("buy milk"))
+        XCTAssertTrue(polished.contains("Kun"))
+    }
+
+    func testLeavesNumberOneAloneWithoutASecondMarker() {
+        XCTAssertEqual(
+            DictationCohesion.polish("he's my number one guy"),
+            "He's my number one guy"
+        )
+    }
+
+    func testFormatsSpokenBulletsWhenTwoMarkersPresent() {
+        let polished = DictationCohesion.polish("bullet milk bullet eggs")
+        XCTAssertTrue(polished.contains("- "))
+        XCTAssertTrue(polished.contains("milk"))
+        XCTAssertTrue(polished.contains("eggs"))
+    }
 }
 
 final class OperatorVocabularyTests: XCTestCase {

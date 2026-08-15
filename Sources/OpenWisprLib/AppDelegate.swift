@@ -23,6 +23,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     private var streamingPartial = ""
     private let streamingQueue = DispatchQueue(label: "local-voice.streaming", qos: .userInitiated)
     private let streamingSessionGate = StreamingSessionGate()
+    private let liveComposer = LiveFieldComposer()
+    private var captureVisibleSpellings: [String] = []
     private var dashboardCaptureMode = false
     private var captureApplicationName = "Unknown app"
     private var captureBundleIdentifier: String?
@@ -719,6 +721,12 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             modeName: captureModeName
         )
         streamingPartial = ""
+        liveComposer.reset()
+        captureVisibleSpellings = []
+        if !dashboardCaptureMode {
+            captureVisibleSpellings = NearbyContextSampler.sampleVisibleSpellings()
+            liveComposer.begin()
+        }
         LatencyInstrumentation.shared.reset()
         LatencyInstrumentation.shared.mark("record")
 
@@ -800,6 +808,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         streamingPartial = ""
+        liveComposer.cancel()
+        captureVisibleSpellings = []
         statusBar.state = .idle
         pillOverlay.hide()
         dashboardCaptureMode = false
@@ -834,6 +844,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     incoming: text
                 )
                 self.pillOverlay.updatePartial(self.streamingPartial)
+                if !self.dashboardCaptureMode {
+                    self.liveComposer.updatePartial(self.streamingPartial)
+                }
             }
         }
     }
@@ -886,6 +899,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         let applicationName = captureApplicationName
         let bundleIdentifier = captureBundleIdentifier
         let modeName = captureModeName
+        let visibleSpellings = captureVisibleSpellings
         let maximumDurationMilliseconds =
             effectiveMaximumDurationMilliseconds(for: profileID)
 
@@ -910,12 +924,14 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 )
                 LatencyInstrumentation.shared.end("stt")
 
-                var text = (self.config.spokenPunctuation?.value ?? false)
-                    ? TextPostProcessor.process(raw)
-                    : raw
+                var text = TextPostProcessor.processStructural(raw)
+                if self.config.spokenPunctuation?.value ?? false {
+                    text = TextPostProcessor.process(text)
+                }
                 text = VocabularyLearner.shared.postProcess(
                     text,
-                    configTerms: self.config.customVocabulary ?? []
+                    configTerms: self.config.customVocabulary ?? [],
+                    visibleSpellings: visibleSpellings
                 )
 
                 LatencyInstrumentation.shared.mark("llm")
@@ -957,6 +973,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     )
                     DispatchQueue.main.async {
                         self.streamingPartial = ""
+                        self.liveComposer.cancel()
+                        self.captureVisibleSpellings = []
                         self.statusBar.state = .idle
                         self.statusBar.buildMenu()
                         self.pillOverlay.hide()
@@ -992,10 +1010,16 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                         if self.dashboardCaptureMode {
                             NSPasteboard.general.clearContents()
                             NSPasteboard.general.setString(text, forType: .string)
+                        } else if self.liveComposer.hasLiveInsertion {
+                            if !self.liveComposer.commitFinal(text) {
+                                self.inserter.insert(text: text)
+                            }
+                            VoiceCommandExecutor.shared.flush()
                         } else {
                             self.inserter.insert(text: text)
                             VoiceCommandExecutor.shared.flush()
                         }
+                        self.captureVisibleSpellings = []
                     } else {
                         let msg = "Empty transcript — speak louder or check mic"
                         self.statusBar.state = .error(msg)

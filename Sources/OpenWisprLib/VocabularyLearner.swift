@@ -79,7 +79,8 @@ public final class VocabularyLearner {
 
     public func postProcess(
         _ text: String,
-        configTerms: [String] = []
+        configTerms: [String] = [],
+        visibleSpellings: [String] = []
     ) -> String {
         let boost = safeBoostTerms(configTerms: configTerms)
         let applied = VocabularyPostProcessor.apply(
@@ -88,7 +89,10 @@ public final class VocabularyLearner {
             boostTerms: boost
         )
         let cleaned = DictationCohesion.polish(applied.text)
-        return cleaned
+        return NearbyContextSampler.applyVisibleSpellings(
+            cleaned,
+            names: visibleSpellings
+        )
     }
 
     /// Multi-word manual dictionary entries only. Single-word fuzzy boost

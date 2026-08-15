@@ -39,6 +39,27 @@ public struct TextPostProcessor {
         return result
     }
 
+    /// Always-on structural commands. Does not rewrite "period" / "comma",
+    /// which stay behind the spoken-punctuation setting because they collide
+    /// with normal English ("period of time").
+    public static func processStructural(_ text: String) -> String {
+        let structural: [(String, String)] = [
+            ("\\bnew paragraph\\b", "\n\n"),
+            ("\\bnew line\\b", "\n"),
+            ("\\bnewline\\b", "\n"),
+        ]
+        var result = text
+        for (pattern, replacement) in structural {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { continue }
+            result = regex.stringByReplacingMatches(
+                in: result,
+                range: NSRange(result.startIndex..., in: result),
+                withTemplate: replacement
+            )
+        }
+        return result
+    }
+
     private static func fixSpacingAroundPunctuation(_ text: String) -> String {
         var result = text
         guard let regex = try? NSRegularExpression(pattern: "\\s+([.,?!:;])", options: []) else { return result }
