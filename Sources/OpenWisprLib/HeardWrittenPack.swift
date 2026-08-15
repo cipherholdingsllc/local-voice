@@ -97,7 +97,6 @@ public enum HeardWrittenPack {
         .init(from: "cursor ai", to: "Cursor"),
         .init(from: "cursor ide", to: "Cursor"),
         .init(from: "super whisper", to: "SuperWhisper"),
-        .init(from: "superwhisper", to: "SuperWhisper"),
         .init(from: "voice ink", to: "VoiceInk"),
         .init(from: "type whisper", to: "TypeWhisper"),
         .init(from: "ultra think", to: "Ultrathink"),
