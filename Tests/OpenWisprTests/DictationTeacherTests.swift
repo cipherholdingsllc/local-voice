@@ -44,6 +44,71 @@ final class DictationTeacherTests: XCTestCase {
         ))
     }
 
+    func testHighJackAndLowJackBecomeSeats() {
+        let result = VocabularyPostProcessor.apply(
+            "high jack and hijack and h jack then low jack and lojack",
+            replacements: PokerVocabulary.replacements
+        )
+        XCTAssertEqual(result.text, "HJ and HJ and HJ then LJ and LJ")
+
+        XCTAssertEqual(
+            VocabularyPostProcessor.apply(
+                "the high jack",
+                replacements: PokerVocabulary.replacements
+            ).text,
+            "HJ"
+        )
+        XCTAssertEqual(
+            VocabularyPostProcessor.apply(
+                "hi jack opens",
+                replacements: PokerVocabulary.replacements
+            ).text,
+            "HJ opens"
+        )
+        XCTAssertEqual(
+            VocabularyPostProcessor.apply(
+                "highjack raises",
+                replacements: PokerVocabulary.replacements
+            ).text,
+            "HJ raises"
+        )
+        XCTAssertEqual(
+            VocabularyPostProcessor.apply(
+                "I am in the high jack",
+                replacements: PokerVocabulary.replacements
+            ).text,
+            "I am in the HJ"
+        )
+        XCTAssertEqual(
+            VocabularyPostProcessor.apply(
+                "the low jack",
+                replacements: PokerVocabulary.replacements
+            ).text,
+            "LJ"
+        )
+        XCTAssertEqual(
+            VocabularyPostProcessor.apply(
+                "lojack folds",
+                replacements: PokerVocabulary.replacements
+            ).text,
+            "LJ folds"
+        )
+        XCTAssertEqual(
+            VocabularyPostProcessor.apply(
+                "low-jack calls",
+                replacements: PokerVocabulary.replacements
+            ).text,
+            "LJ calls"
+        )
+        XCTAssertEqual(
+            VocabularyPostProcessor.apply(
+                "I am in the low jack",
+                replacements: PokerVocabulary.replacements
+            ).text,
+            "I am in the LJ"
+        )
+    }
+
     func testPokerReplacements() {
         let result = VocabularyPostProcessor.apply(
             "I open under the gun and three bet the cutoff then c-bet the flop",
