@@ -26,9 +26,41 @@ public enum SpokenFigureNormalizer {
     public static func apply(_ text: String) -> String {
         guard !text.isEmpty else { return text }
         var result = rewritePortDigits(text)
+        result = rewriteKAmounts(result)
         result = rewriteDigitAmounts(result)
         result = rewriteUnitAmounts(result)
         return result
+    }
+
+    /// "$45k" or "45k dollars" -> $45,000. Bare "45k" stays (could be tokens).
+    private static func rewriteKAmounts(_ text: String) -> String {
+        var output = text
+        let dollarK = #"(?i)\$(\d{1,7})\s*k\b"#
+        if let regex = try? NSRegularExpression(pattern: dollarK) {
+            let matches = regex.matches(in: output, range: NSRange(output.startIndex..., in: output))
+            for match in matches.reversed() {
+                guard match.numberOfRanges >= 2,
+                      let valueRange = Range(match.range(at: 1), in: output),
+                      let whole = Range(match.range(at: 0), in: output),
+                      let base = Int(String(output[valueRange]))
+                else { continue }
+                output.replaceSubrange(whole, with: format(base * 1_000, unit: "dollars"))
+            }
+        }
+        let spokenK = #"(?i)\b(\d{1,7})\s*k\s+(dollars?|bucks?)\b"#
+        if let regex = try? NSRegularExpression(pattern: spokenK) {
+            let matches = regex.matches(in: output, range: NSRange(output.startIndex..., in: output))
+            for match in matches.reversed() {
+                guard match.numberOfRanges >= 3,
+                      let valueRange = Range(match.range(at: 1), in: output),
+                      let unitRange = Range(match.range(at: 2), in: output),
+                      let whole = Range(match.range(at: 0), in: output),
+                      let base = Int(String(output[valueRange]))
+                else { continue }
+                output.replaceSubrange(whole, with: format(base * 1_000, unit: String(output[unitRange])))
+            }
+        }
+        return output
     }
 
     /// STT sometimes emits "45 thousand dollars" instead of number-words.

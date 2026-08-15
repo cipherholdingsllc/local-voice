@@ -118,6 +118,13 @@ final class DictationTeacherTests: XCTestCase {
         XCTAssertTrue(result.text.contains("3-bet"), result.text)
         XCTAssertTrue(result.text.contains("CO"), result.text)
         XCTAssertTrue(result.text.contains("flop"), result.text)
+        XCTAssertEqual(
+            VocabularyPostProcessor.apply(
+                "I jam all in after a for bet",
+                replacements: PokerVocabulary.replacements
+            ).text,
+            "I jam all-in after a 4-bet"
+        )
     }
 
     func testUnderTheGunPlusTwoBecomesUTGPlusTwo() {
@@ -212,6 +219,18 @@ final class DictationTeacherTests: XCTestCase {
         XCTAssertEqual(
             PokerHandNormalizer.apply("jack nine diamonds"),
             "J9d"
+        )
+        XCTAssertEqual(
+            PokerHandNormalizer.apply("jack of clubs nine of hearts"),
+            "Jc9h"
+        )
+        XCTAssertEqual(
+            PokerHandNormalizer.apply("nine of hearts jack of clubs"),
+            "Jc9h"
+        )
+        XCTAssertEqual(
+            PokerHandNormalizer.apply("jack of clubs nine of clubs"),
+            "J9c"
         )
         XCTAssertEqual(
             PokerHandNormalizer.apply("ace king offsuit"),

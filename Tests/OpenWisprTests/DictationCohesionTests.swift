@@ -56,6 +56,15 @@ final class DictationCohesionTests: XCTestCase {
         )
     }
 
+    func testWaitIMeantAlsoRetractsTheValue() {
+        XCTAssertEqual(
+            DictationCohesion.polish(
+                "The budget is forty thousand dollars wait I meant forty-five thousand dollars"
+            ),
+            "The budget is forty-five thousand dollars"
+        )
+    }
+
     func testInTheSurvivesCohesion() {
         let sentence =
             "Would it land in the real ledger as well as Laird getting a text?"
@@ -212,6 +221,18 @@ final class SpokenFigureNormalizerTests: XCTestCase {
         XCTAssertEqual(
             SpokenFigureNormalizer.apply("I have 2 ideas in the ledger"),
             "I have 2 ideas in the ledger"
+        )
+        XCTAssertEqual(
+            SpokenFigureNormalizer.apply("The budget is $45k"),
+            "The budget is $45,000"
+        )
+        XCTAssertEqual(
+            SpokenFigureNormalizer.apply("The budget is 45k dollars"),
+            "The budget is $45,000"
+        )
+        XCTAssertEqual(
+            SpokenFigureNormalizer.apply("about 45k tokens"),
+            "about 45k tokens"
         )
     }
 

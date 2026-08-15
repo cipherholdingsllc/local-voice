@@ -843,6 +843,12 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     existing: self.streamingPartial,
                     incoming: text
                 )
+                let cleaned = VocabularyLearner.shared.postProcess(
+                    self.streamingPartial,
+                    configTerms: self.config.customVocabulary ?? [],
+                    visibleSpellings: self.captureVisibleSpellings
+                )
+                self.streamingPartial = cleaned
                 self.pillOverlay.updatePartial(self.streamingPartial)
                 if !self.dashboardCaptureMode {
                     self.liveComposer.updatePartial(self.streamingPartial)
@@ -1155,7 +1161,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self = self else { return }
             do {
                 let raw = try self.sttRouter.transcribe(audioURL: audioURL)
-                var text = (self.config.spokenPunctuation?.value ?? false) ? TextPostProcessor.process(raw) : raw
+                var text = TextPostProcessor.processStructural(raw)
+                if self.config.spokenPunctuation?.value ?? false {
+                    text = TextPostProcessor.process(text)
+                }
                 text = VocabularyLearner.shared.postProcess(
                     text,
                     configTerms: self.config.customVocabulary ?? []

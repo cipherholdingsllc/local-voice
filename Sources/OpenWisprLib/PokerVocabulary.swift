@@ -206,8 +206,10 @@ public enum PokerVocabulary {
         .init(from: "3 bet", to: "3-bet"),
         .init(from: "three-bet", to: "3-bet"),
         .init(from: "four bet", to: "4-bet"),
+        .init(from: "for bet", to: "4-bet"),
         .init(from: "4 bet", to: "4-bet"),
         .init(from: "four-bet", to: "4-bet"),
+        .init(from: "all in", to: "all-in"),
         .init(from: "five bet", to: "5-bet"),
         .init(from: "5 bet", to: "5-bet"),
         .init(from: "continuation bet", to: "c-bet"),
@@ -295,72 +297,92 @@ public enum PokerHandNormalizer {
     ]
 
     private static let faceLetters: Set<String> = ["A", "K", "Q", "J"]
+    private static let rankByWord: [String: String] = Dictionary(uniqueKeysWithValues: ranks)
+    private static let suitByWord: [String: String] = Dictionary(uniqueKeysWithValues: suits)
+    private static let rankAlt = alternation(ranks.map(\.0))
+    private static let suitAlt = alternation(suits.map(\.0))
+
+    private static let pocketRegex = compile("(?i)\\bpocket (\(rankAlt))\\b")
+    private static let twoSuitOfRegex = compile(
+        "(?i)\\b(\(rankAlt)) of (\(suitAlt)) (\(rankAlt)) of (\(suitAlt))\\b"
+    )
+    private static let twoSuitSpaceRegex = compile(
+        "(?i)\\b(\(rankAlt)) (\(suitAlt)) (\(rankAlt)) (\(suitAlt))\\b"
+    )
+    private static let suitedSuitRegex = compile(
+        "(?i)\\b(\(rankAlt)) (\(rankAlt)) suited (\(suitAlt))\\b"
+    )
+    private static let ofSuitRegex = compile("(?i)\\b(\(rankAlt)) (\(rankAlt)) of (\(suitAlt))\\b")
+    private static let trailingSuitRegex = compile("(?i)\\b(\(rankAlt)) (\(rankAlt)) (\(suitAlt))\\b")
+    private static let offsuitRegex = compile("(?i)\\b(\(rankAlt)) (\(rankAlt)) offsuit\\b")
+    private static let offSuitRegex = compile("(?i)\\b(\(rankAlt)) (\(rankAlt)) off suit\\b")
+    private static let suitedRegex = compile("(?i)\\b(\(rankAlt)) (\(rankAlt)) suited\\b")
+    private static let barePairRegex = compile("(?i)\\b(\(rankAlt)) (\(rankAlt))\\b")
 
     public static func apply(_ text: String) -> String {
         guard !text.isEmpty else { return text }
-        var result = text
-        for (word, letter) in ranks {
-            result = replace("(?i)\\bpocket \(word)\\b", with: letter + letter, in: result)
+        var result = rewrite(pocketRegex, in: text) { match in
+            guard let rank = letter(match[1], in: rankByWord) else { return nil }
+            return rank + rank
         }
-        for left in ranks {
-            for right in ranks where left.1 != right.1 {
-                let hole = pair(left.1, right.1)
-                for (suitWord, suitLetter) in suits {
-                    result = replace(
-                        "(?i)\\b\(left.0) \(right.0) suited \(suitWord)\\b",
-                        with: hole + suitLetter,
-                        in: result
-                    )
-                    result = replace(
-                        "(?i)\\b\(left.0) \(right.0) of \(suitWord)\\b",
-                        with: hole + suitLetter,
-                        in: result
-                    )
-                    result = replace(
-                        "(?i)\\b\(left.0) \(right.0) \(suitWord)\\b",
-                        with: hole + suitLetter,
-                        in: result
-                    )
-                }
-            }
-        }
-        for left in ranks {
-            for right in ranks where left.1 != right.1 {
-                let hole = pair(left.1, right.1)
-                result = replace(
-                    "(?i)\\b\(left.0) \(right.0) offsuit\\b",
-                    with: hole + "o",
-                    in: result
-                )
-                result = replace(
-                    "(?i)\\b\(left.0) \(right.0) off suit\\b",
-                    with: hole + "o",
-                    in: result
-                )
-                result = replace(
-                    "(?i)\\b\(left.0) \(right.0) suited\\b",
-                    with: hole,
-                    in: result
-                )
-            }
-        }
-        for left in ranks {
-            for right in ranks where left.1 != right.1 {
-                guard faceLetters.contains(left.1) || faceLetters.contains(right.1) else {
-                    continue
-                }
-                result = replace(
-                    "(?i)\\b\(left.0) \(right.0)\\b",
-                    with: pair(left.1, right.1),
-                    in: result
-                )
-            }
+        result = rewrite(twoSuitOfRegex, in: result) { twoSuit($0) }
+        result = rewrite(twoSuitSpaceRegex, in: result) { twoSuit($0) }
+        result = rewrite(suitedSuitRegex, in: result) { sameSuit($0) }
+        result = rewrite(ofSuitRegex, in: result) { sameSuit($0) }
+        result = rewrite(trailingSuitRegex, in: result) { sameSuit($0) }
+        result = rewrite(offsuitRegex, in: result) { pair($0, suffix: "o") }
+        result = rewrite(offSuitRegex, in: result) { pair($0, suffix: "o") }
+        result = rewrite(suitedRegex, in: result) { pair($0, suffix: "") }
+        result = rewrite(barePairRegex, in: result) { groups in
+            guard let left = letter(groups[1], in: rankByWord),
+                  let right = letter(groups[2], in: rankByWord),
+                  left != right,
+                  faceLetters.contains(left) || faceLetters.contains(right)
+            else { return nil }
+            return canonical(left, right, "")
         }
         return result
     }
 
-    private static func pair(_ a: String, _ b: String) -> String {
-        canonical(a, b, "")
+    private static func twoSuit(_ groups: [String]) -> String? {
+        guard groups.count >= 5,
+              let r1 = letter(groups[1], in: rankByWord),
+              let s1 = letter(groups[2], in: suitByWord),
+              let r2 = letter(groups[3], in: rankByWord),
+              let s2 = letter(groups[4], in: suitByWord),
+              r1 != r2
+        else { return nil }
+        if s1 == s2 {
+            return canonical(r1, r2, s1)
+        }
+        let order = "AKQJT98765432"
+        guard let i1 = order.firstIndex(of: Character(r1)),
+              let i2 = order.firstIndex(of: Character(r2)) else {
+            return r1 + s1 + r2 + s2
+        }
+        if i1 <= i2 {
+            return r1 + s1 + r2 + s2
+        }
+        return r2 + s2 + r1 + s1
+    }
+
+    private static func sameSuit(_ groups: [String]) -> String? {
+        guard groups.count >= 4,
+              let left = letter(groups[1], in: rankByWord),
+              let right = letter(groups[2], in: rankByWord),
+              let suit = letter(groups[3], in: suitByWord),
+              left != right
+        else { return nil }
+        return canonical(left, right, suit)
+    }
+
+    private static func pair(_ groups: [String], suffix: String) -> String? {
+        guard groups.count >= 3,
+              let left = letter(groups[1], in: rankByWord),
+              let right = letter(groups[2], in: rankByWord),
+              left != right
+        else { return nil }
+        return canonical(left, right, suffix)
     }
 
     private static func canonical(_ a: String, _ b: String, _ suffix: String) -> String {
@@ -375,12 +397,41 @@ public enum PokerHandNormalizer {
         return b + a + suffix
     }
 
-    private static func replace(_ pattern: String, with template: String, in text: String) -> String {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
-        return regex.stringByReplacingMatches(
-            in: text,
-            range: NSRange(text.startIndex..., in: text),
-            withTemplate: template
-        )
+    private static func letter(_ word: String, in map: [String: String]) -> String? {
+        map[word.lowercased()]
+    }
+
+    private static func alternation(_ words: [String]) -> String {
+        words
+            .sorted { $0.count > $1.count }
+            .map(NSRegularExpression.escapedPattern(for:))
+            .joined(separator: "|")
+    }
+
+    private static func compile(_ pattern: String) -> NSRegularExpression? {
+        try? NSRegularExpression(pattern: pattern)
+    }
+
+    private static func rewrite(
+        _ regex: NSRegularExpression?,
+        in text: String,
+        template: ([String]) -> String?
+    ) -> String {
+        guard let regex else { return text }
+        let ns = text as NSString
+        let matches = regex.matches(in: text, range: NSRange(location: 0, length: ns.length))
+        var output = text
+        for match in matches.reversed() {
+            var groups: [String] = []
+            for i in 0..<match.numberOfRanges {
+                let range = match.range(at: i)
+                groups.append(range.location == NSNotFound ? "" : ns.substring(with: range))
+            }
+            guard let replacement = template(groups),
+                  let whole = Range(match.range, in: output)
+            else { continue }
+            output.replaceSubrange(whole, with: replacement)
+        }
+        return output
     }
 }

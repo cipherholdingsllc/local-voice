@@ -543,9 +543,12 @@ public final class LocalFileTranscriptionProcessor:
             let start = Date()
             let raw = try router.transcribe(audioURL: chunk)
             let inference = Date().timeIntervalSince(start) * 1_000
-            var text = (config.spokenPunctuation?.value ?? false)
-                ? TextPostProcessor.process(raw)
-                : raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            var text = TextPostProcessor.processStructural(raw)
+            if config.spokenPunctuation?.value ?? false {
+                text = TextPostProcessor.process(text)
+            } else {
+                text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
             text = VocabularyLearner.shared.postProcess(
                 text,
                 configTerms: config.customVocabulary ?? []

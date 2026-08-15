@@ -22,7 +22,7 @@ public struct TextPostProcessor {
         ("\\bnew line\\b", "\n"),
         ("\\bnewline\\b", "\n"),
         ("\\bnew paragraph\\b", "\n\n"),
-    ]
+    ].sorted { $0.0.count > $1.0.count }
 
     public static func process(_ text: String) -> String {
         var result = text

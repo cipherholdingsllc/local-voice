@@ -23,7 +23,7 @@ public struct DictationCohesion {
         let valueWord =
             "(?:zero|oh|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|and|dollars?|bucks?|percent|cent|milliseconds?|ms|bb|blinds?)"
         let pattern =
-            "(?i)(?:\(valueWord)(?:-\(valueWord))?(?:\\s+\(valueWord)(?:-\(valueWord))?){0,7})\\s*[,.\\p{Pd}]*\\s*\\b(?:wait,?\\s*I mean|no,?\\s*I mean)\\b\\s*[,.\\p{Pd}]*\\s*"
+            "(?i)(?:\(valueWord)(?:-\(valueWord))?(?:\\s+\(valueWord)(?:-\(valueWord))?){0,7})\\s*[,.\\p{Pd}]*\\s*\\b(?:wait,?\\s*I mean(?:t)?|no,?\\s*I mean(?:t)?|sorry,?\\s*I mean(?:t)?)\\b\\s*[,.\\p{Pd}]*\\s*"
         guard let regex = try? NSRegularExpression(pattern: pattern) else {
             return text
         }
