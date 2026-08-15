@@ -35,6 +35,30 @@ final class VocabularyLearnerTests: XCTestCase {
         XCTAssertFalse(VocabularyLearner.isValidReplacementSource("of the"))
         XCTAssertTrue(VocabularyLearner.isValidReplacementSource("koon chan"))
     }
+
+    func testSeededReplacementRefreshesStaleTarget() {
+        let stale = [
+            VocabularyPostProcessor.Replacement(from: "the hijack", to: "the HJ"),
+        ]
+        let refreshed = VocabularyLearner.refreshedReplacements(existing: stale)
+        let hijack = refreshed.first { $0.from.caseInsensitiveCompare("the hijack") == .orderedSame }
+        XCTAssertEqual(hijack?.to, "HJ")
+        XCTAssertEqual(hijack?.origin, .seeded)
+    }
+
+    func testUserReplacementIsNotClobberedBySeed() {
+        let taught = [
+            VocabularyPostProcessor.Replacement(
+                from: "the hijack",
+                to: "the hijack seat",
+                origin: .user
+            ),
+        ]
+        let refreshed = VocabularyLearner.refreshedReplacements(existing: taught)
+        let hijack = refreshed.first { $0.from.caseInsensitiveCompare("the hijack") == .orderedSame }
+        XCTAssertEqual(hijack?.to, "the hijack seat")
+        XCTAssertEqual(hijack?.origin, .user)
+    }
 }
 
 final class VocabularyPostProcessorTests: XCTestCase {

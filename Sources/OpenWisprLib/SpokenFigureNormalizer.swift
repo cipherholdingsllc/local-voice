@@ -26,8 +26,42 @@ public enum SpokenFigureNormalizer {
     public static func apply(_ text: String) -> String {
         guard !text.isEmpty else { return text }
         var result = rewritePortDigits(text)
+        result = rewriteDigitAmounts(result)
         result = rewriteUnitAmounts(result)
         return result
+    }
+
+    /// STT sometimes emits "45 thousand dollars" instead of number-words.
+    /// Ordinary counts without a unit ("2 ideas") stay untouched.
+    private static func rewriteDigitAmounts(_ text: String) -> String {
+        let pattern =
+            #"(?i)\b(\d{1,7}(?:,\d{3})*)(?:\s+(thousand|million|billion))?\s+(dollars?|bucks?|percent|per\s+cent)\b"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
+        let range = NSRange(text.startIndex..., in: text)
+        let matches = regex.matches(in: text, range: range)
+        var output = text
+        for match in matches.reversed() {
+            guard match.numberOfRanges >= 4,
+                  let valueRange = Range(match.range(at: 1), in: output),
+                  let unitRange = Range(match.range(at: 3), in: output),
+                  let whole = Range(match.range(at: 0), in: output)
+            else { continue }
+            let raw = String(output[valueRange]).replacingOccurrences(of: ",", with: "")
+            guard let base = Int(raw) else { continue }
+            var value = base
+            if match.range(at: 2).location != NSNotFound,
+               let scaleRange = Range(match.range(at: 2), in: output) {
+                switch String(output[scaleRange]).lowercased() {
+                case "thousand": value = base * 1_000
+                case "million": value = base * 1_000_000
+                case "billion": value = base * 1_000_000_000
+                default: break
+                }
+            }
+            let unit = String(output[unitRange]).lowercased()
+            output.replaceSubrange(whole, with: format(value, unit: unit))
+        }
+        return output
     }
 
     private static func rewriteUnitAmounts(_ text: String) -> String {

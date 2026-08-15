@@ -204,6 +204,17 @@ final class SpokenFigureNormalizerTests: XCTestCase {
         )
     }
 
+    func testDigitAmountsWithUnits() {
+        XCTAssertEqual(
+            SpokenFigureNormalizer.apply("The budget is 45 thousand dollars with a 12 percent reserve"),
+            "The budget is $45,000 with a 12% reserve"
+        )
+        XCTAssertEqual(
+            SpokenFigureNormalizer.apply("I have 2 ideas in the ledger"),
+            "I have 2 ideas in the ledger"
+        )
+    }
+
     func testPostProcessBudgetCorrection() {
         let text = VocabularyLearner.shared.postProcess(
             "The budget is forty thousand dollars wait, I mean forty-five thousand dollars with a twelve percent reserve"

@@ -10,12 +10,19 @@ import Foundation
 /// there is no known "this is what STT actually says" mapping for them yet.
 public struct VocabularyPostProcessor {
     public struct Replacement: Codable, Equatable, Sendable {
+        public enum Origin: String, Codable, Sendable {
+            case seeded
+            case user
+        }
+
         public let from: String
         public let to: String
+        public let origin: Origin?
 
-        public init(from: String, to: String) {
+        public init(from: String, to: String, origin: Origin? = nil) {
             self.from = from
             self.to = to
+            self.origin = origin
         }
     }
 

@@ -41,8 +41,10 @@ public final class VocabularyLearner {
         queue.sync { mergedReplacementRulesLocked() }
     }
 
-    /// User rules win on the same `from` key so a bad operator seed can be
-    /// overridden from Dictionary without a rebuild.
+    /// Compiled operator/poker rules are the default. User-taught rules with
+    /// `origin == .user` still win on the same `from` key so Dictionary can
+    /// override a bad seed without a rebuild. Stale seeded `to` values are
+    /// refreshed on load by `refreshedReplacements`.
     private func mergedReplacementRulesLocked() -> [VocabularyPostProcessor.Replacement] {
         var byFrom: [String: VocabularyPostProcessor.Replacement] = [:]
         for rule in OperatorVocabulary.replacements + PokerVocabulary.replacements {
@@ -165,7 +167,7 @@ public final class VocabularyLearner {
         guard Self.isValidReplacementSource(source), Self.isValidManualTerm(target) else { return false }
         return queue.sync {
             store.replacements.removeAll { $0.from.caseInsensitiveCompare(source) == .orderedSame }
-            store.replacements.append(.init(from: source, to: target))
+            store.replacements.append(.init(from: source, to: target, origin: .user))
             persist()
             notifyChanged()
             return true
@@ -301,16 +303,31 @@ public final class VocabularyLearner {
             if !exists { next.manual.append(term) }
         }
         next.manual.sort()
+        next.replacements = refreshedReplacements(existing: next.replacements)
+        return next
+    }
+
+    /// Refresh compiled `to` values. Keep a stored rule only when the operator
+    /// explicitly taught it (`origin == .user`). Missing `origin` is treated as
+    /// a stale seed — that is how older JSON files are encoded.
+    static func refreshedReplacements(
+        existing: [VocabularyPostProcessor.Replacement]
+    ) -> [VocabularyPostProcessor.Replacement] {
+        var byFrom: [String: VocabularyPostProcessor.Replacement] = [:]
+        for rule in existing {
+            byFrom[rule.from.lowercased()] = rule
+        }
         for rule in OperatorVocabulary.replacements + PokerVocabulary.replacements {
             guard isValidReplacementSource(rule.from), isValidManualTerm(rule.to) else {
                 continue
             }
-            let exists = next.replacements.contains {
-                $0.from.caseInsensitiveCompare(rule.from) == .orderedSame
+            let key = rule.from.lowercased()
+            if let current = byFrom[key], current.origin == .user {
+                continue
             }
-            if !exists { next.replacements.append(rule) }
+            byFrom[key] = .init(from: rule.from, to: rule.to, origin: .seeded)
         }
-        return next
+        return Array(byFrom.values)
     }
 
     /// True when every word in the span is high-frequency English that must

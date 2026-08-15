@@ -120,6 +120,42 @@ final class DictationTeacherTests: XCTestCase {
         XCTAssertTrue(result.text.contains("flop"), result.text)
     }
 
+    func testUnderTheGunPlusTwoBecomesUTGPlusTwo() {
+        XCTAssertEqual(
+            VocabularyPostProcessor.apply(
+                "I open under the gun plus two",
+                replacements: PokerVocabulary.replacements
+            ).text,
+            "I open UTG+2"
+        )
+        XCTAssertEqual(
+            VocabularyPostProcessor.apply(
+                "you tee gee plus one three bet",
+                replacements: PokerVocabulary.replacements
+            ).text,
+            "UTG+1 3-bet"
+        )
+        XCTAssertEqual(
+            VocabularyPostProcessor.apply(
+                "utg plus 2 folds",
+                replacements: PokerVocabulary.replacements
+            ).text,
+            "UTG+2 folds"
+        )
+    }
+
+    func testJackNineSuitedIsAHandNotASeat() {
+        XCTAssertEqual(
+            PokerHandNormalizer.apply(
+                VocabularyPostProcessor.apply(
+                    "I had jack nine suited",
+                    replacements: PokerVocabulary.replacements
+                ).text
+            ),
+            "I had J9s"
+        )
+    }
+
     func testPokerDoesNotRewriteOrdinaryEnglish() {
         let foldTurn = VocabularyPostProcessor.apply(
             "I fold the turn and call the river",
