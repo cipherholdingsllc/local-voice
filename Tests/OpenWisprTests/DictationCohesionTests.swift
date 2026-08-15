@@ -47,6 +47,15 @@ final class DictationCohesionTests: XCTestCase {
         )
     }
 
+    func testWaitIMeanKeepsTheSentenceFrame() {
+        XCTAssertEqual(
+            DictationCohesion.polish(
+                "The budget is forty thousand dollars wait, I mean forty-five thousand dollars with a twelve percent reserve"
+            ),
+            "The budget is forty-five thousand dollars with a twelve percent reserve"
+        )
+    }
+
     func testInTheSurvivesCohesion() {
         let sentence =
             "Would it land in the real ledger as well as Laird getting a text?"
@@ -152,5 +161,50 @@ final class OperatorVocabularyTests: XCTestCase {
                 "common English replacement: \(rule.from)"
             )
         }
+    }
+
+    func testEliFiveBecomesELI5() {
+        let result = VocabularyPostProcessor.apply(
+            "give me an eli five of the PR",
+            replacements: OperatorVocabulary.replacements
+        )
+        XCTAssertEqual(result.text, "give me an ELI5 of the PR")
+    }
+}
+
+final class SpokenFigureNormalizerTests: XCTestCase {
+    func testMoneyAndPercent() {
+        XCTAssertEqual(
+            SpokenFigureNormalizer.apply(
+                "The budget is forty-five thousand dollars with a twelve percent reserve"
+            ),
+            "The budget is $45,000 with a 12% reserve"
+        )
+    }
+
+    func testMillisecondsAndPort() {
+        XCTAssertEqual(
+            SpokenFigureNormalizer.apply(
+                "retries after a five hundred millisecond timeout on port four three eight seven"
+            ),
+            "retries after a 500ms timeout on port 4387"
+        )
+    }
+
+    func testLeavesOrdinaryCountsAlone() {
+        XCTAssertEqual(
+            SpokenFigureNormalizer.apply("I have two ideas in the ledger"),
+            "I have two ideas in the ledger"
+        )
+    }
+
+    func testPostProcessBudgetCorrection() {
+        let text = VocabularyLearner.shared.postProcess(
+            "The budget is forty thousand dollars wait, I mean forty-five thousand dollars with a twelve percent reserve"
+        )
+        XCTAssertTrue(text.contains("$45,000"), text)
+        XCTAssertTrue(text.contains("12%"), text)
+        XCTAssertFalse(text.contains("forty thousand"), text)
+        XCTAssertTrue(text.contains("in the") || !text.lowercased().contains("kun chen"))
     }
 }

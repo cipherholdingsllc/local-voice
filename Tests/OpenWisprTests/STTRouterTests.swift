@@ -127,7 +127,7 @@ final class STTRouterTests: XCTestCase {
         XCTAssertEqual(router.activeExecutionRoute(), .localProcess)
     }
 
-    func testAutomaticEnglishUsesWhisperForPreviewChunks() {
+    func testAutomaticEnglishUsesParakeetForPreviewChunksWhenAccuracyFirst() {
         let parakeet = EngineStub(
             name: "parakeet",
             route: .localProcess
@@ -139,7 +139,27 @@ final class STTRouterTests: XCTestCase {
         let router = makeRouter(
             preferred: .auto,
             parakeet: parakeet,
-            whisper: whisper
+            whisper: whisper,
+            interactiveAccuracyFirst: true
+        )
+
+        XCTAssertTrue(router.chunkEngine() === parakeet)
+    }
+
+    func testAutomaticEnglishUsesWhisperForPreviewChunksWhenFastPath() {
+        let parakeet = EngineStub(
+            name: "parakeet",
+            route: .localProcess
+        )
+        let whisper = EngineStub(
+            name: "whisper-server",
+            route: .localLoopback
+        )
+        let router = makeRouter(
+            preferred: .auto,
+            parakeet: parakeet,
+            whisper: whisper,
+            interactiveAccuracyFirst: false
         )
 
         XCTAssertTrue(router.chunkEngine() === whisper)

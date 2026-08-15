@@ -93,7 +93,8 @@ public final class VocabularyLearner {
             cleaned,
             names: visibleSpellings
         )
-        return PokerHandNormalizer.apply(spelled)
+        let hands = PokerHandNormalizer.apply(spelled)
+        return SpokenFigureNormalizer.apply(hands)
     }
 
     /// Multi-word manual dictionary entries only. Single-word fuzzy boost

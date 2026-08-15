@@ -107,9 +107,9 @@ public final class STTRouter {
             }
         }
 
-        // Automatic English dictation uses Whisper for short utterances and
-        // preview chunks, while Parakeet remains the long-form engine. Warm
-        // both off the main thread so neither route pays a first-use penalty.
+        // Accuracy-first uses Parakeet for final takes and live preview.
+        // The fast path still warms Whisper for short utterances. Warm both
+        // off the main thread so neither route pays a first-use penalty.
         if parakeetWarmed, usesHybridInteractiveRoute() {
             if whisperCanRun() {
                 do {
@@ -201,7 +201,10 @@ public final class STTRouter {
     }
 
     public func chunkEngine() -> STTEngine? {
-        if usesHybridInteractiveRoute(), whisperCanRun() { return whisper }
+        if usesHybridInteractiveRoute() {
+            if interactiveAccuracyFirst, parakeetCanRun() { return parakeet }
+            if whisperCanRun() { return whisper }
+        }
         if shouldUseParakeet(), parakeetCanRun() { return parakeet }
         if whisperCanRun() { return whisper }
         return nil

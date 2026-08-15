@@ -8,7 +8,8 @@ import Foundation
 public struct DictationCohesion {
     public static func polish(_ text: String) -> String {
         guard !text.isEmpty else { return text }
-        var result = applySelfCorrections(text)
+        var result = retractCorrectedValues(text)
+        result = applySelfCorrections(result)
         result = stripFillers(result)
         result = collapseRepeatedWords(result)
         result = formatSpokenLists(result)
@@ -16,10 +17,24 @@ public struct DictationCohesion {
         return result
     }
 
-    /// "send it to Dylan scratch that send it to Andras" ? "send it to Andras"
+    /// "forty thousand dollars wait, I mean forty-five thousand dollars"
+    /// drops only the retracted value, not the sentence frame.
+    private static func retractCorrectedValues(_ text: String) -> String {
+        let valueWord =
+            "(?:zero|oh|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|and|dollars?|bucks?|percent|cent|milliseconds?|ms|bb|blinds?)"
+        let pattern =
+            "(?i)(?:\(valueWord)(?:-\(valueWord))?(?:\\s+\(valueWord)(?:-\(valueWord))?){0,7})\\s*[,.\\p{Pd}]*\\s*\\b(?:wait,?\\s*I mean|no,?\\s*I mean)\\b\\s*[,.\\p{Pd}]*\\s*"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return text
+        }
+        let range = NSRange(text.startIndex..., in: text)
+        return regex.stringByReplacingMatches(in: text, range: range, withTemplate: "")
+    }
+
+    /// "send it to Dylan scratch that send it to Andras" -> "send it to Andras"
     private static func applySelfCorrections(_ text: String) -> String {
         let pattern =
-            #"(?i)(?:^|[.!?]\s+|,\s+)?[^.!?]*?\b(?:scratch that|never mind|forget that|wait I mean|no I mean)\b[,.]?\s*"#
+            #"(?i)(?:^|[.!?]\s+|,\s+)?[^.!?]*?\b(?:scratch that|never mind|forget that)\b[,.]?\s*"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else {
             return text
         }
