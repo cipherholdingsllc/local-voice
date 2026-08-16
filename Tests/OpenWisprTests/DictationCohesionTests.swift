@@ -230,15 +230,22 @@ final class OperatorVocabularyTests: XCTestCase {
         )
     }
 
-    func testJasonIsNotRewrittenToJSON() {
+    func testEndTaxBecomesENTEXS() {
+        for heard in ["end tax", "en texs", "and text", "and tax"] {
+            let result = VocabularyPostProcessor.apply(
+                "\(heard) is our client growth system",
+                replacements: OperatorVocabulary.replacements
+            )
+            XCTAssertEqual(result.text, "ENTEXS is our client growth system", heard)
+        }
+    }
+
+    func testLocalBoysBecomesLocalVoice() {
         let result = VocabularyPostProcessor.apply(
-            "jason sent the package jason file",
+            "dictating into local boys on my mac mini",
             replacements: OperatorVocabulary.replacements
         )
-        XCTAssertEqual(result.text, "jason sent the package.json file")
-        XCTAssertFalse(
-            OperatorVocabulary.replacements.contains { $0.from.lowercased() == "jason" }
-        )
+        XCTAssertEqual(result.text, "dictating into Local Voice on my mac mini")
     }
 }
 

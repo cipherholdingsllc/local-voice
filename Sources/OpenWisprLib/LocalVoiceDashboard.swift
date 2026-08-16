@@ -724,8 +724,20 @@ private struct DictionaryView: View {
             statusMessage = "Enter a word or phrase first."
             return
         }
+        guard VocabularyLearner.isValidManualTerm(candidate) else {
+            statusMessage =
+                "Could not add \"\(candidate)\". Use 1–60 characters with at least one letter."
+            return
+        }
+        if VocabularyLearner.shared.manualTerms().contains(where: {
+            $0.caseInsensitiveCompare(candidate) == .orderedSame
+        }) {
+            statusMessage = "\"\(candidate)\" is already in your dictionary."
+            refresh()
+            return
+        }
         guard VocabularyLearner.shared.addTerm(candidate) else {
-            statusMessage = "Could not add \"\(candidate)\". Use 1–60 characters with at least one letter."
+            statusMessage = "Could not add \"\(candidate)\". Try again."
             return
         }
         newTerm = ""
