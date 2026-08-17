@@ -247,6 +247,37 @@ final class OperatorVocabularyTests: XCTestCase {
         )
         XCTAssertEqual(result.text, "dictating into Local Voice on my mac mini")
     }
+
+    func testGeneralModeDoesNotApplyPokerReplacements() {
+        let heard = "I use a see bet on the flop"
+        let general = VocabularyLearner.shared.postProcess(
+            heard,
+            pokerVocabularyEnabled: false
+        )
+        XCTAssertFalse(general.contains("c-bet"), general)
+        XCTAssertTrue(general.lowercased().contains("see bet"), general)
+
+        let poker = VocabularyLearner.shared.postProcess(
+            heard,
+            pokerVocabularyEnabled: true
+        )
+        XCTAssertTrue(poker.contains("c-bet"), poker)
+    }
+
+    func testGeneralModeSkipsPokerHandNormalizer() {
+        let heard = "I had pocket aces on jack nine suited"
+        let general = VocabularyLearner.shared.postProcess(
+            heard,
+            pokerVocabularyEnabled: false
+        )
+        XCTAssertTrue(general.lowercased().contains("jack nine"), general)
+
+        let poker = VocabularyLearner.shared.postProcess(
+            heard,
+            pokerVocabularyEnabled: true
+        )
+        XCTAssertTrue(poker.contains("J9s") || poker.contains("J9"), poker)
+    }
 }
 
 final class SpokenFigureNormalizerTests: XCTestCase {

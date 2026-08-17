@@ -155,6 +155,20 @@ final class VoiceContractTests: XCTestCase {
             ),
             .generalCommand
         )
+        XCTAssertEqual(
+            VoiceContractProfileID.localVoiceProfile(
+                bundleIdentifier: "com.cipherholdings.exploitpoker",
+                modeName: nil
+            ),
+            .pokerExploit
+        )
+        XCTAssertEqual(
+            VoiceContractProfileID.localVoiceProfile(
+                bundleIdentifier: nil,
+                modeName: "Exploit Poker"
+            ),
+            .pokerExploit
+        )
         XCTAssertTrue(
             VoiceContractProfileID.allCases
                 .filter(\.isGeneral)

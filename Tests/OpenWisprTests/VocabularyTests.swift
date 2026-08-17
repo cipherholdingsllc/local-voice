@@ -38,26 +38,30 @@ final class VocabularyLearnerTests: XCTestCase {
 
     func testSeededReplacementRefreshesStaleTarget() {
         let stale = [
-            VocabularyPostProcessor.Replacement(from: "the hijack", to: "the HJ"),
+            VocabularyPostProcessor.Replacement(from: "get hubs", to: "get hubs repo"),
         ]
         let refreshed = VocabularyLearner.refreshedReplacements(existing: stale)
-        let hijack = refreshed.first { $0.from.caseInsensitiveCompare("the hijack") == .orderedSame }
-        XCTAssertEqual(hijack?.to, "HJ")
-        XCTAssertEqual(hijack?.origin, .seeded)
+        let github = refreshed.first {
+            $0.from.caseInsensitiveCompare("get hubs") == .orderedSame
+        }
+        XCTAssertEqual(github?.to, "GitHub")
+        XCTAssertEqual(github?.origin, .seeded)
     }
 
     func testUserReplacementIsNotClobberedBySeed() {
         let taught = [
             VocabularyPostProcessor.Replacement(
-                from: "the hijack",
-                to: "the hijack seat",
+                from: "get hubs",
+                to: "get hubs repo",
                 origin: .user
             ),
         ]
         let refreshed = VocabularyLearner.refreshedReplacements(existing: taught)
-        let hijack = refreshed.first { $0.from.caseInsensitiveCompare("the hijack") == .orderedSame }
-        XCTAssertEqual(hijack?.to, "the hijack seat")
-        XCTAssertEqual(hijack?.origin, .user)
+        let github = refreshed.first {
+            $0.from.caseInsensitiveCompare("get hubs") == .orderedSame
+        }
+        XCTAssertEqual(github?.to, "get hubs repo")
+        XCTAssertEqual(github?.origin, .user)
     }
 }
 

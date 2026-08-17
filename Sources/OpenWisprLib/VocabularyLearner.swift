@@ -33,26 +33,54 @@ public final class VocabularyLearner {
         queue.sync { store.manual.sorted() }
     }
 
-    public func replacementRules() -> [VocabularyPostProcessor.Replacement] {
-        queue.sync { mergedReplacementRulesLocked() }
+    public func replacementRules(
+        pokerVocabularyEnabled: Bool = false
+    ) -> [VocabularyPostProcessor.Replacement] {
+        queue.sync {
+            mergedReplacementRulesLocked(
+                pokerVocabularyEnabled: pokerVocabularyEnabled
+            )
+        }
     }
 
-    private func mergedReplacementRules() -> [VocabularyPostProcessor.Replacement] {
-        queue.sync { mergedReplacementRulesLocked() }
+    private func mergedReplacementRules(
+        pokerVocabularyEnabled: Bool = false
+    ) -> [VocabularyPostProcessor.Replacement] {
+        queue.sync {
+            mergedReplacementRulesLocked(
+                pokerVocabularyEnabled: pokerVocabularyEnabled
+            )
+        }
     }
 
-    /// Compiled operator/poker rules are the default. User-taught rules with
+    private static let pokerReplacementSources: Set<String> = {
+        Set(PokerVocabulary.replacements.map { $0.from.lowercased() })
+    }()
+
+    /// Compiled operator rules are always on. Poker rules apply only when the
+    /// active capture profile is `poker.exploit`. User-taught rules with
     /// `origin == .user` still win on the same `from` key so Dictionary can
     /// override a bad seed without a rebuild. Stale seeded `to` values are
     /// refreshed on load by `refreshedReplacements`.
-    private func mergedReplacementRulesLocked() -> [VocabularyPostProcessor.Replacement] {
+    private func mergedReplacementRulesLocked(
+        pokerVocabularyEnabled: Bool = false
+    ) -> [VocabularyPostProcessor.Replacement] {
         var byFrom: [String: VocabularyPostProcessor.Replacement] = [:]
-        for rule in OperatorVocabulary.replacements + PokerVocabulary.replacements {
+        var compiled = OperatorVocabulary.replacements
+        if pokerVocabularyEnabled {
+            compiled += PokerVocabulary.replacements
+        }
+        for rule in compiled {
             guard Self.isValidReplacementSource(rule.from) else { continue }
             byFrom[rule.from.lowercased()] = rule
         }
         for rule in store.replacements {
-            byFrom[rule.from.lowercased()] = rule
+            let key = rule.from.lowercased()
+            if !pokerVocabularyEnabled,
+               Self.pokerReplacementSources.contains(key) {
+                continue
+            }
+            byFrom[key] = rule
         }
         return Array(byFrom.values)
     }
@@ -82,12 +110,18 @@ public final class VocabularyLearner {
     public func postProcess(
         _ text: String,
         configTerms: [String] = [],
-        visibleSpellings: [String] = []
+        visibleSpellings: [String] = [],
+        pokerVocabularyEnabled: Bool = false
     ) -> String {
-        let boost = safeBoostTerms(configTerms: configTerms)
+        let boost = safeBoostTerms(
+            configTerms: configTerms,
+            pokerVocabularyEnabled: pokerVocabularyEnabled
+        )
         let applied = VocabularyPostProcessor.apply(
             text,
-            replacements: mergedReplacementRules(),
+            replacements: mergedReplacementRules(
+                pokerVocabularyEnabled: pokerVocabularyEnabled
+            ),
             boostTerms: boost
         )
         let cleaned = DictationCohesion.polish(applied.text)
@@ -95,26 +129,40 @@ public final class VocabularyLearner {
             cleaned,
             names: visibleSpellings
         )
-        let hands = PokerHandNormalizer.apply(spelled)
-        return SpokenFigureNormalizer.apply(hands)
+        let normalized = pokerVocabularyEnabled
+            ? PokerHandNormalizer.apply(spelled)
+            : spelled
+        return SpokenFigureNormalizer.apply(normalized)
     }
 
     /// Multi-word manual dictionary entries only. Single-word fuzzy boost
     /// corrupts common English ("man" -> "Kun"); single-word fixes use
     /// explicit `replacements` instead.
-    func safeBoostTerms(configTerms: [String] = []) -> [String] {
+    func safeBoostTerms(
+        configTerms: [String] = [],
+        pokerVocabularyEnabled: Bool = false
+    ) -> [String] {
         queue.sync {
             mergedBoostTerms(
                 manual: store.manual,
-                configTerms: configTerms
+                configTerms: configTerms,
+                pokerVocabularyEnabled: pokerVocabularyEnabled
             )
         }
     }
 
-    private func mergedBoostTerms(manual: [String], configTerms: [String]) -> [String] {
+    private func mergedBoostTerms(
+        manual: [String],
+        configTerms: [String],
+        pokerVocabularyEnabled: Bool = false
+    ) -> [String] {
         var seen = Set<String>()
         var out: [String] = []
-        for term in OperatorVocabulary.terms + PokerVocabulary.terms + manual + configTerms where term.contains(" ") {
+        var seeded = OperatorVocabulary.terms
+        if pokerVocabularyEnabled {
+            seeded += PokerVocabulary.terms
+        }
+        for term in seeded + manual + configTerms where term.contains(" ") {
             let key = term.lowercased()
             guard !key.isEmpty, !seen.contains(key) else { continue }
             seen.insert(key)
@@ -296,7 +344,7 @@ public final class VocabularyLearner {
 
     private static func seedOperatorTerms(_ store: Store) -> Store {
         var next = store
-        for term in OperatorVocabulary.terms + PokerVocabulary.terms where isValidManualTerm(term) {
+        for term in OperatorVocabulary.terms where isValidManualTerm(term) {
             let exists = next.manual.contains {
                 $0.caseInsensitiveCompare(term) == .orderedSame
             }
@@ -317,7 +365,7 @@ public final class VocabularyLearner {
         for rule in existing {
             byFrom[rule.from.lowercased()] = rule
         }
-        for rule in OperatorVocabulary.replacements + PokerVocabulary.replacements {
+        for rule in OperatorVocabulary.replacements {
             guard isValidReplacementSource(rule.from), isValidManualTerm(rule.to) else {
                 continue
             }

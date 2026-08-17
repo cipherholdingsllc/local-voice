@@ -7,6 +7,7 @@ public enum VoiceContractProfileID: String, Codable, CaseIterable, Sendable {
     case generalProfessional = "general.professional"
     case generalTechnical = "general.technical"
     case generalCommand = "general.command"
+    case generalLongForm = "general.long_form"
     case pokerExploit = "poker.exploit"
 
     public var maximumDurationMilliseconds: Int {
@@ -16,6 +17,8 @@ public enum VoiceContractProfileID: String, Codable, CaseIterable, Sendable {
         case .generalDefault, .generalMessage, .generalProfessional,
              .generalTechnical:
             return 600_000
+        case .generalLongForm:
+            return 3_600_000
         }
     }
 
@@ -27,6 +30,21 @@ public enum VoiceContractProfileID: String, Codable, CaseIterable, Sendable {
         bundleIdentifier: String?,
         modeName: String?
     ) -> VoiceContractProfileID {
+        if let bundle = bundleIdentifier?.lowercased() {
+            if bundle.contains("exploitpoker")
+                || bundle.contains("exploit-poker")
+                || bundle.contains("pokergod") {
+                return .pokerExploit
+            }
+        }
+
+        switch modeName?.lowercased() {
+        case "exploit poker", "poker", "pokergod":
+            return .pokerExploit
+        default:
+            break
+        }
+
         switch bundleIdentifier {
         case "com.tinyspeck.slackmacgap":
             return .generalMessage
@@ -310,10 +328,13 @@ public enum LocalVoiceContract {
         guard profileId.isGeneral else {
             throw VoiceContractError.productProfileMismatch
         }
+        let maximumAudioBytes = profileId == .generalLongForm
+            ? 134_217_728
+            : 33_554_432
         guard audio.byteLength >= 44,
-              audio.byteLength <= 33_554_432,
+              audio.byteLength <= maximumAudioBytes,
               audio.durationMs >= 1,
-              audio.durationMs <= 600_000,
+              audio.durationMs <= profileId.maximumDurationMilliseconds,
               maximumDurationMilliseconds >= 1_000,
               maximumDurationMilliseconds <= profileId.maximumDurationMilliseconds,
               audio.durationMs <= maximumDurationMilliseconds else {

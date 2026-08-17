@@ -846,7 +846,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 let cleaned = VocabularyLearner.shared.postProcess(
                     self.streamingPartial,
                     configTerms: self.config.customVocabulary ?? [],
-                    visibleSpellings: self.captureVisibleSpellings
+                    visibleSpellings: self.captureVisibleSpellings,
+                    pokerVocabularyEnabled: self.captureProfileID == .pokerExploit
                 )
                 self.streamingPartial = cleaned
                 self.pillOverlay.updatePartial(self.streamingPartial)
@@ -938,7 +939,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 text = VocabularyLearner.shared.postProcess(
                     taught.text,
                     configTerms: self.config.customVocabulary ?? [],
-                    visibleSpellings: visibleSpellings
+                    visibleSpellings: visibleSpellings,
+                    pokerVocabularyEnabled: profileID == .pokerExploit
                 )
 
                 LatencyInstrumentation.shared.mark("llm")
@@ -1167,7 +1169,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 text = VocabularyLearner.shared.postProcess(
                     text,
-                    configTerms: self.config.customVocabulary ?? []
+                    configTerms: self.config.customVocabulary ?? [],
+                    pokerVocabularyEnabled: self.captureProfileID == .pokerExploit
                 )
                 DispatchQueue.main.async {
                     if !text.isEmpty {
