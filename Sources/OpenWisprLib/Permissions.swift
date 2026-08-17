@@ -38,6 +38,10 @@ public struct LocalVoicePermissionSnapshot: Equatable, Sendable {
         }
         return nil
     }
+
+    public func runtimeReady(hotkeyMonitorReady: Bool) -> Bool {
+        dictationReady && hotkeyMonitorReady
+    }
 }
 
 public struct Permissions {
