@@ -10,6 +10,7 @@ final class CGEventHotkeyManager {
     private let activationMode: HotkeyActivationMode
     private var onKeyDown: (() -> Void)?
     private var onKeyUp: (() -> Void)?
+    private var onKeyCancel: (() -> Void)?
     var onLockChanged: ((Bool) -> Void)?
     private(set) var isLockEngaged = false
 
@@ -32,10 +33,15 @@ final class CGEventHotkeyManager {
     }
 
     @discardableResult
-    func start(onKeyDown: @escaping () -> Void, onKeyUp: @escaping () -> Void) -> Bool {
+    func start(
+        onKeyDown: @escaping () -> Void,
+        onKeyUp: @escaping () -> Void,
+        onKeyCancel: (() -> Void)? = nil
+    ) -> Bool {
         stop()
         self.onKeyDown = onKeyDown
         self.onKeyUp = onKeyUp
+        self.onKeyCancel = onKeyCancel
 
         guard CGPreflightListenEventAccess() else {
             fputs(
@@ -97,6 +103,7 @@ final class CGEventHotkeyManager {
         keyHeld = false
         holdConfirmed = false
         isLockEngaged = false
+        onKeyCancel = nil
     }
 
     private static let eventCallback: CGEventTapCallBack = { _, type, event, userInfo in
@@ -107,6 +114,7 @@ final class CGEventHotkeyManager {
             if let tap = manager.eventTap {
                 CGEvent.tapEnable(tap: tap, enable: true)
             }
+            manager.reconcileAfterTapReset()
             return Unmanaged.passUnretained(event)
         }
 
@@ -120,7 +128,7 @@ final class CGEventHotkeyManager {
             guard UInt16(event.getIntegerValueField(.keyboardEventKeycode)) == keyCode else { return }
             guard modifiersMatch(event) else { return }
 
-            let isDown = modifierFlagIsDown(event, keyCode: keyCode)
+            let isDown = Self.modifierFlagIsDown(flags: event.flags, keyCode: keyCode)
             guard isDown != modifierPhysicallyDown else { return }
             modifierPhysicallyDown = isDown
 
@@ -259,8 +267,39 @@ final class CGEventHotkeyManager {
         }
     }
 
-    private func modifierFlagIsDown(_ event: CGEvent, keyCode: UInt16) -> Bool {
-        let flags = event.flags
+    /// After macOS disables the tap, the next fn up/down can be lost.
+    /// Reconcile against live modifier flags so AppDelegate cannot stay stuck.
+    private func reconcileAfterTapReset() {
+        holdPendingWork?.cancel()
+        let physicallyDown: Bool
+        if isModifierOnlyKey(keyCode) {
+            physicallyDown = Self.modifierFlagIsDown(
+                flags: CGEventSource.flagsState(.combinedSessionState),
+                keyCode: keyCode
+            )
+        } else {
+            physicallyDown = keyHeld
+        }
+        modifierPhysicallyDown = physicallyDown
+        switch HotkeyHoldReconcile.action(
+            keyHeld: keyHeld,
+            physicallyDown: physicallyDown,
+            lockEngaged: isLockEngaged
+        ) {
+        case .none:
+            break
+        case .startHold:
+            keyHeld = true
+            holdConfirmed = true
+            onKeyDown?()
+        case .endHold:
+            keyHeld = false
+            holdConfirmed = false
+            onKeyUp?()
+        }
+    }
+
+    static func modifierFlagIsDown(flags: CGEventFlags, keyCode: UInt16) -> Bool {
         switch keyCode {
         case 63: return flags.contains(.maskSecondaryFn)
         case 54, 55: return flags.contains(.maskCommand)
