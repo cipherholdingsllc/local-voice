@@ -278,6 +278,15 @@ final class OperatorVocabularyTests: XCTestCase {
         )
         XCTAssertTrue(poker.contains("J9s") || poker.contains("J9"), poker)
     }
+
+    func testPostProcessDoesNotExpandCipherToCipherLab() {
+        let text = VocabularyLearner.shared.postProcess(
+            "Yo Cipher",
+            pokerVocabularyEnabled: false
+        )
+        XCTAssertEqual(text, "Yo Cipher")
+        XCTAssertFalse(text.contains("Cipher Lab"), text)
+    }
 }
 
 final class SpokenFigureNormalizerTests: XCTestCase {
