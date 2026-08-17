@@ -297,21 +297,30 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func recoverAfterSystemWake() {
-        guard isReady, !isPressed else { return }
+        guard isReady else { return }
 
-        // Core Audio and local model processes can become stale across sleep.
-        // Re-arm capture immediately, then restore warm-model latency away
-        // from the main thread.
+        // A missed fn key-up leaves isPressed true, which used to skip this
+        // entire recovery and swallow every later hold. Cancel the stale
+        // session, then recreate the event tap. reload() tears down audio, so
+        // it must not run against a live take.
+        if isPressed {
+            handleRecordingCancel()
+        }
+        isLockMode = false
+
         recorder.reload()
+        if !shortcutCaptureActive {
+            startListening()
+        }
 
         guard config.keepModelWarm?.value ?? true,
               let router = sttRouter else {
-            print("Wake recovery: audio re-armed")
+            print("Wake recovery: hotkey and audio re-armed")
             return
         }
         DispatchQueue.global(qos: .userInitiated).async {
             router.warmup()
-            print("Wake recovery: audio re-armed; local model warm")
+            print("Wake recovery: hotkey and audio re-armed; local model warm")
         }
     }
 
@@ -680,6 +689,15 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         // Do not also require hotkeyMonitorReady — that flag is cleared during
         // startListening() restarts and would silently swallow live Fn presses.
         guard isReady, !hotkeyManagers.isEmpty else { return }
+
+        if isPressed, !recorder.isRecording {
+            fputs(
+                "Local Voice: clearing stale fn hold; recorder was not running\n",
+                stderr
+            )
+            isPressed = false
+            isLockMode = false
+        }
 
         let isToggle = config.toggleMode?.value ?? false
 
