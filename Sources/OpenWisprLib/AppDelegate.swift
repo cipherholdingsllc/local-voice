@@ -843,19 +843,24 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     existing: self.streamingPartial,
                     incoming: text
                 )
-                let cleaned = VocabularyLearner.shared.postProcess(
-                    self.streamingPartial,
-                    configTerms: self.config.customVocabulary ?? [],
-                    visibleSpellings: self.captureVisibleSpellings,
-                    pokerVocabularyEnabled: self.captureProfileID == .pokerExploit
-                )
-                self.streamingPartial = cleaned
-                self.pillOverlay.updatePartial(self.streamingPartial)
+                // Merge the raw STT buffer. Polish is display-only; writing it
+                // back made the next chunk miss overlap and duplicate `itThere`.
+                let preview = self.previewDictation(self.streamingPartial)
+                self.pillOverlay.updatePartial(preview)
                 if !self.dashboardCaptureMode {
-                    self.liveComposer.updatePartial(self.streamingPartial)
+                    self.liveComposer.updatePartial(preview)
                 }
             }
         }
+    }
+
+    private func previewDictation(_ raw: String) -> String {
+        VocabularyLearner.shared.postProcess(
+            raw,
+            configTerms: config.customVocabulary ?? [],
+            visibleSpellings: captureVisibleSpellings,
+            pokerVocabularyEnabled: captureProfileID == .pokerExploit
+        )
     }
 
     private func handleRecordingStop(reason: RecordingStopReason = .user) {
@@ -898,7 +903,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             : "Finishing locally with \(sttRouter.activeEngineName())"
         LocalVoiceStore.shared.setState(.transcribing, detail: finishingDetail)
         if config.showCursorHUD?.value ?? true {
-            pillOverlay.show(state: .transcribing, partialText: streamingPartial.isEmpty ? nil : streamingPartial)
+            pillOverlay.show(
+                state: .transcribing,
+                partialText: streamingPartial.isEmpty ? nil : previewDictation(streamingPartial)
+            )
         }
 
         let requestID = captureRequestID

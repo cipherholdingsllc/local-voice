@@ -9,16 +9,21 @@ import Foundation
 /// Invariants:
 /// - Real `?` / `!` sentence ends are left alone.
 /// - Isolated `.` after an incomplete tail may become a join mark.
-/// - Dots that belong to `...` are never treated as terminators.
+/// - Dots that belong to `...` or U+2026 are never treated as terminators.
+/// - Bare preposition + determiner (`to The White House`, `inThe`) is a noun
+///   phrase, not a pause join.
 /// - Output never contains U+2014.
 public enum PauseContinuation {
     public static let enDash = "\u{2013}"
     public static let emDash = "\u{2014}"
+    public static let unicodeEllipsis = "\u{2026}"
 
     private static let continuationStarters: [String] = [
-        "There", "Then", "The", "This", "That", "These", "Those",
-        "They", "We", "You", "He", "She", "So", "But", "And",
-        "Because", "If", "When", "While", "Although", "A", "An",
+        "Meanwhile", "Although", "Because", "However", "Actually",
+        "Anyway", "There", "Then", "This", "That", "These", "Those",
+        "They", "Also", "Still", "Plus", "Yet", "The", "And",
+        "When", "While", "We", "You", "He", "She", "So", "But",
+        "If", "A", "An",
     ]
 
     private static let glueLeftTokens: Set<String> = [
@@ -38,6 +43,8 @@ public enum PauseContinuation {
         "about", "think", "say", "said", "mean", "know", "put",
     ]
 
+    private static let determiners: Set<String> = ["the", "a", "an"]
+
     private static let gluedContinuationRegex: NSRegularExpression? = {
         let starters = continuationStarters
             .sorted { $0.count > $1.count }
@@ -56,13 +63,11 @@ public enum PauseContinuation {
 
     public static func repair(_ text: String) -> String {
         guard !text.isEmpty else { return text }
-        var result = text.replacingOccurrences(of: emDash, with: enDash)
+        var result = sanitizeInsertedText(text)
         result = splitGluedContinuations(result)
         result = joinFalseSentenceBreaks(result)
         result = joinMidSentenceCapitals(result)
-        result = normalizeEnDashSpacing(result)
-        assertNoEmDash(result)
-        return result
+        return sanitizeInsertedText(result)
     }
 
     public static func joinMark(left: String) -> String {
@@ -70,6 +75,27 @@ public enum PauseContinuation {
         if isTrailingOff(tail) { return "... " }
         if isContrast(tail) { return " \(enDash) " }
         return ", "
+    }
+
+    /// Last-mile lint for anything that can reach the insert path, including
+    /// optional Ollama rewrite. Converts em-dash and unicode ellipsis; never
+    /// emits U+2014.
+    public static func sanitizeInsertedText(_ text: String) -> String {
+        var result = text.replacingOccurrences(of: emDash, with: enDash)
+        result = result.replacingOccurrences(of: unicodeEllipsis, with: "...")
+        result = result.replacingOccurrences(
+            of: #"(?<=\S)[ \t]+---+[ \t]+(?=\S)"#,
+            with: " \(enDash) ",
+            options: .regularExpression
+        )
+        result = result.replacingOccurrences(
+            of: #"(?<=\S)[ \t]+--[ \t]+(?=\S)"#,
+            with: " \(enDash) ",
+            options: .regularExpression
+        )
+        result = normalizeEnDashSpacing(result)
+        assertNoEmDash(result)
+        return result
     }
 
     static func normalizeEnDashSpacing(_ text: String) -> String {
@@ -82,6 +108,25 @@ public enum PauseContinuation {
         .replacingOccurrences(of: #"[ \t]{2,}"#, with: " ", options: .regularExpression)
         .replacingOccurrences(of: #"\s+$"#, with: "", options: .regularExpression)
         .replacingOccurrences(of: #"^\s+"#, with: "", options: .regularExpression)
+    }
+
+    /// CamelCase STT glue (`itThere`). Nil for product names (`iPhone`, `CipherLab`).
+    static func splitCamelGlue(_ token: String) -> (String, String)? {
+        let chars = Array(token)
+        guard chars.count >= 3 else { return nil }
+        for i in 1..<chars.count {
+            let prev = chars[i - 1]
+            let cur = chars[i]
+            guard prev.isLetter, prev.isLowercase, cur.isLetter, cur.isUppercase else {
+                continue
+            }
+            let left = String(chars[0..<i])
+            let right = String(chars[i...])
+            guard glueLeftTokens.contains(left.lowercased()) else { return nil }
+            guard isContinuationStarter(right) else { return nil }
+            return (left, right)
+        }
+        return nil
     }
 
     private static func splitGluedContinuations(_ text: String) -> String {
@@ -101,7 +146,8 @@ public enum PauseContinuation {
             guard glueLeftTokens.contains(leftToken.lowercased()) else { continue }
             guard isContinuationStarter(starter) else { continue }
             let prefix = String(result[..<leftRange.lowerBound])
-            let mark = joinMark(left: prefix + leftToken)
+            let left = prefix + leftToken
+            let mark = clauseJoinMark(left: left, starter: starter) ?? " "
             result.replaceSubrange(
                 leftRange.lowerBound..<rightRange.upperBound,
                 with: leftToken + mark + starter.lowercased()
@@ -127,13 +173,18 @@ public enum PauseContinuation {
             if isEllipsisDot(in: result, at: punctRange) { continue }
             let left = String(result[leftRange])
             let word = String(result[wordRange])
-            guard isIncomplete(left) else { continue }
             guard isContinuationStarter(word) else { continue }
-            let mark = joinMark(left: left)
-            result.replaceSubrange(
-                fullRange,
-                with: left.trimmingCharacters(in: .whitespaces) + mark + word.lowercased()
-            )
+            let trimmed = left.trimmingCharacters(in: .whitespaces)
+            if let mark = clauseJoinMark(left: left, starter: word) {
+                result.replaceSubrange(
+                    fullRange,
+                    with: trimmed + mark + word.lowercased()
+                )
+                continue
+            }
+            if isDeterminer(word), isPrepositionalTail(left) {
+                result.replaceSubrange(fullRange, with: trimmed + " " + word)
+            }
         }
         return result
     }
@@ -155,17 +206,34 @@ public enum PauseContinuation {
             let prefix = String(result[..<fullRange.lowerBound])
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if prefix.hasSuffix("?") || prefix.hasSuffix("!") { continue }
-            guard isIncomplete(prefix) else { continue }
             if prefix.hasSuffix("...")
                 || prefix.hasSuffix(",")
                 || prefix.hasSuffix(enDash) {
-                result.replaceSubrange(wordRange, with: word.lowercased())
+                if clauseJoinMark(left: prefix, starter: word) != nil {
+                    result.replaceSubrange(wordRange, with: word.lowercased())
+                }
                 continue
             }
-            let mark = joinMark(left: prefix)
-            result.replaceSubrange(fullRange, with: mark + word.lowercased())
+            if let mark = clauseJoinMark(left: prefix, starter: word) {
+                result.replaceSubrange(fullRange, with: mark + word.lowercased())
+            }
         }
         return result
+    }
+
+    /// Join mark when this is a pause continuation. Nil means do not rewrite
+    /// the break (complete sentence, or a determiner starting a noun phrase).
+    private static func clauseJoinMark(left: String, starter: String) -> String? {
+        guard isContinuationStarter(starter) else { return nil }
+        let words = lastWords(left, 4)
+        if isDeterminer(starter) {
+            if isTrailingOff(words) || isContrast(words) {
+                return joinMark(left: left)
+            }
+            return nil
+        }
+        guard isIncomplete(left) else { return nil }
+        return joinMark(left: left)
     }
 
     private static func isEllipsisDot(in text: String, at range: Range<String.Index>) -> Bool {
@@ -182,6 +250,15 @@ public enum PauseContinuation {
 
     private static func isContinuationStarter(_ word: String) -> Bool {
         continuationStarters.contains { $0.caseInsensitiveCompare(word) == .orderedSame }
+    }
+
+    private static func isDeterminer(_ word: String) -> Bool {
+        determiners.contains(word.lowercased())
+    }
+
+    private static func isPrepositionalTail(_ left: String) -> Bool {
+        guard let last = lastWords(left, 1).last else { return false }
+        return functionEndings.contains(last)
     }
 
     private static func isIncomplete(_ left: String) -> Bool {
@@ -226,5 +303,6 @@ public enum PauseContinuation {
         #if DEBUG
         assert(!text.contains(emDash), "PauseContinuation must never emit U+2014")
         #endif
+        _ = text
     }
 }

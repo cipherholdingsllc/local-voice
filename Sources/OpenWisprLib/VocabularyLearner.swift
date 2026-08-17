@@ -132,7 +132,9 @@ public final class VocabularyLearner {
         let normalized = pokerVocabularyEnabled
             ? PokerHandNormalizer.apply(spelled)
             : spelled
-        return SpokenFigureNormalizer.apply(normalized)
+        return PauseContinuation.sanitizeInsertedText(
+            SpokenFigureNormalizer.apply(normalized)
+        )
     }
 
     /// Multi-word manual dictionary entries only. Single-word fuzzy boost

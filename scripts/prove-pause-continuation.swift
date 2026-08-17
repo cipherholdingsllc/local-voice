@@ -83,6 +83,57 @@ enum PauseContinuationProve {
             "recapitalize after ellipsis"
         )
 
+        let unicodeEllipsis = DictationCohesion.polish(
+            "think about it\u{2026} There should be more"
+        )
+        expect(unicodeEllipsis.contains("it... there"), "unicode ellipsis: \(unicodeEllipsis)")
+        expect(!unicodeEllipsis.contains("\u{2026}"), "unicode ellipsis survived")
+
+        expectEqual(
+            DictationCohesion.polish("Would it land inThe real ledger"),
+            "Would it land in the real ledger",
+            "inThe noun phrase"
+        )
+        expectEqual(
+            DictationCohesion.polish("I sent it to The White House"),
+            "I sent it to The White House",
+            "The White House"
+        )
+        let trailingThe = DictationCohesion.polish(
+            "Yeah, I mean if you think about it. The next piece is timing."
+        )
+        expect(trailingThe.contains("it... the next"), "trailing The: \(trailingThe)")
+
+        expectEqual(
+            PauseContinuation.sanitizeInsertedText("alpha -- beta"),
+            "alpha \u{2013} beta",
+            "spaced double hyphen"
+        )
+        expectEqual(
+            PauseContinuation.sanitizeInsertedText("run --help please"),
+            "run --help please",
+            "flag --help"
+        )
+
+        let camel = StreamingTranscriptAssembler.merge(
+            existing: "Yeah I mean if you think about it",
+            incoming: "itThere should be a little bit more"
+        )
+        expect(!camel.contains("itThere"), "camel merge glued: \(camel)")
+        expect(!camel.contains("it it"), "camel merge dup: \(camel)")
+        let camelPolished = DictationCohesion.polish(camel)
+        expect(
+            camelPolished.lowercased().contains("it... there"),
+            "camel polish: \(camelPolished)"
+        )
+
+        let rawPreview = "Yeah I mean if you think about itThere"
+        let rightMerge = StreamingTranscriptAssembler.merge(
+            existing: rawPreview,
+            incoming: "There should be a little bit more"
+        )
+        expect(!rightMerge.contains("itThere"), "raw merge kept glue: \(rightMerge)")
+
         let dash = TextPostProcessor.process("one dash two")
         expectEqual(dash, "one \u{2013} two", "spoken dash")
         expect(!dash.contains("\u{2014}"), "spoken dash em")
