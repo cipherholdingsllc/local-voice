@@ -194,4 +194,14 @@ final class VocabularyPostProcessorTests: XCTestCase {
         XCTAssertTrue(result.corrections.isEmpty)
         XCTAssertEqual(result.text, "Would it land in the real ledger")
     }
+
+    func testFuzzyBoostDoesNotExpandPartialMultiWordMatch() {
+        let result = VocabularyPostProcessor.apply(
+            "Yo Cipher",
+            replacements: [],
+            boostTerms: ["Cipher Lab"]
+        )
+        XCTAssertEqual(result.text, "Yo Cipher")
+        XCTAssertTrue(result.corrections.isEmpty)
+    }
 }

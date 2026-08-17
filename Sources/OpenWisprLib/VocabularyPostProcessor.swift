@@ -115,6 +115,9 @@ public struct VocabularyPostProcessor {
     }
 
     private static func closestGluedToken(in tokens: [String], target: String) -> String? {
+        let targetWords = target
+            .components(separatedBy: .whitespaces)
+            .filter { !$0.isEmpty }
         let normalizedTarget = target
             .lowercased()
             .components(separatedBy: CharacterSet.alphanumerics.inverted)
@@ -122,7 +125,14 @@ public struct VocabularyPostProcessor {
         let maxDistance = min(3, max(1, normalizedTarget.count / 3))
         var best: (token: String, distance: Int)?
         for token in tokens {
-            let distance = levenshtein(token.lowercased(), normalizedTarget)
+            let tokenLower = token.lowercased()
+            // A lone spoken word that already matches part of the target must
+            // not fuzzy-expand to the full multi-word phrase (e.g. "Cipher"
+            // -> "Cipher Lab" via glued "cipherlab" comparison).
+            if targetWords.contains(where: { $0.lowercased() == tokenLower }) {
+                continue
+            }
+            let distance = levenshtein(tokenLower, normalizedTarget)
             guard distance > 0, distance <= maxDistance else { continue }
             if let best, distance >= best.distance { continue }
             best = (token, distance)
