@@ -37,6 +37,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     private var permissionRepairOpenedCapability:
         LocalVoicePermissionCapability?
     private var wakeObserver: NSObjectProtocol?
+    private var frontmostObserver: NSObjectProtocol?
+    private var lastFrontmostBundleID: String?
     private var vocabularyObserver: NSObjectProtocol?
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
@@ -47,6 +49,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         statusBar = StatusBarController()
         recorder = AudioRecorder()
         startWakeMonitoring()
+        startFrontmostMonitoring()
         showDashboard()
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -281,6 +284,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
             self.wakeObserver = nil
         }
+        if let frontmostObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(frontmostObserver)
+            self.frontmostObserver = nil
+        }
         for manager in hotkeyManagers { manager.stop() }
         hotkeyManagers = []
         sttRouter?.shutdown(preserveParakeet: false)
@@ -296,22 +303,66 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func recoverAfterSystemWake() {
-        guard isReady, !isPressed else { return }
+    private func startFrontmostMonitoring() {
+        lastFrontmostBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        frontmostObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            self?.surviveFrontmostChange(note)
+        }
+    }
 
-        // Core Audio and local model processes can become stale across sleep.
-        // Re-arm capture immediately, then restore warm-model latency away
-        // from the main thread.
+    /// Cursor installs a session tap when it becomes frontmost and macOS
+    /// disables ours. Re-enable in place — do not call startListening().
+    private func surviveFrontmostChange(_ note: Notification) {
+        guard isReady, !shortcutCaptureActive else { return }
+        let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+        let current = app?.bundleIdentifier
+            ?? NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let previous = lastFrontmostBundleID
+        lastFrontmostBundleID = current
+        guard HotkeyTapSurvival.shouldRearmOnFrontmostChange(
+            previousBundleID: previous,
+            currentBundleID: current
+        ) else { return }
+        for manager in hotkeyManagers {
+            manager.surviveFrontmostChange(bundleID: current)
+        }
+        if HotkeyTapSurvival.isCompetingEditor(current) {
+            fputs(
+                "Local Voice: re-enabled fn tap after switch to \(current ?? "cursor")\n",
+                stderr
+            )
+        }
+    }
+
+    private func recoverAfterSystemWake() {
+        guard isReady else { return }
+
+        // A missed fn key-up leaves isPressed true, which used to skip this
+        // entire recovery and swallow every later hold. Cancel the stale
+        // session, then recreate the event tap. reload() tears down audio, so
+        // it must not run against a live take.
+        if isPressed {
+            handleRecordingCancel()
+        }
+        isLockMode = false
+
         recorder.reload()
+        if !shortcutCaptureActive {
+            startListening()
+        }
 
         guard config.keepModelWarm?.value ?? true,
               let router = sttRouter else {
-            print("Wake recovery: audio re-armed")
+            print("Wake recovery: hotkey and audio re-armed")
             return
         }
         DispatchQueue.global(qos: .userInitiated).async {
             router.warmup()
-            print("Wake recovery: audio re-armed; local model warm")
+            print("Wake recovery: hotkey and audio re-armed; local model warm")
         }
     }
 
@@ -341,10 +392,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyManagers = []
         permissionCoordinator.updateHotkeyMonitorReady(false)
 
-        let permissions = permissionCoordinator.refresh().current
         let globalToggle = config.toggleMode?.value ?? false
-        if permissions.inputMonitoring {
-            for hk in config.hotkeys {
+        InputMonitoringAccess.registerWithTCC()
+        for hk in config.hotkeys {
                 let mode = hk.resolvedActivationMode(globalToggle: globalToggle)
                 let manager = CGEventHotkeyManager(
                     keyCode: hk.keyCode,
@@ -392,12 +442,19 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                         stderr
                     )
                 }
-            }
         }
         permissionCoordinator.updateHotkeyMonitorReady(
             !config.hotkeys.isEmpty
             && hotkeyManagers.count == config.hotkeys.count
         )
+
+        let probeSnapshot = permissionCoordinator.refresh().current
+        try? LocalVoicePermissionProbe.make(
+            snapshot: probeSnapshot,
+            hotkeyMonitorReady: permissionCoordinator.hotkeyMonitorReady,
+            tapAttempted: !config.hotkeys.isEmpty,
+            tapStarted: !hotkeyManagers.isEmpty
+        ).write()
 
         isReady = true
         statusBar.sttEngineName = sttRouter.activeEngineName()
@@ -409,7 +466,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             $0.languageName = languageName
             $0.whisperReady = Transcriber.findWhisperBinary() != nil
         }
-        applyPermissionSnapshot(permissions)
+        applyPermissionSnapshot(probeSnapshot)
 
         let hotkeyDesc = config.hotkeySummary()
         print("Local Voice v\(OpenWispr.version)")
@@ -680,6 +737,15 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         // Do not also require hotkeyMonitorReady — that flag is cleared during
         // startListening() restarts and would silently swallow live Fn presses.
         guard isReady, !hotkeyManagers.isEmpty else { return }
+
+        if isPressed, !recorder.isRecording {
+            fputs(
+                "Local Voice: clearing stale fn hold; recorder was not running\n",
+                stderr
+            )
+            isPressed = false
+            isLockMode = false
+        }
 
         let isToggle = config.toggleMode?.value ?? false
 
