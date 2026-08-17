@@ -95,6 +95,34 @@ final class PermissionCoordinatorTests: XCTestCase {
         )
     }
 
+    func testRepairOpensAccessibilityWhenFnTapIsAlreadyRunning() {
+        let snapshot = LocalVoicePermissionSnapshot(
+            microphone: true,
+            accessibility: false,
+            inputMonitoring: false
+        )
+        let coordinator = PermissionCoordinator(
+            snapshotProvider: { snapshot },
+            signingModeProvider: { .stable }
+        )
+        coordinator.updateHotkeyMonitorReady(true)
+
+        let plan = coordinator.repairPlan(for: snapshot)
+
+        XCTAssertEqual(plan.primaryCapability, .accessibility)
+        XCTAssertEqual(
+            plan.primaryAction,
+            .openSettings(.accessibility)
+        )
+        XCTAssertTrue(
+            plan.missingCapabilities.contains(.inputMonitoring)
+        )
+        XCTAssertFalse(plan.isComplete)
+        XCTAssertTrue(
+            plan.instruction?.contains("not Automic Vault") == true
+        )
+    }
+
     func testMicrophoneRepairRequestsPermissionWithoutBlockingSettingsFlow() {
         let snapshot = LocalVoicePermissionSnapshot(
             microphone: false,
@@ -212,5 +240,39 @@ final class PermissionCoordinatorTests: XCTestCase {
 
         XCTAssertFalse(second.changed)
         XCTAssertFalse(second.inputMonitoringChanged)
+    }
+
+    func testApplyingPermissionsCannotLeaveAFalseReadyState() {
+        var runtime = LocalVoiceRuntimeSnapshot(
+            state: .ready,
+            engineName: "Test",
+            modelName: "Test",
+            languageName: "English",
+            statusDetail: "Ready",
+            privacyVerified: true,
+            whisperReady: true,
+            accessibilityReady: true,
+            microphoneReady: true,
+            inputMonitoringReady: true,
+            hotkeyReady: true
+        )
+        let missingInputMonitoring = LocalVoicePermissionSnapshot(
+            microphone: true,
+            accessibility: true,
+            inputMonitoring: false
+        )
+
+        runtime.applyPermissionReadiness(
+            missingInputMonitoring,
+            hotkeyMonitorReady: false,
+            hotkeySummary: "fn"
+        )
+
+        XCTAssertEqual(runtime.state, .error)
+        XCTAssertFalse(runtime.hotkeyReady)
+        XCTAssertEqual(
+            runtime.statusDetail,
+            "Input Monitoring is required for the recording shortcut"
+        )
     }
 }

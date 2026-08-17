@@ -108,14 +108,19 @@ public final class PermissionCoordinator {
                 return !current.accessibility
             }
         }
-        let primary = missing.first
+        // If the fn tap is already running, Repair must not steal focus
+        // to Input Monitoring while Text insertion is the orange row.
+        let repairTargets = missing.filter { capability in
+            capability != .inputMonitoring || !hotkeyMonitorReady
+        }
+        let primary = repairTargets.first
         let primaryAction = primary.map(Self.repairAction)
         let instruction = primary.map { capability in
             let action = Self.instruction(
                 for: capability,
-                stepCount: missing.count
+                stepCount: repairTargets.count
             )
-            let names = missing.map(\.displayName).joined(separator: ", ")
+            let names = repairTargets.map(\.displayName).joined(separator: ", ")
             return "Needed: \(names). \(action)"
         }
         let signingWarning =
