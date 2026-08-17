@@ -24,11 +24,13 @@ public final class OllamaCleanup {
         Return ONLY valid JSON matching this schema:
         {"text":"polished text","commands":[]}
 
+        Never use em-dashes. Use a comma, ellipsis (...), or an en-dash.
+
         Commands schema (execute, do not type literally):
-        - {"type":"new_line"} — insert newline
-        - {"type":"scratch_that"} — delete last insertion
-        - {"type":"all_caps"} — uppercase last sentence
-        - {"type":"send_it"} — press Return/Enter
+        - {"type":"new_line"} - insert newline
+        - {"type":"scratch_that"} - delete last insertion
+        - {"type":"all_caps"} - uppercase last sentence
+        - {"type":"send_it"} - press Return/Enter
 
         Raw transcript:
         \(raw)
@@ -78,7 +80,9 @@ public final class OllamaCleanup {
             VoiceCommandExecutor.shared.enqueue(commands)
         }
 
-        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return PauseContinuation.repair(
+            text.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
     }
 
     public static func isReachable(baseURL: URL = URL(string: "http://127.0.0.1:11434")!) -> Bool {

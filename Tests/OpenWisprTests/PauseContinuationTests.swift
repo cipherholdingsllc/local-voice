@@ -106,4 +106,93 @@ final class PauseContinuationTests: XCTestCase {
             "Yeah, think about it... there should be more"
         )
     }
+
+    func testUnicodeEllipsisIsNotATerminator() {
+        let out = DictationCohesion.polish("think about it\u{2026} There should be more")
+        XCTAssertTrue(out.contains("it... there"), out)
+        XCTAssertFalse(out.contains("\u{2026}"), out)
+        XCTAssertFalse(out.contains("it...."), out)
+        XCTAssertFalse(out.contains("\u{2014}"), out)
+    }
+
+    func testGluedInTheIsANounPhraseNotACommaJoin() {
+        let out = DictationCohesion.polish("Would it land inThe real ledger")
+        XCTAssertEqual(out, "Would it land in the real ledger")
+        XCTAssertFalse(out.contains("in, the"), out)
+    }
+
+    func testPrepositionPlusTheKeepsTheProperNoun() {
+        XCTAssertEqual(
+            DictationCohesion.polish("I sent it to The White House"),
+            "I sent it to The White House"
+        )
+        XCTAssertEqual(
+            DictationCohesion.polish("I sent it to. The White House"),
+            "I sent it to The White House"
+        )
+    }
+
+    func testTrailingOffPlusTheStillJoins() {
+        let out = DictationCohesion.polish("Yeah, I mean if you think about it. The next piece is timing.")
+        XCTAssertTrue(out.contains("it... the next"), out)
+        XCTAssertFalse(out.contains("it. The"), out)
+    }
+
+    func testAlsoAfterAPauseJoins() {
+        let out = DictationCohesion.polish("think about it. Also there is a second path")
+        XCTAssertTrue(out.lowercased().contains("it... also"), out)
+        XCTAssertFalse(out.contains("it. Also"), out)
+    }
+
+    func testSpacedDoubleHyphenBecomesEnDashNotEmDash() {
+        let out = PauseContinuation.sanitizeInsertedText("alpha -- beta")
+        XCTAssertEqual(out, "alpha \u{2013} beta")
+        XCTAssertFalse(out.contains("\u{2014}"))
+        XCTAssertEqual(
+            PauseContinuation.sanitizeInsertedText("run --help please"),
+            "run --help please"
+        )
+    }
+
+    func testOllamaEmDashCannotReachInsert() {
+        let out = PauseContinuation.repair("keep going \u{2014} then stop")
+        XCTAssertEqual(out, "keep going \u{2013} then stop")
+    }
+
+    func testCamelGlueAtChunkBoundaryDoesNotDuplicate() {
+        let merged = StreamingTranscriptAssembler.merge(
+            existing: "Yeah I mean if you think about it",
+            incoming: "itThere should be a little bit more"
+        )
+        XCTAssertFalse(merged.contains("it it"), merged)
+        XCTAssertFalse(merged.contains("itThere"), merged)
+        let out = DictationCohesion.polish(merged)
+        XCTAssertTrue(out.lowercased().contains("it... there"), out)
+    }
+
+    func testPolishedPreviewMustNotFeedTheNextMerge() {
+        let raw = "Yeah I mean if you think about itThere"
+        let polished = DictationCohesion.polish(raw)
+        let wrong = StreamingTranscriptAssembler.merge(
+            existing: polished,
+            incoming: "itThere should be a little bit more"
+        )
+        let right = StreamingTranscriptAssembler.merge(
+            existing: raw,
+            incoming: "There should be a little bit more"
+        )
+        XCTAssertTrue(wrong.contains("itThere") || wrong.lowercased().contains("it it"), wrong)
+        XCTAssertFalse(right.contains("itThere"), right)
+        let out = DictationCohesion.polish(right)
+        XCTAssertTrue(out.lowercased().contains("it... there") || out.lowercased().contains("it, there"), out)
+    }
+
+    func testCipherLabIsNotCamelGlue() {
+        XCTAssertNil(PauseContinuation.splitCamelGlue("CipherLab"))
+        XCTAssertNil(PauseContinuation.splitCamelGlue("iPhone"))
+        XCTAssertEqual(
+            PauseContinuation.splitCamelGlue("itThere")?.0,
+            "it"
+        )
+    }
 }

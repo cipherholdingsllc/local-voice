@@ -16,7 +16,7 @@ public struct DictationCohesion {
         result = collapseWhitespace(result)
         result = PauseContinuation.repair(result)
         result = recapitalizeSentences(result)
-        return result
+        return PauseContinuation.sanitizeInsertedText(result)
     }
 
     /// "forty thousand dollars wait, I mean forty-five thousand dollars"
@@ -152,6 +152,11 @@ public struct DictationCohesion {
         var i = 0
         while i < chars.count {
             let ch = chars[i]
+            if ch == "\u{2026}" {
+                capitalizeNext = false
+                i += 1
+                continue
+            }
             if ch == "." {
                 var count = 0
                 var j = i
