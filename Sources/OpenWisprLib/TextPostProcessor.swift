@@ -13,7 +13,11 @@ public struct TextPostProcessor {
         ("\\bsemicolon\\b", ";"),
         ("\\bsemi colon\\b", ";"),
         ("\\bellipsis\\b", "..."),
-        ("\\bdash\\b", " —"),
+        ("\\bem dash\\b", " – "),
+        ("\\ben dash\\b", " – "),
+        ("\\bendash\\b", " – "),
+        ("\\bn dash\\b", " – "),
+        ("\\bdash\\b", " – "),
         ("\\bhyphen\\b", "-"),
         ("\\bopen quote\\b", "\""),
         ("\\bclose quote\\b", "\""),
@@ -34,8 +38,14 @@ public struct TextPostProcessor {
                 withTemplate: replacement
             )
         }
+        result = result.replacingOccurrences(
+            of: PauseContinuation.emDash,
+            with: PauseContinuation.enDash
+        )
+        result = PauseContinuation.normalizeEnDashSpacing(result)
         result = fixSpacingAroundPunctuation(result)
         result = ensureSpaceAfterPunctuation(result)
+        result = PauseContinuation.normalizeEnDashSpacing(result)
         return result
     }
 
@@ -73,7 +83,7 @@ public struct TextPostProcessor {
 
     private static func ensureSpaceAfterPunctuation(_ text: String) -> String {
         var result = text
-        guard let regex = try? NSRegularExpression(pattern: "([.,?!:;])(\\w)", options: []) else { return result }
+        guard let regex = try? NSRegularExpression(pattern: "([.,?!:;\\u{2013}])(\\w)", options: []) else { return result }
         result = regex.stringByReplacingMatches(
             in: result,
             range: NSRange(result.startIndex..., in: result),
