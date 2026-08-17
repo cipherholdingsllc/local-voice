@@ -14,6 +14,8 @@ public struct DictationCohesion {
         result = collapseRepeatedWords(result)
         result = formatSpokenLists(result)
         result = collapseWhitespace(result)
+        result = PauseContinuation.repair(result)
+        result = recapitalizeSentences(result)
         return result
     }
 
@@ -139,25 +141,44 @@ public struct DictationCohesion {
             .replacingOccurrences(of: #"[ \t]{2,}"#, with: " ", options: .regularExpression)
             .replacingOccurrences(of: #"\n{3,}"#, with: "\n\n", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        return recapitalizeSentences(result)
+        return result
     }
 
-    private static func recapitalizeSentences(_ text: String) -> String {
+    /// Capitalize after a real sentence end. Ellipsis (`...`) is a pause, not
+    /// a terminator, so the following word stays lowercase.
+    static func recapitalizeSentences(_ text: String) -> String {
         var chars = Array(text)
         var capitalizeNext = true
-        for i in chars.indices {
+        var i = 0
+        while i < chars.count {
             let ch = chars[i]
-            if ch.isNewline || ch == "." || ch == "!" || ch == "?" {
-                capitalizeNext = true
+            if ch == "." {
+                var count = 0
+                var j = i
+                while j < chars.count, chars[j] == "." {
+                    count += 1
+                    j += 1
+                }
+                capitalizeNext = count < 3
+                i = j
                 continue
             }
-            if ch.isWhitespace { continue }
+            if ch.isNewline || ch == "!" || ch == "?" {
+                capitalizeNext = true
+                i += 1
+                continue
+            }
+            if ch.isWhitespace {
+                i += 1
+                continue
+            }
             if capitalizeNext, ch.isLetter {
                 chars[i] = Character(String(ch).uppercased())
                 capitalizeNext = false
             } else {
                 capitalizeNext = false
             }
+            i += 1
         }
         return String(chars)
     }
