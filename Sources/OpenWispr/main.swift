@@ -220,6 +220,9 @@ func cmdStatus() {
     print("Microphone:  \(permissions.microphone ? "granted" : "required")")
     print("Accessibility: \(permissions.accessibility ? "granted" : "required")")
     print("Input monitor: \(permissions.inputMonitoring ? "granted" : "required")")
+    if Bundle.main.bundlePath.hasSuffix(".app") == false {
+        print("Note:        CLI permission lines are Terminal's TCC, not Local Voice.app. Trust Command Center in the running app.")
+    }
     print("Launch login: \(LaunchAtLoginManager.statusSummary)")
 }
 

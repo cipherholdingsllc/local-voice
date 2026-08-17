@@ -45,7 +45,7 @@ public struct Permissions {
         LocalVoicePermissionSnapshot(
             microphone: AVCaptureDevice.authorizationStatus(for: .audio) == .authorized,
             accessibility: AXIsProcessTrusted(),
-            inputMonitoring: CGPreflightListenEventAccess()
+            inputMonitoring: InputMonitoringAccess.isGranted()
         )
     }
 
@@ -72,35 +72,35 @@ public struct Permissions {
     }
 
     static func openAccessibilitySettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-            NSWorkspace.shared.open(url)
-        }
+        promptAccessibility()
+        PrivacySettingsURL.open(.accessibility)
     }
 
     static func openInputMonitoringSettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
-            NSWorkspace.shared.open(url)
-        }
+        InputMonitoringAccess.registerWithTCC()
+        PrivacySettingsURL.open(.inputMonitoring)
     }
 
     static func openMicrophoneSettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
-            NSWorkspace.shared.open(url)
-        }
+        PrivacySettingsURL.open(.microphone)
     }
 
     @discardableResult
     static func requestInputMonitoring(openSettings: Bool = true) -> Bool {
-        if CGPreflightListenEventAccess() {
+        if InputMonitoringAccess.isGranted() {
             print("Input Monitoring: granted")
             return true
         }
         print("Input Monitoring: requesting...")
-        CGRequestListenEventAccess()
-        let granted = CGPreflightListenEventAccess()
+        if openSettings {
+            InputMonitoringAccess.registerWithTCC()
+            PrivacySettingsURL.open(.inputMonitoring)
+        } else {
+            InputMonitoringAccess.registerWithTCCAsync()
+        }
+        let granted = InputMonitoringAccess.isGranted()
         if !granted {
-            print("Input Monitoring: denied — grant in System Settings → Privacy → Input Monitoring")
-            if openSettings { openInputMonitoringSettings() }
+            print("Input Monitoring: denied — grant in System Settings → Privacy & Security → Input Monitoring")
         }
         return granted
     }
