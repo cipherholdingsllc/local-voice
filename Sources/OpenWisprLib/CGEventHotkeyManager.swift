@@ -37,12 +37,20 @@ final class CGEventHotkeyManager {
         self.onKeyDown = onKeyDown
         self.onKeyUp = onKeyUp
 
-        guard CGPreflightListenEventAccess() else {
+        InputMonitoringAccess.registerWithTCCAsync()
+        let preflight = CGPreflightListenEventAccess()
+        guard EventTapRegistration.shouldAttemptCreate(preflightGranted: preflight) else {
             fputs(
                 "CGEventHotkeyManager: Input Monitoring is not granted\n",
                 stderr
             )
             return false
+        }
+        if !preflight {
+            fputs(
+                "CGEventHotkeyManager: Input Monitoring preflight is false — creating the tap anyway so this .app can register in System Settings\n",
+                stderr
+            )
         }
 
         let mask = (1 << CGEventType.keyDown.rawValue)

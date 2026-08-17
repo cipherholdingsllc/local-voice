@@ -341,10 +341,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyManagers = []
         permissionCoordinator.updateHotkeyMonitorReady(false)
 
-        let permissions = permissionCoordinator.refresh().current
         let globalToggle = config.toggleMode?.value ?? false
-        if permissions.inputMonitoring {
-            for hk in config.hotkeys {
+        InputMonitoringAccess.registerWithTCC()
+        for hk in config.hotkeys {
                 let mode = hk.resolvedActivationMode(globalToggle: globalToggle)
                 let manager = CGEventHotkeyManager(
                     keyCode: hk.keyCode,
@@ -392,12 +391,19 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                         stderr
                     )
                 }
-            }
         }
         permissionCoordinator.updateHotkeyMonitorReady(
             !config.hotkeys.isEmpty
             && hotkeyManagers.count == config.hotkeys.count
         )
+
+        let probeSnapshot = permissionCoordinator.refresh().current
+        try? LocalVoicePermissionProbe.make(
+            snapshot: probeSnapshot,
+            hotkeyMonitorReady: permissionCoordinator.hotkeyMonitorReady,
+            tapAttempted: !config.hotkeys.isEmpty,
+            tapStarted: !hotkeyManagers.isEmpty
+        ).write()
 
         isReady = true
         statusBar.sttEngineName = sttRouter.activeEngineName()
@@ -409,7 +415,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             $0.languageName = languageName
             $0.whisperReady = Transcriber.findWhisperBinary() != nil
         }
-        applyPermissionSnapshot(permissions)
+        applyPermissionSnapshot(probeSnapshot)
 
         let hotkeyDesc = config.hotkeySummary()
         print("Local Voice v\(OpenWispr.version)")
