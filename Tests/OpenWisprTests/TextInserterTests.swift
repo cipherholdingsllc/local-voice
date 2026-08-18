@@ -57,7 +57,7 @@ final class TextInserterTests: XCTestCase {
         XCTAssertFalse(TextInsertOutcome.insertedViaPaste.didConfirmFieldInsert)
     }
 
-    func testCopyNeedsAccessibilityLeavesTranscriptOnPasteboard() {
+    func testCopyNeedsAccessibilityLeavesTranscriptOnPasteboardAndUsesPasteStub() {
         let pasteboard = NSPasteboard.general
         let previous = pasteboard.string(forType: .string)
         defer {
@@ -67,12 +67,29 @@ final class TextInserterTests: XCTestCase {
             }
         }
 
+        let priorMarker = "lv-prior-clipboard-\(UUID().uuidString)"
+        pasteboard.clearContents()
+        pasteboard.setString(priorMarker, forType: .string)
+
         let inserter = TextInserter()
         inserter.accessibilityTrusted = { false }
-        inserter.pastePoster = { true }
+        var pastePosterCallCount = 0
+        inserter.pastePoster = {
+            pastePosterCallCount += 1
+            return false
+        }
         let marker = "lv-paste-probe-\(UUID().uuidString)"
         let outcome = inserter.insert(text: marker)
+
         XCTAssertEqual(outcome, .copiedNeedsAccessibility)
+        XCTAssertEqual(pastePosterCallCount, 1, "Tests must use the stub instead of posting a live Cmd-V")
         XCTAssertEqual(pasteboard.string(forType: .string), marker)
+
+        RunLoop.main.run(until: Date().addingTimeInterval(0.5))
+        XCTAssertEqual(
+            pasteboard.string(forType: .string),
+            marker,
+            "AX-false quiet-copy must not restore the prior clipboard value"
+        )
     }
 }
