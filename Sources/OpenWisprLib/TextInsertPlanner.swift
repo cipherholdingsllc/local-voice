@@ -19,7 +19,7 @@ public enum TextInsertOutcome: Equatable, Sendable {
     public var operatorMessage: String? {
         switch self {
         case .copiedNeedsAccessibility:
-            return "Copied. Accessibility ON: Local Voice.app \u{2014} not Vault."
+            return "Copied. Press Cmd-V. Then Accessibility: Local Voice.app, not Vault."
         case .blockedSecureField:
             return "Can't type in a password field - transcript copied"
         case .insertedViaAccessibility, .insertedViaPaste, .insertedViaUnicode:

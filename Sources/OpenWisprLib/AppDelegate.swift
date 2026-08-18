@@ -37,7 +37,6 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     private var permissionRepairDeadline: Date?
     private var permissionRepairOpenedCapability:
         LocalVoicePermissionCapability?
-    private var didOfferAccessibilityRepair = false
     private var wakeObserver: NSObjectProtocol?
     private var frontmostObserver: NSObjectProtocol?
     private var lastFrontmostBundleID: String?
@@ -400,10 +399,6 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
                     self.pillOverlay.hide(ifState: .error)
                 }
-            }
-            if outcome == .copiedNeedsAccessibility, !didOfferAccessibilityRepair {
-                didOfferAccessibilityRepair = true
-                Permissions.openAccessibilitySettings()
             }
         }
         return outcome

@@ -6,6 +6,8 @@ import Foundation
 class TextInserter {
     let pasteKeyCode: CGKeyCode
     var accessibilityTrusted: () -> Bool = { AXIsProcessTrusted() }
+    /// Tests stub this so unit runs do not post Cmd-V into the focused app.
+    var pastePoster: (() -> Bool)?
 
     init() {
         self.pasteKeyCode = TextInserter.resolveKeyCode(for: "v") ?? 9
@@ -28,6 +30,9 @@ class TextInserter {
             return .blockedSecureField
         case .copyNeedsAccessibility:
             copyToPasteboard(text)
+            // Best-effort Cmd-V while the dictation target is still focused.
+            // Do not restore the clipboard if it does not land.
+            _ = simulatePaste()
             fputs(
                 "TextInserter: Accessibility not granted - left transcript on clipboard\n",
                 stderr
@@ -162,6 +167,9 @@ class TextInserter {
 
     @discardableResult
     private func simulatePaste() -> Bool {
+        if let pastePoster {
+            return pastePoster()
+        }
         let keyCode = pasteKeyCode
 
         guard let source = CGEventSource(stateID: .hidSystemState),

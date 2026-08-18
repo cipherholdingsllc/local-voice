@@ -21,7 +21,7 @@ final class TextInserterTests: XCTestCase {
         )
         XCTAssertEqual(
             TextInsertOutcome.copiedNeedsAccessibility.operatorMessage,
-            "Copied. Accessibility ON: Local Voice.app — not Vault."
+            "Copied. Press Cmd-V. Then Accessibility: Local Voice.app, not Vault."
         )
         XCTAssertFalse(TextInsertOutcome.copiedNeedsAccessibility.didConfirmFieldInsert)
     }
@@ -69,6 +69,7 @@ final class TextInserterTests: XCTestCase {
 
         let inserter = TextInserter()
         inserter.accessibilityTrusted = { false }
+        inserter.pastePoster = { true }
         let marker = "lv-paste-probe-\(UUID().uuidString)"
         let outcome = inserter.insert(text: marker)
         XCTAssertEqual(outcome, .copiedNeedsAccessibility)
