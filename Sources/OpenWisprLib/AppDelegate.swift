@@ -393,18 +393,20 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     @discardableResult
     private func insertTranscribedText(_ text: String) -> TextInsertOutcome {
         restoreCaptureAppFocus()
+        if let bundle = captureBundleIdentifier {
+            inserter.targetProcessIdentifier = NSRunningApplication
+                .runningApplications(withBundleIdentifier: bundle)
+                .first?
+                .processIdentifier
+        } else {
+            inserter.targetProcessIdentifier = nil
+        }
         let outcome = inserter.insert(text: text)
         persistLastInsert(text: text, outcome: outcome)
         refreshPermissionState(force: true)
-        if let message = outcome.operatorMessage {
-            statusBar.state = .error(message)
-            if config.showCursorHUD?.value ?? true {
-                pillOverlay.show(state: .error, partialText: message)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                    self.pillOverlay.hide(ifState: .error)
-                }
-            }
-        }
+        // Quiet copy: do not pop an error HUD every take. Clipboard is the
+        // working path until Accessibility is granted. Status bar Repair
+        // remains the grant path.
         return outcome
     }
 
@@ -1227,10 +1229,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     }
 
                     self.statusBar.sttEngineName = self.sttRouter.activeEngineName()
-                    if insertOutcome?.operatorMessage == nil {
-                        self.statusBar.state = .idle
-                        self.pillOverlay.hide()
-                    }
+                    self.statusBar.state = .idle
+                    self.pillOverlay.hide()
                     self.statusBar.buildMenu()
                     self.dashboardCaptureMode = false
                     LocalVoiceStore.shared.updateRuntime {

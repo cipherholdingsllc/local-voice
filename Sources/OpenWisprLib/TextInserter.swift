@@ -8,6 +8,8 @@ class TextInserter {
     var accessibilityTrusted: () -> Bool = { AXIsProcessTrusted() }
     /// Tests stub this so unit runs do not post Cmd-V into the focused app.
     var pastePoster: (() -> Bool)?
+    /// Best-effort Cmd-V targeted at the capture app. Still dropped without Accessibility.
+    var targetProcessIdentifier: pid_t?
 
     init() {
         self.pasteKeyCode = TextInserter.resolveKeyCode(for: "v") ?? 9
@@ -181,6 +183,10 @@ class TextInserter {
         keyDown.flags = .maskCommand
         keyUp.flags = .maskCommand
 
+        if let pid = targetProcessIdentifier, pid > 0 {
+            keyDown.postToPid(pid)
+            keyUp.postToPid(pid)
+        }
         keyDown.post(tap: .cghidEventTap)
         keyUp.post(tap: .cghidEventTap)
         return true
