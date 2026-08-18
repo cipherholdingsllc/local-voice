@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import AVFoundation
 
 private enum RecordingStopReason {
@@ -36,6 +37,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     private var permissionRepairDeadline: Date?
     private var permissionRepairOpenedCapability:
         LocalVoicePermissionCapability?
+    private var didOfferAccessibilityRepair = false
     private var wakeObserver: NSObjectProtocol?
     private var frontmostObserver: NSObjectProtocol?
     private var lastFrontmostBundleID: String?
@@ -384,7 +386,34 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
     func toggleRawPolished() {
         let text = TranscriptStore.shared.toggle()
-        inserter.insert(text: text)
+        insertTranscribedText(text)
+    }
+
+    @discardableResult
+    private func insertTranscribedText(_ text: String) -> TextInsertOutcome {
+        let outcome = inserter.insert(text: text)
+        refreshPermissionState(force: true)
+        if let message = outcome.operatorMessage {
+            statusBar.state = .error(message)
+            if config.showCursorHUD?.value ?? true {
+                pillOverlay.show(state: .error, partialText: message)
+            }
+            if outcome == .copiedNeedsAccessibility, !didOfferAccessibilityRepair {
+                didOfferAccessibilityRepair = true
+                Permissions.openAccessibilitySettings()
+            }
+        }
+        return outcome
+    }
+
+    private func persistPermissionProbe() {
+        let snapshot = permissionCoordinator.latestSnapshot ?? Permissions.snapshot()
+        try? LocalVoicePermissionProbe.make(
+            snapshot: snapshot,
+            hotkeyMonitorReady: permissionCoordinator.hotkeyMonitorReady,
+            tapAttempted: !config.hotkeys.isEmpty,
+            tapStarted: !hotkeyManagers.isEmpty
+        ).write()
     }
 
     private func startListening() {
@@ -491,6 +520,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     private func refreshPermissionState(force: Bool = false) {
         let refresh = permissionCoordinator.refresh()
         let snapshot = refresh.current
+        persistPermissionProbe()
         guard isReady else {
             LocalVoiceStore.shared.updateRuntime {
                 $0.accessibilityReady = snapshot.accessibility
@@ -1098,11 +1128,11 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                             NSPasteboard.general.setString(text, forType: .string)
                         } else if self.liveComposer.hasLiveInsertion {
                             if !self.liveComposer.commitFinal(text) {
-                                self.inserter.insert(text: text)
+                                self.insertTranscribedText(text)
                             }
                             VoiceCommandExecutor.shared.flush()
                         } else {
-                            self.inserter.insert(text: text)
+                            self.insertTranscribedText(text)
                             VoiceCommandExecutor.shared.flush()
                         }
                         self.captureVisibleSpellings = []

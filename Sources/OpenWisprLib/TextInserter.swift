@@ -1,41 +1,94 @@
 import AppKit
-import Foundation
-import Cocoa
+import ApplicationServices
 import Carbon.HIToolbox
+import Foundation
 
 class TextInserter {
     let pasteKeyCode: CGKeyCode
+    var accessibilityTrusted: () -> Bool = { AXIsProcessTrusted() }
 
     init() {
         self.pasteKeyCode = TextInserter.resolveKeyCode(for: "v") ?? 9
     }
 
-    func insert(text: String) {
+    @discardableResult
+    func insert(text: String) -> TextInsertOutcome {
         let guardResult = SecureFieldGuard.canInjectHere()
-        guard guardResult.allowed else {
+        let strategy = TextInsertPlanner.strategy(
+            accessibilityTrusted: accessibilityTrusted(),
+            secureFieldBlocked: !guardResult.allowed
+        )
+
+        switch strategy {
+        case .blockedSecureField:
+            copyToPasteboard(text)
             if let reason = guardResult.reason {
                 fputs("TextInserter: \(reason)\n", stderr)
             }
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(text, forType: .string)
-            return
+            return .blockedSecureField
+        case .copyNeedsAccessibility:
+            copyToPasteboard(text)
+            fputs(
+                "TextInserter: Accessibility not granted — left transcript on clipboard\n",
+                stderr
+            )
+            return .copiedNeedsAccessibility
+        case .insertIntoField:
+            return insertIntoField(text)
         }
+    }
 
+    private func insertIntoField(_ text: String) -> TextInsertOutcome {
         let pasteboard = NSPasteboard.general
         let savedItems = savePasteboard(pasteboard)
+        copyToPasteboard(text)
 
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
-        let writeChangeCount = pasteboard.changeCount
-
-        if !simulatePaste() {
-            insertViaUnicode(text)
+        if insertViaAccessibility(text) {
+            restorePasteboardLater(pasteboard, items: savedItems)
+            return .insertedViaAccessibility
         }
 
+        if simulatePaste() {
+            // Leave the transcript on the clipboard. Restoring the previous
+            // clipboard after a dropped Cmd-V made the field look empty.
+            return .insertedViaPaste
+        }
+
+        insertViaUnicode(text)
+        return .insertedViaUnicode
+    }
+
+    private func copyToPasteboard(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    private func restorePasteboardLater(
+        _ pasteboard: NSPasteboard,
+        items: [[(NSPasteboard.PasteboardType, Data)]]
+    ) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            guard pasteboard.changeCount == writeChangeCount else { return }
-            self.restorePasteboard(pasteboard, items: savedItems)
+            self.restorePasteboard(pasteboard, items: items)
         }
+    }
+
+    @discardableResult
+    private func insertViaAccessibility(_ text: String) -> Bool {
+        let system = AXUIElementCreateSystemWide()
+        var focused: AnyObject?
+        guard AXUIElementCopyAttributeValue(
+            system,
+            kAXFocusedUIElementAttribute as CFString,
+            &focused
+        ) == .success, let element = focused else {
+            return false
+        }
+        let ax = element as! AXUIElement
+        return AXUIElementSetAttributeValue(
+            ax,
+            kAXSelectedTextAttribute as CFString,
+            text as CFString
+        ) == .success
     }
 
     private func savePasteboard(_ pasteboard: NSPasteboard) -> [[(NSPasteboard.PasteboardType, Data)]] {
