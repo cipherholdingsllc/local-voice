@@ -35,15 +35,16 @@ public enum TextInsertOutcome: Equatable, Sendable {
 public enum TextInsertPlanner {
     public static func strategy(
         accessibilityTrusted: Bool,
-        secureFieldBlocked: Bool
+        secureFieldBlocked: Bool,
+        postEventTrusted: Bool = false
     ) -> TextInsertStrategy {
         if secureFieldBlocked {
             return .blockedSecureField
         }
-        if !accessibilityTrusted {
-            return .copyNeedsAccessibility
+        if accessibilityTrusted || postEventTrusted {
+            return .insertIntoField
         }
-        return .insertIntoField
+        return .copyNeedsAccessibility
     }
 
     public static func shouldRestoreClipboard(

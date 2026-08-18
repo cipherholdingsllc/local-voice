@@ -77,3 +77,24 @@ public enum InputMonitoringAccess {
         }
     }
 }
+
+/// Post-event TCC helpers.
+///
+/// Quinn / Apple DTS: `kTCCServicePostEvent` is a separate bucket from
+/// Accessibility and ListenEvent. It *shows* in System Settings → Accessibility
+/// but `AXIsProcessTrusted()` does not probe it. On macOS 26, `CGEvent.post`
+/// and `postToPid` silently no-op without this grant.
+///
+/// Call `request()` from Local Voice.app only. A Cursor/CLI call registers
+/// the wrong process.
+public enum PostEventAccess {
+    public static func isGranted() -> Bool {
+        CGPreflightPostEventAccess()
+    }
+
+    /// One-time system prompt for this binary. Does not open Settings.
+    @discardableResult
+    public static func request() -> Bool {
+        CGRequestPostEventAccess()
+    }
+}

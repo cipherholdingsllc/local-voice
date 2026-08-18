@@ -422,6 +422,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         try? LocalVoiceLastInsertProbe(
             outcome: outcome,
             accessibilityTrusted: AXIsProcessTrusted(),
+            postEventTrusted: PostEventAccess.isGranted(),
             targetBundle: captureBundleIdentifier,
             text: text
         ).write()

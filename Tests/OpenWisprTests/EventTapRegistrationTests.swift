@@ -37,5 +37,7 @@ final class EventTapRegistrationTests: XCTestCase {
         XCTAssertFalse(probe.tapStarted)
         XCTAssertTrue(probe.bundlePath.contains("Applications/Local Voice.app"))
         XCTAssertFalse(probe.bundlePath.contains("Repos/local-voice"))
+        XCTAssertFalse(probe.postEvent)
+        XCTAssertEqual(probe.schemaVersion, "local-voice-permission-probe.v2")
     }
 }

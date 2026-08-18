@@ -1,26 +1,27 @@
 import AppKit
 import ApplicationServices
-import Carbon.HIToolbox
 import Foundation
 
 class TextInserter {
-    let pasteKeyCode: CGKeyCode
+    /// Virtual key code for V. Hardcoded (open-wispr #36). Layout lookup
+    /// silently broke paste on non-QWERTY / non-latin sources.
+    let pasteKeyCode: CGKeyCode = 9
     var accessibilityTrusted: () -> Bool = { AXIsProcessTrusted() }
+    var postEventTrusted: () -> Bool = { PostEventAccess.isGranted() }
     /// Tests stub this so unit runs do not post Cmd-V into the focused app.
     var pastePoster: (() -> Bool)?
-    /// Best-effort Cmd-V targeted at the capture app. Still dropped without Accessibility.
+    /// Best-effort Cmd-V targeted at the capture app. Still dropped without PostEvent.
     var targetProcessIdentifier: pid_t?
 
-    init() {
-        self.pasteKeyCode = TextInserter.resolveKeyCode(for: "v") ?? 9
-    }
+    init() {}
 
     @discardableResult
     func insert(text: String) -> TextInsertOutcome {
         let guardResult = SecureFieldGuard.canInjectHere()
         let strategy = TextInsertPlanner.strategy(
             accessibilityTrusted: accessibilityTrusted(),
-            secureFieldBlocked: !guardResult.allowed
+            secureFieldBlocked: !guardResult.allowed,
+            postEventTrusted: postEventTrusted()
         )
 
         switch strategy {
@@ -123,54 +124,13 @@ class TextInserter {
         pasteboard.writeObjects(pasteboardItems)
     }
 
-    private static func resolveKeyCode(for target: Character) -> CGKeyCode? {
-        guard let inputSource = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
-            let rawLayoutData = TISGetInputSourceProperty(inputSource, kTISPropertyUnicodeKeyLayoutData) else {
-            return nil
-        }
-
-        let layoutData = unsafeBitCast(rawLayoutData, to: CFData.self)
-        guard let layoutBytes = CFDataGetBytePtr(layoutData) else {
-            return nil
-        }
-
-        let keyboardLayout = UnsafePointer<UCKeyboardLayout>(OpaquePointer(layoutBytes))
-        let keyboardType = UInt32(LMGetKbdType())
-        let wanted = String(target).lowercased()
-
-        for keyCode in 0..<128 {
-            var deadKeyState: UInt32 = 0
-            var chars = [UniChar](repeating: 0, count: 4)
-            var actualLength: Int = 0
-
-            let status = UCKeyTranslate(
-                keyboardLayout,
-                UInt16(keyCode),
-                UInt16(kUCKeyActionDisplay),
-                0,
-                keyboardType,
-                OptionBits(kUCKeyTranslateNoDeadKeysBit),
-                &deadKeyState,
-                chars.count,
-                &actualLength,
-                &chars
-            )
-
-            guard status == noErr else { continue }
-
-            let produced = String(utf16CodeUnits: chars, count: actualLength).lowercased()
-            if produced == wanted {
-                return CGKeyCode(keyCode)
-            }
-        }
-
-        return nil
-    }
-
     @discardableResult
     private func simulatePaste() -> Bool {
         if let pastePoster {
             return pastePoster()
+        }
+        guard postEventTrusted() else {
+            return false
         }
         let keyCode = pasteKeyCode
 

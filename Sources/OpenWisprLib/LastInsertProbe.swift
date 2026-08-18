@@ -1,12 +1,13 @@
 import Foundation
 
 public struct LocalVoiceLastInsertProbe: Codable, Equatable, Sendable {
-    public static let schemaVersion = "local-voice-last-insert.v1"
+    public static let schemaVersion = "local-voice-last-insert.v2"
 
     public let schemaVersion: String
     public let capturedAt: Date
     public let outcome: String
     public let accessibilityTrusted: Bool
+    public let postEventTrusted: Bool
     public let targetBundle: String?
     public let text: String
 
@@ -14,6 +15,7 @@ public struct LocalVoiceLastInsertProbe: Codable, Equatable, Sendable {
         capturedAt: Date = Date(),
         outcome: TextInsertOutcome,
         accessibilityTrusted: Bool,
+        postEventTrusted: Bool,
         targetBundle: String?,
         text: String
     ) {
@@ -21,6 +23,7 @@ public struct LocalVoiceLastInsertProbe: Codable, Equatable, Sendable {
         self.capturedAt = capturedAt
         self.outcome = String(describing: outcome)
         self.accessibilityTrusted = accessibilityTrusted
+        self.postEventTrusted = postEventTrusted
         self.targetBundle = targetBundle
         self.text = String(text.prefix(500))
     }

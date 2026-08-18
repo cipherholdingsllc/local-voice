@@ -41,6 +41,26 @@ final class PermissionCoordinatorTests: XCTestCase {
         XCTAssertFalse(plan.isComplete)
     }
 
+    func testPostEventWithoutFullAXCompletesInsertRepair() {
+        let snapshot = LocalVoicePermissionSnapshot(
+            microphone: true,
+            accessibility: false,
+            inputMonitoring: true,
+            postEvent: true
+        )
+        let coordinator = PermissionCoordinator(
+            snapshotProvider: { snapshot },
+            signingModeProvider: { .stable }
+        )
+
+        let plan = coordinator.repairPlan(for: snapshot)
+
+        XCTAssertTrue(plan.isComplete)
+        XCTAssertTrue(snapshot.canInsert)
+        XCTAssertTrue(snapshot.runtimeReady(hotkeyMonitorReady: true))
+        XCTAssertNil(snapshot.blockingSummary)
+    }
+
     func testCompletePlanHasNoRepairAction() {
         let snapshot = LocalVoicePermissionSnapshot(
             microphone: true,

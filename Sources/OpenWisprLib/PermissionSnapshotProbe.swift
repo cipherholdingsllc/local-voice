@@ -1,7 +1,7 @@
 import Foundation
 
 public struct LocalVoicePermissionProbe: Codable, Equatable, Sendable {
-    public static let schemaVersion = "local-voice-permission-probe.v1"
+    public static let schemaVersion = "local-voice-permission-probe.v2"
 
     public let schemaVersion: String
     public let capturedAt: Date
@@ -9,6 +9,7 @@ public struct LocalVoicePermissionProbe: Codable, Equatable, Sendable {
     public let microphone: Bool
     public let accessibility: Bool
     public let inputMonitoring: Bool
+    public let postEvent: Bool
     public let hotkeyMonitorReady: Bool
     public let tapAttempted: Bool
     public let tapStarted: Bool
@@ -19,6 +20,7 @@ public struct LocalVoicePermissionProbe: Codable, Equatable, Sendable {
         microphone: Bool,
         accessibility: Bool,
         inputMonitoring: Bool,
+        postEvent: Bool,
         hotkeyMonitorReady: Bool,
         tapAttempted: Bool,
         tapStarted: Bool
@@ -29,6 +31,7 @@ public struct LocalVoicePermissionProbe: Codable, Equatable, Sendable {
         self.microphone = microphone
         self.accessibility = accessibility
         self.inputMonitoring = inputMonitoring
+        self.postEvent = postEvent
         self.hotkeyMonitorReady = hotkeyMonitorReady
         self.tapAttempted = tapAttempted
         self.tapStarted = tapStarted
@@ -50,6 +53,7 @@ public struct LocalVoicePermissionProbe: Codable, Equatable, Sendable {
             microphone: snapshot.microphone,
             accessibility: snapshot.accessibility,
             inputMonitoring: snapshot.inputMonitoring,
+            postEvent: snapshot.postEvent,
             hotkeyMonitorReady: hotkeyMonitorReady,
             tapAttempted: tapAttempted,
             tapStarted: tapStarted

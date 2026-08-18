@@ -3,9 +3,20 @@ import XCTest
 
 final class TextInserterTests: XCTestCase {
 
-    func testPasteKeyCodeResolvesForCurrentLayout() {
+    func testPasteKeyCodeIsVirtualV() {
         let inserter = TextInserter()
-        XCTAssertTrue(inserter.pasteKeyCode < 128, "Paste key code should be a valid virtual key code")
+        XCTAssertEqual(inserter.pasteKeyCode, 9, "Cmd-V must use virtual V, not a layout lookup")
+    }
+
+    func testPostEventWithoutFullAXStillInsertsIntoField() {
+        XCTAssertEqual(
+            TextInsertPlanner.strategy(
+                accessibilityTrusted: false,
+                secureFieldBlocked: false,
+                postEventTrusted: true
+            ),
+            .insertIntoField
+        )
     }
 
     func testMissingAccessibilityCopiesInsteadOfFakingPaste() {
@@ -73,6 +84,7 @@ final class TextInserterTests: XCTestCase {
 
         let inserter = TextInserter()
         inserter.accessibilityTrusted = { false }
+        inserter.postEventTrusted = { false }
         var pastePosterCallCount = 0
         inserter.pastePoster = {
             pastePosterCallCount += 1
