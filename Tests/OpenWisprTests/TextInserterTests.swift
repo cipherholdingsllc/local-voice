@@ -19,13 +19,13 @@ final class TextInserterTests: XCTestCase {
         )
     }
 
-    func testMissingAccessibilityCopiesInsteadOfFakingPaste() {
+    func testMissingAccessibilityStillAttemptsFieldInsert() {
         XCTAssertEqual(
             TextInsertPlanner.strategy(
                 accessibilityTrusted: false,
                 secureFieldBlocked: false
             ),
-            .copyNeedsAccessibility
+            .insertIntoField
         )
         XCTAssertFalse(
             TextInsertPlanner.shouldRestoreClipboard(for: .copiedNeedsAccessibility)

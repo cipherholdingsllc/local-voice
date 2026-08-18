@@ -199,8 +199,9 @@ final class PermissionCoordinatorTests: XCTestCase {
         XCTAssertFalse(
             granted.runtimeReady(hotkeyMonitorReady: false)
         )
-        XCTAssertFalse(
-            missingAccessibility.runtimeReady(hotkeyMonitorReady: true)
+        XCTAssertTrue(
+            missingAccessibility.runtimeReady(hotkeyMonitorReady: true),
+            "Insert permission is attempted without blocking dictation"
         )
         XCTAssertTrue(
             granted.runtimeReady(hotkeyMonitorReady: true)
@@ -241,7 +242,8 @@ final class PermissionCoordinatorTests: XCTestCase {
             let plan = coordinator.repairPlan(for: snapshot)
 
             XCTAssertEqual(plan.isComplete, bits == 0b111)
-            XCTAssertEqual(coordinator.runtimeReady, bits == 0b111)
+            let micAndInput = (bits & 0b001 != 0) && (bits & 0b100 != 0)
+            XCTAssertEqual(coordinator.runtimeReady, micAndInput)
         }
     }
 

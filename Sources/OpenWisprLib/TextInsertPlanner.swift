@@ -41,10 +41,10 @@ public enum TextInsertPlanner {
         if secureFieldBlocked {
             return .blockedSecureField
         }
-        if accessibilityTrusted || postEventTrusted {
-            return .insertIntoField
-        }
-        return .copyNeedsAccessibility
+        // Always attempt AX write + Cmd-V. AXIsProcessTrusted() is a probe,
+        // not a delivery guarantee, and treating a false probe as "copy only"
+        // is what made the dashboard orange row skip typing.
+        return .insertIntoField
     }
 
     public static func shouldRestoreClipboard(

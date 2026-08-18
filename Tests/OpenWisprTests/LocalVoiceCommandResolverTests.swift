@@ -54,7 +54,7 @@ final class LocalVoicePermissionSnapshotTests: XCTestCase {
         XCTAssertFalse(snapshot.dictationReady)
         XCTAssertEqual(
             snapshot.blockingSummary,
-            "Input Monitoring is required for the fn hotkey"
+            "Input Monitoring is required for the recording shortcut"
         )
     }
 
@@ -66,11 +66,12 @@ final class LocalVoicePermissionSnapshotTests: XCTestCase {
         )
 
         XCTAssertTrue(snapshot.hotkeyReady)
-        XCTAssertFalse(snapshot.dictationReady)
-        XCTAssertEqual(
-            snapshot.blockingSummary,
-            "Accessibility is required to insert text"
+        XCTAssertTrue(
+            snapshot.dictationReady,
+            "Missing insert permission must not block listen-while-testing"
         )
+        XCTAssertNil(snapshot.blockingSummary)
+        XCTAssertFalse(snapshot.canInsert)
     }
 
     func testAllPermissionsMakeDictationReady() {

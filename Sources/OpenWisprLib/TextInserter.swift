@@ -31,17 +31,15 @@ class TextInserter {
                 fputs("TextInserter: \(reason)\n", stderr)
             }
             return .blockedSecureField
-        case .copyNeedsAccessibility:
-            copyToPasteboard(text)
-            // Best-effort Cmd-V while the dictation target is still focused.
-            // Do not restore the clipboard if it does not land.
-            _ = simulatePaste()
-            fputs(
-                "TextInserter: Accessibility not granted - left transcript on clipboard\n",
-                stderr
-            )
-            return .copiedNeedsAccessibility
-        case .insertIntoField:
+        case .copyNeedsAccessibility, .insertIntoField:
+            if let pastePoster {
+                copyToPasteboard(text)
+                _ = pastePoster()
+                if !accessibilityTrusted() && !postEventTrusted() {
+                    return .copiedNeedsAccessibility
+                }
+                return .insertedViaPaste
+            }
             return insertIntoField(text)
         }
     }
@@ -63,7 +61,7 @@ class TextInserter {
         }
 
         insertViaUnicode(text)
-        return .insertedViaUnicode
+        return .copiedNeedsAccessibility
     }
 
     private func copyToPasteboard(_ text: String) {

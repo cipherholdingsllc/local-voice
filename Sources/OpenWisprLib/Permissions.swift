@@ -32,7 +32,10 @@ public struct LocalVoicePermissionSnapshot: Equatable, Sendable {
     }
 
     public var dictationReady: Bool {
-        microphone && inputMonitoring && canInsert
+        // Mic + shortcut are enough to dictate. Insert permission is
+        // attempted anyway; do not park the app in "permission required"
+        // and skip typing while we are testing.
+        microphone && inputMonitoring
     }
 
     public var blockingSummary: String? {
@@ -41,9 +44,6 @@ public struct LocalVoicePermissionSnapshot: Equatable, Sendable {
         }
         if !microphone {
             return "Microphone access is required to dictate"
-        }
-        if !canInsert {
-            return "Accessibility is required to insert text"
         }
         return nil
     }
