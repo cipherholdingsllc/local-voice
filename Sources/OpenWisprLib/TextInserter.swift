@@ -29,7 +29,7 @@ class TextInserter {
         case .copyNeedsAccessibility:
             copyToPasteboard(text)
             fputs(
-                "TextInserter: Accessibility not granted — left transcript on clipboard\n",
+                "TextInserter: Accessibility not granted - left transcript on clipboard\n",
                 stderr
             )
             return .copiedNeedsAccessibility
@@ -67,7 +67,9 @@ class TextInserter {
         _ pasteboard: NSPasteboard,
         items: [[(NSPasteboard.PasteboardType, Data)]]
     ) {
+        let writeChangeCount = pasteboard.changeCount
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            guard pasteboard.changeCount == writeChangeCount else { return }
             self.restorePasteboard(pasteboard, items: items)
         }
     }
