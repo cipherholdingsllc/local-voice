@@ -21,7 +21,7 @@ final class TextInserterTests: XCTestCase {
         )
         XCTAssertEqual(
             TextInsertOutcome.copiedNeedsAccessibility.operatorMessage,
-            "Copied. Press Cmd-V. Then Accessibility: Local Voice.app, not Vault."
+            "Copied. Press Cmd-V now. Accessibility: Local Voice.app, not Vault."
         )
         XCTAssertFalse(TextInsertOutcome.copiedNeedsAccessibility.didConfirmFieldInsert)
     }

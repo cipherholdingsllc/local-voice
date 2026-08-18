@@ -126,7 +126,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
         if !AXIsProcessTrusted() {
             print("Accessibility: not granted")
-            Permissions.promptAccessibility()
+            // Do not prompt here. The TCC prompt steals focus from the
+            // dictation target so Cmd-V never hits the field. Repair remains
+            // the operator path for Accessibility.
         } else {
             print("Accessibility: granted")
         }
@@ -390,7 +392,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
     @discardableResult
     private func insertTranscribedText(_ text: String) -> TextInsertOutcome {
+        restoreCaptureAppFocus()
         let outcome = inserter.insert(text: text)
+        persistLastInsert(text: text, outcome: outcome)
         refreshPermissionState(force: true)
         if let message = outcome.operatorMessage {
             statusBar.state = .error(message)
@@ -402,6 +406,23 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         return outcome
+    }
+
+    private func restoreCaptureAppFocus() {
+        guard let bundle = captureBundleIdentifier,
+              bundle != "com.cipherholdings.localvoice" else { return }
+        NSRunningApplication.runningApplications(withBundleIdentifier: bundle)
+            .first?
+            .activate(options: [.activateIgnoringOtherApps])
+    }
+
+    private func persistLastInsert(text: String, outcome: TextInsertOutcome) {
+        try? LocalVoiceLastInsertProbe(
+            outcome: outcome,
+            accessibilityTrusted: AXIsProcessTrusted(),
+            targetBundle: captureBundleIdentifier,
+            text: text
+        ).write()
     }
 
     private func persistPermissionProbe() {
