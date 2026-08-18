@@ -54,6 +54,13 @@ final class PillOverlay {
         }
     }
 
+    func hide(ifState state: PillState) {
+        DispatchQueue.main.async { [weak self] in
+            guard self?.currentState == state else { return }
+            self?.panel?.orderOut(nil)
+        }
+    }
+
     func updateLevel(_ level: Float) {
         DispatchQueue.main.async { [weak self] in
             self?.glyphView?.level = level

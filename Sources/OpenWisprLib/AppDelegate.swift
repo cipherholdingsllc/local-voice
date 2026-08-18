@@ -397,6 +397,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             statusBar.state = .error(message)
             if config.showCursorHUD?.value ?? true {
                 pillOverlay.show(state: .error, partialText: message)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                    self.pillOverlay.hide(ifState: .error)
+                }
             }
             if outcome == .copiedNeedsAccessibility, !didOfferAccessibilityRepair {
                 didOfferAccessibilityRepair = true
@@ -1112,6 +1115,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
                 DispatchQueue.main.async {
                     LatencyInstrumentation.shared.mark("inject")
+                    var insertOutcome: TextInsertOutcome?
                     if let message = taught.message {
                         LocalVoiceStore.shared.setState(.ready, detail: message)
                         if self.config.showCursorHUD?.value ?? true {
@@ -1128,11 +1132,11 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                             NSPasteboard.general.setString(text, forType: .string)
                         } else if self.liveComposer.hasLiveInsertion {
                             if !self.liveComposer.commitFinal(text) {
-                                self.insertTranscribedText(text)
+                                insertOutcome = self.insertTranscribedText(text)
                             }
                             VoiceCommandExecutor.shared.flush()
                         } else {
-                            self.insertTranscribedText(text)
+                            insertOutcome = self.insertTranscribedText(text)
                             VoiceCommandExecutor.shared.flush()
                         }
                         self.captureVisibleSpellings = []
@@ -1207,9 +1211,11 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     }
 
                     self.statusBar.sttEngineName = self.sttRouter.activeEngineName()
-                    self.statusBar.state = .idle
+                    if insertOutcome?.operatorMessage == nil {
+                        self.statusBar.state = .idle
+                        self.pillOverlay.hide()
+                    }
                     self.statusBar.buildMenu()
-                    self.pillOverlay.hide()
                     self.dashboardCaptureMode = false
                     LocalVoiceStore.shared.updateRuntime {
                         $0.engineName = self.sttRouter.activeEngineName()
