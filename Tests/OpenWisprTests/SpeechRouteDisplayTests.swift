@@ -60,4 +60,15 @@ final class SpeechRouteDisplayTests: XCTestCase {
         XCTAssertTrue(detail.contains("whisper-server (base.en)"))
         XCTAssertTrue(detail.contains("not the field"))
     }
+
+    func testLastTakeNamesTheDestinationApp() {
+        let detail = SpeechRouteDisplay.lastTakeDetail(
+            outcome: .insertedViaAccessibility,
+            engineName: "parakeet-tdt-0.6b",
+            destination: "Ghostty"
+        )
+        XCTAssertTrue(detail.contains("parakeet-tdt-0.6b"))
+        XCTAssertTrue(detail.contains("Ghostty"))
+        XCTAssertFalse(detail.contains("the field"))
+    }
 }

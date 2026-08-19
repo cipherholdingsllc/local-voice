@@ -424,7 +424,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         LocalVoiceStore.shared.updateRuntime {
             $0.lastTakeDetail = SpeechRouteDisplay.lastTakeDetail(
                 outcome: outcome,
-                engineName: engineName
+                engineName: engineName,
+                destination: self.captureApplicationName
             )
             $0.lastTakeLandedInField = outcome.didConfirmFieldInsert
             if let router = self.sttRouter {
@@ -1146,29 +1147,31 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     LatencyInstrumentation.shared.mark("inject")
                     if let message = taught.message {
                         LocalVoiceStore.shared.setState(.ready, detail: message)
-                        if self.config.showCursorHUD?.value ?? true {
+                        if text.isEmpty, self.config.showCursorHUD?.value ?? true {
                             self.pillOverlay.show(state: .transcribing, partialText: message)
                             DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
                                 self.pillOverlay.hide()
                             }
                         }
                     }
+                    var insertOutcome: TextInsertOutcome?
                     if !text.isEmpty {
                         self.lastTranscription = text
                         if self.dashboardCaptureMode {
-                            _ = self.insertTranscribedText(text)
+                            insertOutcome = self.insertTranscribedText(text)
                         } else if self.liveComposer.hasLiveInsertion {
                             if self.liveComposer.commitFinal(text) {
+                                insertOutcome = .insertedViaLiveComposer
                                 self.persistLastInsert(
                                     text: text,
                                     outcome: .insertedViaLiveComposer
                                 )
                             } else {
-                                _ = self.insertTranscribedText(text)
+                                insertOutcome = self.insertTranscribedText(text)
                             }
                             VoiceCommandExecutor.shared.flush()
                         } else {
-                            _ = self.insertTranscribedText(text)
+                            insertOutcome = self.insertTranscribedText(text)
                             VoiceCommandExecutor.shared.flush()
                         }
                         self.captureVisibleSpellings = []
@@ -1244,7 +1247,26 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
                     self.statusBar.sttEngineName = self.sttRouter.activeEngineName()
                     self.statusBar.state = .idle
-                    self.pillOverlay.hide()
+                    if !text.isEmpty, self.config.showCursorHUD?.value ?? true {
+                        let dest = self.captureApplicationName.isEmpty
+                            ? "the field"
+                            : self.captureApplicationName
+                        let snippet = String(text.prefix(80))
+                        let landed = insertOutcome?.didConfirmFieldInsert ?? false
+                        let hud = landed
+                            ? "\(dest): \(snippet)"
+                            : "History only (\(dest)): \(snippet)"
+                        self.pillOverlay.show(
+                            state: landed ? .transcribing : .error,
+                            partialText: hud,
+                            playEarcon: false
+                        )
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+                            self.pillOverlay.hide()
+                        }
+                    } else if taught.message == nil {
+                        self.pillOverlay.hide()
+                    }
                     self.statusBar.buildMenu()
                     self.dashboardCaptureMode = false
                     LocalVoiceStore.shared.updateRuntime {

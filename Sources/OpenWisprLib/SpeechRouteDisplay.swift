@@ -51,13 +51,16 @@ public enum SpeechRouteDisplay {
 
     public static func lastTakeDetail(
         outcome: TextInsertOutcome,
-        engineName: String
+        engineName: String,
+        destination: String? = nil
     ) -> String {
+        let dest = destination?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let destLabel = (dest?.isEmpty == false) ? dest! : "the field"
         switch outcome {
         case .insertedViaAccessibility, .insertedViaLiveComposer, .insertedViaUnicode:
-            return "Last take: \(engineName) typed into the field."
+            return "Last take: \(engineName) typed into \(destLabel)."
         case .transcribedOnly:
-            return "Last take: \(engineName) transcribed. Words are in history, not the field."
+            return "Last take: \(engineName) transcribed. Words are in history, not \(destLabel)."
         case .blockedSecureField:
             return "Last take: blocked in a password field."
         }

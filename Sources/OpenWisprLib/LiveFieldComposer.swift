@@ -84,9 +84,21 @@ public final class LiveFieldComposer {
             disabled = true
             return false
         }
+        let before = Self.stringValue(of: element)
         guard Self.setSelectedText(element, text) else {
             disabled = true
             return false
+        }
+        if !text.isEmpty {
+            let after = Self.stringValue(of: element)
+            guard TextInsertPlanner.accessibilityWriteLanded(
+                before: before,
+                after: after,
+                inserted: text
+            ) else {
+                disabled = true
+                return false
+            }
         }
         insertedText = text
         hasLiveInsertion = !text.isEmpty
@@ -141,5 +153,17 @@ public final class LiveFieldComposer {
             kAXSelectedTextAttribute as CFString,
             text as CFString
         ) == .success
+    }
+
+    private static func stringValue(of element: AXUIElement) -> String? {
+        var value: AnyObject?
+        guard AXUIElementCopyAttributeValue(
+            element,
+            kAXValueAttribute as CFString,
+            &value
+        ) == .success else {
+            return nil
+        }
+        return value as? String
     }
 }

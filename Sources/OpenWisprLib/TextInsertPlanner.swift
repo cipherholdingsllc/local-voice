@@ -18,7 +18,7 @@ public enum TextInsertOutcome: Equatable, Sendable {
         case .blockedSecureField:
             return "Can't type in a password field"
         case .transcribedOnly:
-            return "Grant Accessibility to Local Voice in System Settings to type into the field."
+            return "Turn on Local Voice in System Settings → Accessibility. Do not toggle it off and on."
         case .insertedViaAccessibility, .insertedViaLiveComposer, .insertedViaUnicode:
             return nil
         }
@@ -47,5 +47,18 @@ public enum TextInsertPlanner {
         for outcome: TextInsertOutcome
     ) -> Bool {
         false
+    }
+
+    /// AX `Set kAXSelectedText == .success` is not proof the visible field
+    /// changed. Electron/Cursor often returns success while `kAXValue` stays put.
+    public static func accessibilityWriteLanded(
+        before: String?,
+        after: String?,
+        inserted: String
+    ) -> Bool {
+        guard !inserted.isEmpty else { return false }
+        guard let after, after.contains(inserted) else { return false }
+        if let before, before == after { return false }
+        return true
     }
 }

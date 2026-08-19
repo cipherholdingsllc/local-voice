@@ -16,7 +16,7 @@ final class TextInserterTests: XCTestCase {
         )
         XCTAssertEqual(
             TextInsertOutcome.transcribedOnly.operatorMessage,
-            "Grant Accessibility to Local Voice in System Settings to type into the field."
+            "Turn on Local Voice in System Settings → Accessibility. Do not toggle it off and on."
         )
         XCTAssertFalse(TextInsertOutcome.transcribedOnly.didConfirmFieldInsert)
     }
@@ -143,5 +143,36 @@ final class TextInserterTests: XCTestCase {
         XCTAssertEqual(outcome, .insertedViaAccessibility)
         XCTAssertEqual(unicodeCalls, 0)
         XCTAssertEqual(pasteboard.string(forType: .string), priorMarker)
+    }
+
+    func testAccessibilityWriteLandedRequiresValueChange() {
+        XCTAssertFalse(
+            TextInsertPlanner.accessibilityWriteLanded(
+                before: "same",
+                after: "same",
+                inserted: "hello"
+            )
+        )
+        XCTAssertTrue(
+            TextInsertPlanner.accessibilityWriteLanded(
+                before: "same",
+                after: "same hello",
+                inserted: "hello"
+            )
+        )
+        XCTAssertFalse(
+            TextInsertPlanner.accessibilityWriteLanded(
+                before: nil,
+                after: nil,
+                inserted: "hello"
+            )
+        )
+        XCTAssertFalse(
+            TextInsertPlanner.accessibilityWriteLanded(
+                before: "x",
+                after: "x",
+                inserted: "x"
+            )
+        )
     }
 }

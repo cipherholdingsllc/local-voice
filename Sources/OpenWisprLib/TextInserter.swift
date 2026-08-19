@@ -50,11 +50,32 @@ class TextInserter {
             return false
         }
         let ax = element as! AXUIElement
-        return AXUIElementSetAttributeValue(
+        let before = stringValue(of: ax)
+        guard AXUIElementSetAttributeValue(
             ax,
             kAXSelectedTextAttribute as CFString,
             text as CFString
-        ) == .success
+        ) == .success else {
+            return false
+        }
+        let after = stringValue(of: ax)
+        return TextInsertPlanner.accessibilityWriteLanded(
+            before: before,
+            after: after,
+            inserted: text
+        )
+    }
+
+    private func stringValue(of ax: AXUIElement) -> String? {
+        var value: AnyObject?
+        guard AXUIElementCopyAttributeValue(
+            ax,
+            kAXValueAttribute as CFString,
+            &value
+        ) == .success else {
+            return nil
+        }
+        return value as? String
     }
 
     /// Type the transcript as keystrokes. Does not touch the clipboard.
