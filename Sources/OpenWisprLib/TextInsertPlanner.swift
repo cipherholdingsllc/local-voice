@@ -17,13 +17,17 @@ public enum TextInsertOutcome: Equatable, Sendable {
         switch self {
         case .blockedSecureField:
             return "Can't type in a password field"
-        case .insertedViaAccessibility, .insertedViaLiveComposer, .insertedViaUnicode, .transcribedOnly:
+        case .transcribedOnly:
+            return "Grant Accessibility to Local Voice in System Settings to type into the field."
+        case .insertedViaAccessibility, .insertedViaLiveComposer, .insertedViaUnicode:
             return nil
         }
     }
 
     public var didConfirmFieldInsert: Bool {
-        self == .insertedViaAccessibility || self == .insertedViaLiveComposer
+        self == .insertedViaAccessibility
+            || self == .insertedViaLiveComposer
+            || self == .insertedViaUnicode
     }
 }
 

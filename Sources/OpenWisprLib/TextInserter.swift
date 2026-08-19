@@ -26,8 +26,13 @@ class TextInserter {
             return .insertedViaAccessibility
         }
 
+        // Unicode CGEvent.post is a silent no-op without Post Event.
+        // Do not post, and do not claim a field insert, when that grant is missing.
+        guard postEventTrusted() else {
+            return .transcribedOnly
+        }
         insertViaUnicode(text)
-        return .transcribedOnly
+        return .insertedViaUnicode
     }
 
     @discardableResult

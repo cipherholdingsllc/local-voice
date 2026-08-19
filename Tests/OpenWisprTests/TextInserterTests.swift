@@ -14,7 +14,10 @@ final class TextInserterTests: XCTestCase {
         XCTAssertFalse(
             TextInsertPlanner.shouldRestoreClipboard(for: .transcribedOnly)
         )
-        XCTAssertNil(TextInsertOutcome.transcribedOnly.operatorMessage)
+        XCTAssertEqual(
+            TextInsertOutcome.transcribedOnly.operatorMessage,
+            "Grant Accessibility to Local Voice in System Settings to type into the field."
+        )
         XCTAssertFalse(TextInsertOutcome.transcribedOnly.didConfirmFieldInsert)
     }
 
@@ -44,6 +47,7 @@ final class TextInserterTests: XCTestCase {
         )
         XCTAssertTrue(TextInsertOutcome.insertedViaAccessibility.didConfirmFieldInsert)
         XCTAssertTrue(TextInsertOutcome.insertedViaLiveComposer.didConfirmFieldInsert)
+        XCTAssertTrue(TextInsertOutcome.insertedViaUnicode.didConfirmFieldInsert)
     }
 
     func testInsertLeavesExistingClipboardAlone() {
@@ -77,7 +81,40 @@ final class TextInserterTests: XCTestCase {
 
         XCTAssertEqual(outcome, .transcribedOnly)
         XCTAssertEqual(axCalls, 1)
+        XCTAssertEqual(unicodeCalls, 0)
+        XCTAssertEqual(pasteboard.string(forType: .string), priorMarker)
+    }
+
+    func testPostEventGrantRecordsUnicodeInsertWithoutClipboard() {
+        let pasteboard = NSPasteboard.general
+        let previous = pasteboard.string(forType: .string)
+        defer {
+            pasteboard.clearContents()
+            if let previous {
+                pasteboard.setString(previous, forType: .string)
+            }
+        }
+
+        let priorMarker = "lv-unicode-clipboard-\(UUID().uuidString)"
+        pasteboard.clearContents()
+        pasteboard.setString(priorMarker, forType: .string)
+
+        let inserter = TextInserter()
+        inserter.accessibilityTrusted = { false }
+        inserter.postEventTrusted = { true }
+        var unicodeCalls = 0
+        var typed = ""
+        inserter.accessibilityWriter = { _ in false }
+        inserter.unicodeWriter = { text in
+            unicodeCalls += 1
+            typed = text
+        }
+        let marker = "lv-unicode-\(UUID().uuidString)"
+        let outcome = inserter.insert(text: marker)
+
+        XCTAssertEqual(outcome, .insertedViaUnicode)
         XCTAssertEqual(unicodeCalls, 1)
+        XCTAssertEqual(typed, marker)
         XCTAssertEqual(pasteboard.string(forType: .string), priorMarker)
     }
 
