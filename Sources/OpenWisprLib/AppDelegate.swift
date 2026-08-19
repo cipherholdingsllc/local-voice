@@ -126,12 +126,12 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
         if !AXIsProcessTrusted() {
             print("Accessibility: not granted")
-            // Do not prompt here. The TCC prompt steals focus from the
-            // dictation target so Cmd-V never hits the field. Repair remains
-            // the operator path for Accessibility.
         } else {
             print("Accessibility: granted")
         }
+        // Ask the OS for permission to fake Cmd-V. This is not Cmd-C.
+        // Do not open Settings here — that steals the dictation target.
+        PostEventAccess.requestOnce()
 
         if !Transcriber.modelExists(modelSize: config.modelSize) {
             DispatchQueue.main.async {

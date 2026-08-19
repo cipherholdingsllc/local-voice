@@ -45,22 +45,15 @@ class TextInserter {
     }
 
     private func insertIntoField(_ text: String) -> TextInsertOutcome {
-        let pasteboard = NSPasteboard.general
-        let savedItems = savePasteboard(pasteboard)
-        copyToPasteboard(text)
-
+        // Type first. Copying first is what made fn feel like a Copy shortcut.
         if insertViaAccessibility(text) {
-            restorePasteboardLater(pasteboard, items: savedItems)
             return .insertedViaAccessibility
         }
 
-        if simulatePaste() {
-            // Leave the transcript on the clipboard. Restoring the previous
-            // clipboard after a dropped Cmd-V made the field look empty.
-            return .insertedViaPaste
-        }
-
-        insertViaUnicode(text)
+        copyToPasteboard(text)
+        // Always post Cmd-V (virtual key 9). A false PostEvent probe must not
+        // skip the keypress. We never post Cmd-C (virtual key 8).
+        _ = simulatePaste()
         return .copiedNeedsAccessibility
     }
 
@@ -126,9 +119,6 @@ class TextInserter {
     private func simulatePaste() -> Bool {
         if let pastePoster {
             return pastePoster()
-        }
-        guard postEventTrusted() else {
-            return false
         }
         let keyCode = pasteKeyCode
 

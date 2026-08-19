@@ -6,6 +6,7 @@ final class TextInserterTests: XCTestCase {
     func testPasteKeyCodeIsVirtualV() {
         let inserter = TextInserter()
         XCTAssertEqual(inserter.pasteKeyCode, 9, "Cmd-V must use virtual V, not a layout lookup")
+        XCTAssertNotEqual(inserter.pasteKeyCode, 8, "Must not post Cmd-C")
     }
 
     func testPostEventWithoutFullAXStillInsertsIntoField() {

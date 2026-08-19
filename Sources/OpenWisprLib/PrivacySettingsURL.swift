@@ -88,6 +88,8 @@ public enum InputMonitoringAccess {
 /// Call `request()` from Local Voice.app only. A Cursor/CLI call registers
 /// the wrong process.
 public enum PostEventAccess {
+    private static var didRequestThisProcess = false
+
     public static func isGranted() -> Bool {
         CGPreflightPostEventAccess()
     }
@@ -96,5 +98,12 @@ public enum PostEventAccess {
     @discardableResult
     public static func request() -> Bool {
         CGRequestPostEventAccess()
+    }
+
+    /// Ask once per process. Safe at launch. Does not open System Settings.
+    public static func requestOnce() {
+        guard !isGranted(), !didRequestThisProcess else { return }
+        didRequestThisProcess = true
+        _ = request()
     }
 }
