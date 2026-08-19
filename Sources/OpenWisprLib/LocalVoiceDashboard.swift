@@ -436,11 +436,6 @@ private struct RuntimeCard: View {
                 ready: store.runtime.hotkeyReady
             )
             HealthRow(
-                title: "Text insertion",
-                detail: store.runtime.accessibilityReady ? "Accessibility granted" : "Permission required",
-                ready: store.runtime.accessibilityReady
-            )
-            HealthRow(
                 title: "Privacy boundary",
                 detail: store.runtime.privacyVerified ? "Local route verified" : "Run self-test",
                 ready: store.runtime.privacyVerified
@@ -474,7 +469,6 @@ private struct RuntimeCard: View {
             .foregroundColor(LocalVoiceTheme.muted)
 
             if !store.runtime.hotkeyReady
-                || !store.runtime.accessibilityReady
                 || !store.runtime.microphoneReady {
                 Button(
                     "Repair permissions",

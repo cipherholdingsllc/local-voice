@@ -65,6 +65,7 @@ final class TextInserterTests: XCTestCase {
             TextInsertPlanner.shouldRestoreClipboard(for: .insertedViaPaste)
         )
         XCTAssertTrue(TextInsertOutcome.insertedViaAccessibility.didConfirmFieldInsert)
+        XCTAssertTrue(TextInsertOutcome.insertedViaLiveComposer.didConfirmFieldInsert)
         XCTAssertFalse(TextInsertOutcome.insertedViaPaste.didConfirmFieldInsert)
     }
 

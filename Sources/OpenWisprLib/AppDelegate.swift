@@ -1150,7 +1150,13 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                             NSPasteboard.general.clearContents()
                             NSPasteboard.general.setString(text, forType: .string)
                         } else if self.liveComposer.hasLiveInsertion {
-                            if !self.liveComposer.commitFinal(text) {
+                            if self.liveComposer.commitFinal(text) {
+                                insertOutcome = .insertedViaLiveComposer
+                                self.persistLastInsert(
+                                    text: text,
+                                    outcome: .insertedViaLiveComposer
+                                )
+                            } else {
                                 insertOutcome = self.insertTranscribedText(text)
                             }
                             VoiceCommandExecutor.shared.flush()

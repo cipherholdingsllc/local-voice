@@ -11,6 +11,7 @@ public enum TextInsertStrategy: Equatable, Sendable {
 
 public enum TextInsertOutcome: Equatable, Sendable {
     case insertedViaAccessibility
+    case insertedViaLiveComposer
     case insertedViaPaste
     case insertedViaUnicode
     case copiedNeedsAccessibility
@@ -22,13 +23,13 @@ public enum TextInsertOutcome: Equatable, Sendable {
             return "Copied. Press Cmd-V now. Accessibility: Local Voice.app, not Vault."
         case .blockedSecureField:
             return "Can't type in a password field - transcript copied"
-        case .insertedViaAccessibility, .insertedViaPaste, .insertedViaUnicode:
+        case .insertedViaAccessibility, .insertedViaLiveComposer, .insertedViaPaste, .insertedViaUnicode:
             return nil
         }
     }
 
     public var didConfirmFieldInsert: Bool {
-        self == .insertedViaAccessibility
+        self == .insertedViaAccessibility || self == .insertedViaLiveComposer
     }
 }
 

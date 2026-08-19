@@ -109,7 +109,7 @@ public final class PermissionCoordinator {
             }
         }
         // If the fn tap is already running, Repair must not steal focus
-        // to Input Monitoring while Text insertion is the orange row.
+        // to Input Monitoring while microphone is still missing.
         let repairTargets = missing.filter { capability in
             capability != .inputMonitoring || !hotkeyMonitorReady
         }
