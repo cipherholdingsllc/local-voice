@@ -174,7 +174,7 @@ public final class PermissionCoordinator {
                 + "Allow Local Voice to use the microphone. Repair will verify it and advance automatically."
         case .accessibility:
             return prefix
-                + "macOS System Settings, not Automic Vault. Open Privacy & Security → Accessibility. That list is also the Post Event grant that lets Local Voice fake Cmd-V. Vault or Computer Use Accessibility being on does not grant Local Voice. Drag ~/Applications/Local Voice.app into the list and turn it on. If a Local Voice row already exists, turn it off, click minus to remove it, then drag the Applications copy in again. Quit Local Voice from the menu bar extra and reopen. Repair will verify text insertion automatically."
+                + "macOS System Settings, not Automic Vault. Open Privacy & Security → Accessibility. That list is also the Post Event grant that lets Local Voice type into the focused field. Vault or Computer Use Accessibility being on does not grant Local Voice. Drag ~/Applications/Local Voice.app into the list and turn it on. If a Local Voice row already exists, turn it off, click minus to remove it, then drag the Applications copy in again. Quit Local Voice from the menu bar extra and reopen. Repair will verify text insertion automatically."
         }
     }
 }

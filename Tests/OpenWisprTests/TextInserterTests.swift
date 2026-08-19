@@ -3,24 +3,7 @@ import XCTest
 
 final class TextInserterTests: XCTestCase {
 
-    func testPasteKeyCodeIsVirtualV() {
-        let inserter = TextInserter()
-        XCTAssertEqual(inserter.pasteKeyCode, 9, "Cmd-V must use virtual V, not a layout lookup")
-        XCTAssertNotEqual(inserter.pasteKeyCode, 8, "Must not post Cmd-C")
-    }
-
-    func testPostEventWithoutFullAXStillInsertsIntoField() {
-        XCTAssertEqual(
-            TextInsertPlanner.strategy(
-                accessibilityTrusted: false,
-                secureFieldBlocked: false,
-                postEventTrusted: true
-            ),
-            .insertIntoField
-        )
-    }
-
-    func testMissingAccessibilityStillAttemptsFieldInsert() {
+    func testSpeakDoesNotCopyAndAttemptsFieldInsert() {
         XCTAssertEqual(
             TextInsertPlanner.strategy(
                 accessibilityTrusted: false,
@@ -29,16 +12,13 @@ final class TextInserterTests: XCTestCase {
             .insertIntoField
         )
         XCTAssertFalse(
-            TextInsertPlanner.shouldRestoreClipboard(for: .copiedNeedsAccessibility)
+            TextInsertPlanner.shouldRestoreClipboard(for: .transcribedOnly)
         )
-        XCTAssertEqual(
-            TextInsertOutcome.copiedNeedsAccessibility.operatorMessage,
-            "Copied. Press Cmd-V now. Accessibility: Local Voice.app, not Vault."
-        )
-        XCTAssertFalse(TextInsertOutcome.copiedNeedsAccessibility.didConfirmFieldInsert)
+        XCTAssertNil(TextInsertOutcome.transcribedOnly.operatorMessage)
+        XCTAssertFalse(TextInsertOutcome.transcribedOnly.didConfirmFieldInsert)
     }
 
-    func testSecureFieldBlocksInjectionEvenWhenAccessibilityIsOn() {
+    func testSecureFieldBlocksInjectionWithoutCopying() {
         XCTAssertEqual(
             TextInsertPlanner.strategy(
                 accessibilityTrusted: true,
@@ -51,7 +31,7 @@ final class TextInserterTests: XCTestCase {
         )
     }
 
-    func testTrustedAccessibilityInsertsIntoFieldAndMayRestoreClipboard() {
+    func testTrustedAccessibilityInsertsIntoFieldWithoutClipboardRestore() {
         XCTAssertEqual(
             TextInsertPlanner.strategy(
                 accessibilityTrusted: true,
@@ -59,18 +39,14 @@ final class TextInserterTests: XCTestCase {
             ),
             .insertIntoField
         )
-        XCTAssertTrue(
-            TextInsertPlanner.shouldRestoreClipboard(for: .insertedViaAccessibility)
-        )
         XCTAssertFalse(
-            TextInsertPlanner.shouldRestoreClipboard(for: .insertedViaPaste)
+            TextInsertPlanner.shouldRestoreClipboard(for: .insertedViaAccessibility)
         )
         XCTAssertTrue(TextInsertOutcome.insertedViaAccessibility.didConfirmFieldInsert)
         XCTAssertTrue(TextInsertOutcome.insertedViaLiveComposer.didConfirmFieldInsert)
-        XCTAssertFalse(TextInsertOutcome.insertedViaPaste.didConfirmFieldInsert)
     }
 
-    func testCopyNeedsAccessibilityLeavesTranscriptOnPasteboardAndUsesPasteStub() {
+    func testInsertLeavesExistingClipboardAlone() {
         let pasteboard = NSPasteboard.general
         let previous = pasteboard.string(forType: .string)
         defer {
@@ -87,23 +63,48 @@ final class TextInserterTests: XCTestCase {
         let inserter = TextInserter()
         inserter.accessibilityTrusted = { false }
         inserter.postEventTrusted = { false }
-        var pastePosterCallCount = 0
-        inserter.pastePoster = {
-            pastePosterCallCount += 1
+        var axCalls = 0
+        var unicodeCalls = 0
+        inserter.accessibilityWriter = { _ in
+            axCalls += 1
             return false
         }
-        let marker = "lv-paste-probe-\(UUID().uuidString)"
+        inserter.unicodeWriter = { _ in
+            unicodeCalls += 1
+        }
+        let marker = "lv-no-copy-\(UUID().uuidString)"
         let outcome = inserter.insert(text: marker)
 
-        XCTAssertEqual(outcome, .copiedNeedsAccessibility)
-        XCTAssertEqual(pastePosterCallCount, 1, "Tests must use the stub instead of posting a live Cmd-V")
-        XCTAssertEqual(pasteboard.string(forType: .string), marker)
+        XCTAssertEqual(outcome, .transcribedOnly)
+        XCTAssertEqual(axCalls, 1)
+        XCTAssertEqual(unicodeCalls, 1)
+        XCTAssertEqual(pasteboard.string(forType: .string), priorMarker)
+    }
 
-        RunLoop.main.run(until: Date().addingTimeInterval(0.5))
-        XCTAssertEqual(
-            pasteboard.string(forType: .string),
-            marker,
-            "AX-false quiet-copy must not restore the prior clipboard value"
-        )
+    func testAccessibilityInsertStillLeavesClipboardAlone() {
+        let pasteboard = NSPasteboard.general
+        let previous = pasteboard.string(forType: .string)
+        defer {
+            pasteboard.clearContents()
+            if let previous {
+                pasteboard.setString(previous, forType: .string)
+            }
+        }
+
+        let priorMarker = "lv-ax-clipboard-\(UUID().uuidString)"
+        pasteboard.clearContents()
+        pasteboard.setString(priorMarker, forType: .string)
+
+        let inserter = TextInserter()
+        inserter.accessibilityTrusted = { true }
+        inserter.postEventTrusted = { false }
+        var unicodeCalls = 0
+        inserter.accessibilityWriter = { _ in true }
+        inserter.unicodeWriter = { _ in unicodeCalls += 1 }
+        let outcome = inserter.insert(text: "typed into field")
+
+        XCTAssertEqual(outcome, .insertedViaAccessibility)
+        XCTAssertEqual(unicodeCalls, 0)
+        XCTAssertEqual(pasteboard.string(forType: .string), priorMarker)
     }
 }

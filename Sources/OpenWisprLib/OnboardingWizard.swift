@@ -34,10 +34,10 @@ final class OnboardingWindowController: NSWindowController {
             Permissions.promptAccessibility()
             Permissions.openAccessibilitySettings()
         }),
-        ("Input Monitoring", "Required for fn/globe and custom hotkeys (CGEventTap).", {
+        ("Input Monitoring", "Required for the fn key and custom hotkeys (CGEventTap).", {
             Permissions.requestInputMonitoring()
         }),
-        ("Ready", "Hold your hotkey (default: fn/globe), speak, release.\n\nOptional: run `ollama serve` for AI cleanup.", {}),
+        ("Ready", "Hold your hotkey (default: fn), speak, release.\n\nOptional: run `ollama serve` for AI cleanup.", {}),
     ]
 
     private var titleLabel: NSTextField!

@@ -129,7 +129,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             print("Accessibility: granted")
         }
-        // Ask the OS for permission to fake Cmd-V. This is not Cmd-C.
+        // Ask the OS for permission to type into the focused field.
         // Do not open Settings here — that steals the dictation target.
         PostEventAccess.requestOnce()
 
@@ -393,20 +393,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     @discardableResult
     private func insertTranscribedText(_ text: String) -> TextInsertOutcome {
         restoreCaptureAppFocus()
-        if let bundle = captureBundleIdentifier {
-            inserter.targetProcessIdentifier = NSRunningApplication
-                .runningApplications(withBundleIdentifier: bundle)
-                .first?
-                .processIdentifier
-        } else {
-            inserter.targetProcessIdentifier = nil
-        }
         let outcome = inserter.insert(text: text)
         persistLastInsert(text: text, outcome: outcome)
         refreshPermissionState(force: true)
-        // Quiet copy: do not pop an error HUD every take. Clipboard is the
-        // working path until Accessibility is granted. Status bar Repair
-        // remains the grant path.
         return outcome
     }
 
@@ -1134,7 +1123,6 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
                 DispatchQueue.main.async {
                     LatencyInstrumentation.shared.mark("inject")
-                    var insertOutcome: TextInsertOutcome?
                     if let message = taught.message {
                         LocalVoiceStore.shared.setState(.ready, detail: message)
                         if self.config.showCursorHUD?.value ?? true {
@@ -1147,21 +1135,19 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     if !text.isEmpty {
                         self.lastTranscription = text
                         if self.dashboardCaptureMode {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(text, forType: .string)
+                            _ = self.insertTranscribedText(text)
                         } else if self.liveComposer.hasLiveInsertion {
                             if self.liveComposer.commitFinal(text) {
-                                insertOutcome = .insertedViaLiveComposer
                                 self.persistLastInsert(
                                     text: text,
                                     outcome: .insertedViaLiveComposer
                                 )
                             } else {
-                                insertOutcome = self.insertTranscribedText(text)
+                                _ = self.insertTranscribedText(text)
                             }
                             VoiceCommandExecutor.shared.flush()
                         } else {
-                            insertOutcome = self.insertTranscribedText(text)
+                            _ = self.insertTranscribedText(text)
                             VoiceCommandExecutor.shared.flush()
                         }
                         self.captureVisibleSpellings = []
@@ -1300,14 +1286,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 DispatchQueue.main.async {
                     if !text.isEmpty {
                         self.lastTranscription = text
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(text, forType: .string)
-                        self.statusBar.state = .copiedToClipboard
+                        _ = self.insertTranscribedText(text)
+                        self.statusBar.state = .idle
                         self.statusBar.buildMenu()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                            self.statusBar.state = .idle
-                            self.statusBar.buildMenu()
-                        }
                     } else {
                         self.statusBar.state = .idle
                     }

@@ -26,7 +26,7 @@ public struct LocalVoicePermissionSnapshot: Equatable, Sendable {
     }
 
     /// Full AX *or* PostEvent is enough to attempt insert. PostEvent is the
-    /// CGEvent paste grant; AX is the selected-text write grant.
+    /// keystroke-injection grant; AX is the selected-text write grant.
     public var canInsert: Bool {
         accessibility || postEvent
     }
@@ -97,7 +97,7 @@ public struct Permissions {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
         AXIsProcessTrustedWithOptions(options)
         // Same Settings pane as Accessibility; this is the API that actually
-        // authorizes CGEvent paste on macOS 26.
+        // authorizes keystroke injection on macOS 26.
         _ = PostEventAccess.request()
     }
 

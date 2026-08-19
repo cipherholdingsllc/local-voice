@@ -46,7 +46,19 @@ public struct KeyCodes {
     }
 
     public static func describe(keyCode: UInt16, modifiers: [String]) -> String {
-        let keyName = codeToName[keyCode] ?? "key(\(keyCode))"
+        displayName(keyCode: keyCode, modifiers: modifiers)
+    }
+
+    public static func displayName(keyCode: UInt16, modifiers: [String]) -> String {
+        var keyName = codeToName[keyCode] ?? "key(\(keyCode))"
+        if keyCode == 63 {
+            keyName = "fn"
+        }
+        if keyName.count >= 2,
+           keyName.first == "f",
+           keyName.dropFirst().allSatisfy(\.isNumber) {
+            keyName = keyName.uppercased()
+        }
         if modifiers.isEmpty {
             return keyName
         }
