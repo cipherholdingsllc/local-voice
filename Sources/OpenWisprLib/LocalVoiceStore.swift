@@ -90,6 +90,36 @@ public struct LocalVoiceRuntimeSnapshot: Equatable, Sendable {
     public var microphoneReady: Bool
     public var inputMonitoringReady: Bool
     public var hotkeyReady: Bool
+    public var permissionRepairDetail: String? = nil
+    public var parakeetReady: Bool = false
+    public var parakeetHealthy: Bool = false
+    public var lastTakeDetail: String? = nil
+    public var lastTakeLandedInField: Bool = false
+
+    public mutating func applyPermissionReadiness(
+        _ snapshot: LocalVoicePermissionSnapshot,
+        hotkeyMonitorReady: Bool,
+        hotkeySummary: String
+    ) {
+        accessibilityReady = snapshot.accessibility
+        microphoneReady = snapshot.microphone
+        inputMonitoringReady = snapshot.inputMonitoring
+        hotkeyReady = hotkeyMonitorReady
+        if state == .listening || state == .transcribing || state == .refining {
+            return
+        }
+        if snapshot.runtimeReady(hotkeyMonitorReady: hotkeyMonitorReady) {
+            if state == .error || state == .preparing {
+                state = .ready
+            }
+            statusDetail = "Hold \(hotkeySummary) to dictate"
+            permissionRepairDetail = nil
+        } else {
+            state = .error
+            statusDetail = snapshot.blockingSummary
+                ?? "The \(hotkeySummary) shortcut monitor could not start"
+        }
+    }
 
     public static let preparing = LocalVoiceRuntimeSnapshot(
         state: .preparing,
@@ -305,7 +335,9 @@ public final class LocalVoiceStore: ObservableObject {
             accessibilityReady: true,
             microphoneReady: true,
             inputMonitoringReady: true,
-            hotkeyReady: true
+            hotkeyReady: true,
+            parakeetReady: true,
+            parakeetHealthy: true
         )
         return LocalVoiceStore(
             storageURL: nil,

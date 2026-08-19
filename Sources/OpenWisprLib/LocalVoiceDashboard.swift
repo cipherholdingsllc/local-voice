@@ -422,8 +422,19 @@ private struct RuntimeCard: View {
 
             HealthRow(
                 title: "Speech engine",
-                detail: store.runtime.engineName,
-                ready: store.runtime.whisperReady
+                detail: SpeechRouteDisplay.engineHealthDetail(
+                    engineName: store.runtime.engineName,
+                    selectedModel: store.runtime.modelName
+                ),
+                ready: store.runtime.whisperReady || store.runtime.parakeetReady
+            )
+            HealthRow(
+                title: "Parakeet",
+                detail: SpeechRouteDisplay.parakeetHealthDetail(
+                    running: store.runtime.parakeetReady,
+                    healthy: store.runtime.parakeetHealthy
+                ),
+                ready: store.runtime.parakeetReady && store.runtime.parakeetHealthy
             )
             HealthRow(
                 title: "Microphone",
@@ -440,6 +451,14 @@ private struct RuntimeCard: View {
                 detail: store.runtime.privacyVerified ? "Local route verified" : "Run self-test",
                 ready: store.runtime.privacyVerified
             )
+
+            if let lastTake = store.runtime.lastTakeDetail {
+                HealthRow(
+                    title: "Last take",
+                    detail: lastTake,
+                    ready: store.runtime.lastTakeLandedInField
+                )
+            }
 
             if let repairDetail = store.runtime.permissionRepairDetail {
                 Text(repairDetail)
@@ -785,13 +804,28 @@ private struct ModelsView: View {
                             title: model.0,
                             detail: model.1,
                             symbol: model.2,
-                            active: store.runtime.engineName.localizedCaseInsensitiveContains(model.0.components(separatedBy: " ").first ?? "")
+                            active: SpeechRouteDisplay.isFeaturedCardActive(
+                                title: model.0,
+                                engineName: store.runtime.engineName,
+                                selectedModel: store.runtime.modelName
+                            )
                         )
                     }
                 }
 
                 VStack(alignment: .leading, spacing: 16) {
-                    SectionHeader(title: "Current route", detail: "Automatic fallback")
+                    SectionHeader(
+                        title: "Current route",
+                        detail: store.runtime.parakeetReady ? "Parakeet running · Whisper fallback ready" : "Automatic fallback"
+                    )
+                    Text(
+                        SpeechRouteDisplay.engineHealthDetail(
+                            engineName: store.runtime.engineName,
+                            selectedModel: store.runtime.modelName
+                        )
+                    )
+                    .font(.system(size: 13))
+                    .foregroundColor(LocalVoiceTheme.secondary)
                     RouteStep(index: "01", title: "Fast path", detail: "Parakeet when installed and compatible")
                     RouteStep(index: "02", title: "Quality path", detail: "Warm whisper-server with your selected model")
                     RouteStep(index: "03", title: "Recovery path", detail: "whisper-cli if the persistent engine is unavailable")
@@ -1433,7 +1467,8 @@ private struct HealthRow: View {
                 Text(detail)
                     .font(.system(size: 10.5))
                     .foregroundColor(LocalVoiceTheme.muted)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

@@ -181,6 +181,11 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             LocalVoiceStore.shared.updateRuntime {
                 $0.privacyVerified = privacy.passed
                 $0.whisperReady = Transcriber.findWhisperBinary() != nil
+                $0.parakeetReady = self.sttRouter.parakeetIsRunning()
+                $0.parakeetHealthy = self.sttRouter.parakeetMarkedHealthy()
+                $0.engineName = self.sttRouter.activeEngineName()
+                $0.modelName = self.sttRouter.activeEngineModelName()
+                    ?? self.config.modelSize
             }
             self.refreshPermissionState(force: true)
         }
@@ -415,6 +420,20 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             targetBundle: captureBundleIdentifier,
             text: text
         ).write()
+        let engineName = sttRouter?.activeEngineName() ?? "unknown engine"
+        LocalVoiceStore.shared.updateRuntime {
+            $0.lastTakeDetail = SpeechRouteDisplay.lastTakeDetail(
+                outcome: outcome,
+                engineName: engineName
+            )
+            $0.lastTakeLandedInField = outcome.didConfirmFieldInsert
+            if let router = self.sttRouter {
+                $0.engineName = router.activeEngineName()
+                $0.modelName = router.activeEngineModelName() ?? self.config.modelSize
+                $0.parakeetReady = router.parakeetIsRunning()
+                $0.parakeetHealthy = router.parakeetMarkedHealthy()
+            }
+        }
     }
 
     private func persistPermissionProbe() {
@@ -502,9 +521,11 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             .first(where: { $0.code == config.language })?.name ?? config.language
         LocalVoiceStore.shared.updateRuntime {
             $0.engineName = self.sttRouter.activeEngineName()
-            $0.modelName = self.config.modelSize
+            $0.modelName = self.sttRouter.activeEngineModelName() ?? self.config.modelSize
             $0.languageName = languageName
             $0.whisperReady = Transcriber.findWhisperBinary() != nil
+            $0.parakeetReady = self.sttRouter.parakeetIsRunning()
+            $0.parakeetHealthy = self.sttRouter.parakeetMarkedHealthy()
         }
         applyPermissionSnapshot(probeSnapshot)
 
@@ -1228,7 +1249,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     self.dashboardCaptureMode = false
                     LocalVoiceStore.shared.updateRuntime {
                         $0.engineName = self.sttRouter.activeEngineName()
-                        $0.modelName = self.config.modelSize
+                        $0.modelName = self.sttRouter.activeEngineModelName()
+                            ?? self.config.modelSize
+                        $0.parakeetReady = self.sttRouter.parakeetIsRunning()
+                        $0.parakeetHealthy = self.sttRouter.parakeetMarkedHealthy()
                     }
                     self.refreshPermissionState(force: true)
                 }

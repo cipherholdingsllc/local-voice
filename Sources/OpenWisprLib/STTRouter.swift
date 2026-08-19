@@ -230,6 +230,19 @@ public final class STTRouter {
         activeEngine().isAvailable()
     }
 
+    public func parakeetIsRunning() -> Bool {
+        if let daemon = parakeet as? ParakeetDaemon {
+            return daemon.isProcessRunning
+        }
+        return parakeetCanRun()
+    }
+
+    public func parakeetMarkedHealthy() -> Bool {
+        healthLock.lock()
+        defer { healthLock.unlock() }
+        return parakeetHealthy
+    }
+
     public func updateInitialPrompt(_ prompt: String?) {
         initialPrompt = prompt
         if let pool = whisper as? WhisperServerPool {
