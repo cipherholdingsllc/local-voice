@@ -1,0 +1,34 @@
+import XCTest
+@testable import OpenWisprLib
+
+final class EventTapRegistrationTests: XCTestCase {
+    func testPreflightFalseStillAttemptsTapCreate() {
+        XCTAssertTrue(
+            EventTapRegistration.shouldAttemptCreate(preflightGranted: false)
+        )
+        XCTAssertTrue(
+            EventTapRegistration.shouldAttemptCreate(preflightGranted: true)
+        )
+    }
+
+    func testPermissionProbeRoundTripsAndNamesTheApplicationsCopy() {
+        let snapshot = LocalVoicePermissionSnapshot(
+            microphone: true,
+            accessibility: false,
+            inputMonitoring: false
+        )
+        let probe = LocalVoicePermissionProbe.make(
+            snapshot: snapshot,
+            hotkeyMonitorReady: false,
+            tapAttempted: true,
+            tapStarted: false,
+            bundlePath: "/Users/ciphercowork/Applications/Local Voice.app"
+        )
+
+        XCTAssertEqual(probe.schemaVersion, LocalVoicePermissionProbe.schemaVersion)
+        XCTAssertTrue(probe.tapAttempted)
+        XCTAssertFalse(probe.tapStarted)
+        XCTAssertTrue(probe.bundlePath.contains("Applications/Local Voice.app"))
+        XCTAssertFalse(probe.bundlePath.contains("Repos/local-voice"))
+    }
+}

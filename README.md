@@ -52,10 +52,14 @@ swift build -c release --product local-voice
 .build/release/local-voice start
 ```
 
-Grant Microphone, Accessibility, and Input Monitoring when macOS asks. The
-default hotkey is Globe/Fn. Local Voice never resets these permissions during
-an upgrade. If macOS permission state changes while the app is open, the
-hotkey monitor recovers automatically without a restart.
+Grant Microphone, Accessibility, and Input Monitoring when **macOS System
+Settings** asks. Automic Vault Accessibility and Computer Use Accessibility
+being on do not grant Local Voice. The default hotkey is Globe/Fn. Local Voice
+never resets these permissions during an upgrade. If macOS permission state
+changes while the app is open, the hotkey monitor recovers automatically
+without a restart. After an ad-hoc rebuild, drag `~/Applications/Local Voice.app`
+into Input Monitoring and Accessibility; do not toggle Vault. See
+`docs/TCC_VS_VAULT.md`.
 
 Open the installed `.app` once to start the menu-bar service. Settings includes
 an optional **Launch at login** control so the Fn hotkey is ready after future

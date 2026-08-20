@@ -5,6 +5,11 @@ BINARY="${1:-.build/release/local-voice}"
 APP_DIR="${2:-Local Voice.app}"
 VERSION="${3:-0.54.0}"
 CODESIGN_IDENTITY="${LOCAL_VOICE_CODESIGN_IDENTITY:--}"
+if [[ "$CODESIGN_IDENTITY" == "-" ]]; then
+    SIGNING_MODE="adhoc"
+else
+    SIGNING_MODE="stable"
+fi
 
 rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS"
@@ -44,6 +49,12 @@ cat > "$APP_DIR/Contents/Info.plist" << PLIST
     <true/>
     <key>NSMicrophoneUsageDescription</key>
     <string>Local Voice uses the microphone only while you dictate and transcribes speech on this Mac.</string>
+    <key>NSInputMonitoringUsageDescription</key>
+    <string>Local Voice needs Input Monitoring to listen for the recording shortcut, including the fn key, while other apps are focused.</string>
+    <key>NSAccessibilityUsageDescription</key>
+    <string>Local Voice needs Accessibility to paste dictated text into the app you are using.</string>
+    <key>LocalVoiceSigningMode</key>
+    <string>${SIGNING_MODE}</string>
 </dict>
 </plist>
 PLIST

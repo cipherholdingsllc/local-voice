@@ -16,6 +16,7 @@ let package = Package(
                 .linkedFramework("AVFoundation"),
                 .linkedFramework("AppKit"),
                 .linkedFramework("ServiceManagement"),
+                .linkedFramework("IOKit"),
             ]
         ),
         .executableTarget(
