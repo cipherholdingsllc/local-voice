@@ -113,6 +113,22 @@ public final class VocabularyLearner {
         visibleSpellings: [String] = [],
         pokerVocabularyEnabled: Bool = false
     ) -> String {
+        stagedPostProcess(
+            text,
+            configTerms: configTerms,
+            visibleSpellings: visibleSpellings,
+            pokerVocabularyEnabled: pokerVocabularyEnabled
+        ).finalText
+    }
+
+    /// Same order as `postProcess`, with each hop preserved for the real-speech
+    /// crucible. Live dictation still calls `postProcess`; do not reorder.
+    public func stagedPostProcess(
+        _ text: String,
+        configTerms: [String] = [],
+        visibleSpellings: [String] = [],
+        pokerVocabularyEnabled: Bool = false
+    ) -> RealSpeechTextStages {
         let boost = safeBoostTerms(
             configTerms: configTerms,
             pokerVocabularyEnabled: pokerVocabularyEnabled
@@ -129,10 +145,22 @@ public final class VocabularyLearner {
             cleaned,
             names: visibleSpellings
         )
-        let normalized = pokerVocabularyEnabled
+        let poker = pokerVocabularyEnabled
             ? PokerHandNormalizer.apply(spelled)
             : spelled
-        return SpokenFigureNormalizer.apply(normalized)
+        let figures = SpokenFigureNormalizer.apply(poker)
+        return RealSpeechTextStages(
+            rawASR: text,
+            afterVocabulary: applied.text,
+            vocabularyCorrections: applied.corrections.map {
+                "\($0.heard) -> \($0.term)"
+            },
+            afterCohesion: cleaned,
+            afterNearby: spelled,
+            afterPoker: poker,
+            afterFigures: figures,
+            nearbyNames: visibleSpellings
+        )
     }
 
     /// Multi-word manual dictionary entries only. Single-word fuzzy boost

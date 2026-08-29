@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import Foundation
 import OpenWisprLib
 
@@ -25,6 +26,8 @@ func printUsage() {
         local-voice benchmark [engine] [model] Run the local synthetic quality gate
         local-voice long-form-benchmark [engine] [model]
                                        Reproduce the long-dictation release gate
+        local-voice real-speech-crucible <status|run|capture> [id]
+                                       Operator real-speech baseline; no new ASR
         local-voice hotkey-diagnose      Test the real Fn event tap without recording
         local-voice contract-fixture    Emit a canonical request/response pair
         local-voice transcribe-file <path> [txt|md|json|srt|vtt]
@@ -220,6 +223,9 @@ func cmdStatus() {
     print("Microphone:  \(permissions.microphone ? "granted" : "required")")
     print("Accessibility: \(permissions.accessibility ? "granted" : "required")")
     print("Input monitor: \(permissions.inputMonitoring ? "granted" : "required")")
+    if Bundle.main.bundlePath.hasSuffix(".app") == false {
+        print("Note:        CLI permission lines are Terminal's TCC, not Local Voice.app. Automic Vault Accessibility is a different app. Trust Command Center / ~/.config/local-voice/permission-snapshot.json.")
+    }
     print("Launch login: \(LaunchAtLoginManager.statusSummary)")
 }
 
@@ -295,6 +301,134 @@ func cmdLongFormBenchmark(engine: String?, model: String?) {
             "Long-form benchmark failed: \(error.localizedDescription)"
         )
         exit(1)
+    }
+}
+
+func cmdRealSpeechCrucible(action: String?, sampleID: String?) {
+    let manifestURL = RealSpeechCrucible.defaultManifestURL()
+    guard FileManager.default.fileExists(atPath: manifestURL.path) else {
+        fputs(
+            "Run this from the local-voice repo root so Benchmarks/real-speech-crucible/manifest.json is visible.\n",
+            stderr
+        )
+        exit(2)
+    }
+
+    do {
+        let manifest = try RealSpeechCrucible.loadManifest(from: manifestURL)
+        let audioRoot = RealSpeechCrucible.defaultAudioRoot()
+        switch action {
+        case "status", nil:
+            let status = RealSpeechCrucible.status(
+                manifest: manifest,
+                audioRoot: audioRoot
+            )
+            print("Real-Speech Crucible")
+            print("Audio root: \(audioRoot.path)")
+            print("Present:    \(status.present.count)/\(manifest.samples.count)")
+            if !status.missing.isEmpty {
+                print("Missing:    \(status.missing.joined(separator: ", "))")
+                print("Capture:    local-voice real-speech-crucible capture <id>")
+            }
+            if status.present.isEmpty {
+                print("Baseline:   not runnable — operator WAVs are the source of truth")
+                exit(2)
+            }
+        case "run":
+            let config = Config.load()
+            let report = try RealSpeechCrucible.run(
+                manifest: manifest,
+                audioRoot: audioRoot,
+                preferredEngine: config.sttEngine ?? .auto,
+                modelSize: config.modelSize,
+                language: config.language,
+                configTerms: config.customVocabulary ?? [],
+                ollamaEnabled: config.ollamaEnabled?.value ?? false
+            )
+            let traces = RealSpeechCrucible.defaultTraceRoot()
+            try FileManager.default.createDirectory(
+                at: traces,
+                withIntermediateDirectories: true
+            )
+            let stamp = ISO8601DateFormatter().string(from: Date())
+                .replacingOccurrences(of: ":", with: "")
+            let out = traces.appendingPathComponent(
+                "baseline-\(stamp).json"
+            )
+            try RealSpeechCrucible.encode(report).write(to: out)
+            if let text = String(data: try RealSpeechCrucible.encode(report), encoding: .utf8) {
+                print(text)
+            }
+            fputs("Wrote \(out.path)\n", stderr)
+            if report.aggregate.scoredSampleCount == 0 { exit(2) }
+        case "capture":
+            try cmdRealSpeechCapture(manifest: manifest, sampleID: sampleID)
+        default:
+            fputs(
+                "Usage: local-voice real-speech-crucible <status|run|capture> [id]\n",
+                stderr
+            )
+            exit(2)
+        }
+    } catch {
+        fputs(
+            "Real-speech crucible failed: \(error.localizedDescription)\n",
+            stderr
+        )
+        exit(1)
+    }
+}
+
+func cmdRealSpeechCapture(manifest: RealSpeechManifest, sampleID: String?) throws {
+    let audioRoot = RealSpeechCrucible.defaultAudioRoot()
+    try FileManager.default.createDirectory(
+        at: audioRoot,
+        withIntermediateDirectories: true
+    )
+    let samples: [RealSpeechSample]
+    if let sampleID {
+        guard let match = manifest.samples.first(where: { $0.id == sampleID }) else {
+            fputs("Unknown sample \(sampleID)\n", stderr)
+            exit(2)
+        }
+        samples = [match]
+    } else {
+        samples = manifest.samples.filter { sample in
+            !FileManager.default.fileExists(
+                atPath: audioRoot.appendingPathComponent(sample.audioFile).path
+            )
+        }
+        if samples.isEmpty {
+            print("All \(manifest.samples.count) operator WAVs are present.")
+            return
+        }
+    }
+
+    print("Quit Local Voice if the mic is busy. This records Terminal's input, not a new engine.")
+    for sample in samples {
+        let dest = audioRoot.appendingPathComponent(sample.audioFile)
+        print("")
+        print("[\(sample.id)] \(sample.condition)")
+        print("SPEAK: \(sample.spokenScript)")
+        print("Press Return to start, Return to stop.")
+        _ = readLine()
+        let recorder = try AVAudioRecorder(
+            url: dest,
+            settings: [
+                AVFormatIDKey: Int(kAudioFormatLinearPCM),
+                AVSampleRateKey: 16_000,
+                AVNumberOfChannelsKey: 1,
+                AVLinearPCMBitDepthKey: 16,
+                AVLinearPCMIsFloatKey: false,
+                AVLinearPCMIsBigEndianKey: false,
+            ]
+        )
+        recorder.prepareToRecord()
+        recorder.record()
+        print("Recording…")
+        _ = readLine()
+        recorder.stop()
+        print("Wrote \(dest.path)")
     }
 }
 
@@ -430,6 +564,11 @@ case "long-form-benchmark":
     cmdLongFormBenchmark(
         engine: args.count > 2 ? args[2] : nil,
         model: args.count > 3 ? args[3] : nil
+    )
+case "real-speech-crucible":
+    cmdRealSpeechCrucible(
+        action: args.count > 2 ? args[2] : nil,
+        sampleID: args.count > 3 ? args[3] : nil
     )
 case "hotkey-diagnose":
     cmdHotkeyDiagnose()
