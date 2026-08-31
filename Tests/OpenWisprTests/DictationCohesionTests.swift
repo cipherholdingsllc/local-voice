@@ -287,6 +287,51 @@ final class OperatorVocabularyTests: XCTestCase {
         XCTAssertEqual(text, "Yo Cipher")
         XCTAssertFalse(text.contains("Cipher Lab"), text)
     }
+
+    func testGeneralBoostOmitsStalePokerPhrases() {
+        let general = VocabularyLearner.shared.safeBoostTerms(
+            pokerVocabularyEnabled: false
+        )
+        XCTAssertFalse(
+            general.contains { $0.caseInsensitiveCompare("pot odds") == .orderedSame },
+            "general boost leaked poker phrase: \(general)"
+        )
+        XCTAssertFalse(
+            general.contains { $0.caseInsensitiveCompare("low jack") == .orderedSame },
+            "general boost leaked poker phrase: \(general)"
+        )
+        XCTAssertTrue(
+            general.contains { $0.caseInsensitiveCompare("Exploit Poker") == .orderedSame },
+            "product name should still boost: \(general)"
+        )
+
+        let poker = VocabularyLearner.shared.safeBoostTerms(
+            pokerVocabularyEnabled: true
+        )
+        XCTAssertTrue(
+            poker.contains { $0.caseInsensitiveCompare("pot odds") == .orderedSame },
+            poker.joined(separator: ", ")
+        )
+    }
+
+    func testGeneralModeDoesNotRewriteOursIntoPotOdds() {
+        let general = VocabularyLearner.shared.postProcess(
+            "take a look at ours and see if it is better",
+            pokerVocabularyEnabled: false
+        )
+        XCTAssertFalse(general.lowercased().contains("pot odds"), general)
+        XCTAssertTrue(general.lowercased().contains("at ours"), general)
+
+        let boosted = VocabularyPostProcessor.apply(
+            "take a look at ours and see if it is better",
+            replacements: [],
+            boostTerms: ["pot odds"]
+        )
+        XCTAssertTrue(
+            boosted.text.lowercased().contains("pot odds"),
+            "matcher still over-matches; general mode must not pass this term. \(boosted.text)"
+        )
+    }
 }
 
 final class SpokenFigureNormalizerTests: XCTestCase {

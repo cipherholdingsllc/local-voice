@@ -166,6 +166,12 @@ public final class VocabularyLearner {
     /// Multi-word manual dictionary entries only. Single-word fuzzy boost
     /// corrupts common English ("man" -> "Kun"); single-word fixes use
     /// explicit `replacements` instead.
+    ///
+    /// Poker-only phrases stay out of general boost even if an older seed
+    /// wrote them into `learned-vocabulary.json`. "at ours" is two edits
+    /// from "pot odds"; ordinary two-word English is two edits from
+    /// "low jack". Product names that also live in `OperatorVocabulary`
+    /// (Exploit Poker, PokerGod) still boost in general mode.
     func safeBoostTerms(
         configTerms: [String] = [],
         pokerVocabularyEnabled: Bool = false
@@ -178,6 +184,12 @@ public final class VocabularyLearner {
             )
         }
     }
+
+    private static let pokerOnlyBoostKeys: Set<String> = {
+        let operatorKeys = Set(OperatorVocabulary.terms.map { $0.lowercased() })
+        return Set(PokerVocabulary.terms.map { $0.lowercased() })
+            .subtracting(operatorKeys)
+    }()
 
     private func mergedBoostTerms(
         manual: [String],
@@ -193,6 +205,9 @@ public final class VocabularyLearner {
         for term in seeded + manual + configTerms where term.contains(" ") {
             let key = term.lowercased()
             guard !key.isEmpty, !seen.contains(key) else { continue }
+            if !pokerVocabularyEnabled, Self.pokerOnlyBoostKeys.contains(key) {
+                continue
+            }
             seen.insert(key)
             out.append(term)
         }
