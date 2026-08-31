@@ -65,6 +65,57 @@ final class DictationCohesionTests: XCTestCase {
         )
     }
 
+    func testLastIntentKeepsTheReplacementTime() {
+        XCTAssertEqual(
+            DictationCohesion.polish("Let's meet at 5 actually 6pm"),
+            "Let's meet at 6pm"
+        )
+        XCTAssertEqual(
+            DictationCohesion.polish("Let's meet at 5... actually 6pm"),
+            "Let's meet at 6pm"
+        )
+        let labeled = DictationCohesion.apply("Let's meet at 5 actually 6pm")
+        XCTAssertTrue(labeled.labels.correction)
+        XCTAssertEqual(labeled.labels.pillDetail, "Correction")
+    }
+
+    func testLastIntentKeepsTheReplacementDay() {
+        XCTAssertEqual(
+            DictationCohesion.polish("Ship on Friday actually Monday"),
+            "Ship on Monday"
+        )
+        XCTAssertEqual(
+            DictationCohesion.polish("Ship on Friday the following Monday"),
+            "Ship on Monday"
+        )
+    }
+
+    func testActuallyWithoutAPriorValueStays() {
+        XCTAssertEqual(
+            DictationCohesion.polish("I actually like this"),
+            "I actually like this"
+        )
+    }
+
+    func testSpokenDashJoinsObviousCompounds() {
+        XCTAssertEqual(
+            DictationCohesion.polish("do 2 for last dash intent"),
+            "Do 2 for last-intent"
+        )
+        XCTAssertEqual(
+            DictationCohesion.polish("oz dash loop"),
+            "Oz-loop"
+        )
+        XCTAssertEqual(
+            DictationCohesion.polish("add a dash of salt"),
+            "Add a dash of salt"
+        )
+        XCTAssertEqual(
+            DictationCohesion.polish("one dash two"),
+            "One dash two"
+        )
+    }
+
     func testInTheSurvivesCohesion() {
         let sentence =
             "Would it land in the real ledger as well as Laird getting a text?"

@@ -42,9 +42,15 @@ public struct DictationCohesion {
         var labels = CleanupLabels.none
         var result = text
 
+        let afterHyphens = joinSpokenHyphens(result)
+        result = afterHyphens
+
         let afterRetract = retractCorrectedValues(result)
-        let afterScratch = applySelfCorrections(afterRetract)
-        if afterRetract != result || afterScratch != afterRetract {
+        let afterLastIntent = retractLastIntent(afterRetract)
+        let afterScratch = applySelfCorrections(afterLastIntent)
+        if afterRetract != result
+            || afterLastIntent != afterRetract
+            || afterScratch != afterLastIntent {
             labels.correction = true
         }
         result = afterScratch
@@ -78,6 +84,81 @@ public struct DictationCohesion {
         }
         let range = NSRange(text.startIndex..., in: text)
         return regex.stringByReplacingMatches(in: text, range: range, withTemplate: "")
+    }
+
+    /// Last intent: keep the replacement, drop the retracted value.
+    /// "meet at 5 actually 6pm" → "meet at 6pm"
+    /// "Friday actually Monday" → "Monday"
+    /// "Friday the following Monday" → "Monday"
+    /// Does not touch "I actually like this".
+    private static let intentScalar: String = {
+        let day =
+            "(?:mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:rs(?:day)?)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)"
+        let numberWord =
+            "(?:zero|oh|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)"
+        let clock = "(?:\\s*(?:am|pm|o'?clock))?"
+        let digits = "(?:\\d{1,4}(?::\\d{2})?\(clock))"
+        let spoken = "(?:\(numberWord)\(clock))"
+        return "(?:\(digits)|\(spoken)|\(day))"
+    }()
+
+    private static func retractLastIntent(_ text: String) -> String {
+        var result = text
+        let actually =
+            "(?i)\\b\(intentScalar)\\b\\s*[,.]{0,3}\\s*(?:\\.{2,}|…)?\\s*\\b(?:or\\s+)?actually\\s+(?=\(intentScalar)\\b)"
+        if let regex = try? NSRegularExpression(pattern: actually) {
+            result = regex.stringByReplacingMatches(
+                in: result,
+                range: NSRange(result.startIndex..., in: result),
+                withTemplate: ""
+            )
+        }
+        let following =
+            "(?i)\\b\(intentScalar)\\b\\s+the following\\s+(?=\(intentScalar)\\b)"
+        if let regex = try? NSRegularExpression(pattern: following) {
+            result = regex.stringByReplacingMatches(
+                in: result,
+                range: NSRange(result.startIndex..., in: result),
+                withTemplate: ""
+            )
+        }
+        return result
+    }
+
+    /// "last dash intent" → "last-intent". Leaves "a dash of salt" and
+    /// number-number "one dash two" (pause / em dash) alone.
+    private static let hyphenJoinBlocklist: Set<String> = [
+        "a", "an", "the", "of", "and", "or", "to", "for", "with", "at", "in",
+        "on", "by", "from", "as", "if", "so", "but", "not", "no", "yes", "my",
+        "me", "we", "you", "it", "is", "be", "do", "did", "one", "two", "three",
+        "four", "five", "six", "seven", "eight", "nine", "ten", "zero", "oh",
+        "em", "en",
+    ]
+
+    private static func joinSpokenHyphens(_ text: String) -> String {
+        let pattern =
+            #"(?i)\b([A-Za-z][A-Za-z0-9]{1,24})\s+(?:dash|hyphen|[—–-])\s+([A-Za-z][A-Za-z0-9]{1,24})\b"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return text
+        }
+        let range = NSRange(text.startIndex..., in: text)
+        let matches = regex.matches(in: text, range: range)
+        var output = text
+        for match in matches.reversed() {
+            guard match.numberOfRanges >= 3,
+                  let leftRange = Range(match.range(at: 1), in: output),
+                  let rightRange = Range(match.range(at: 2), in: output),
+                  let whole = Range(match.range(at: 0), in: output)
+            else { continue }
+            let left = String(output[leftRange])
+            let right = String(output[rightRange])
+            if hyphenJoinBlocklist.contains(left.lowercased())
+                || hyphenJoinBlocklist.contains(right.lowercased()) {
+                continue
+            }
+            output.replaceSubrange(whole, with: "\(left)-\(right)")
+        }
+        return output
     }
 
     /// "send it to Dylan scratch that send it to Andras" -> "send it to Andras"
