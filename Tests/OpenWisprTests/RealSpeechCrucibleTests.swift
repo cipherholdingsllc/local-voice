@@ -27,6 +27,9 @@ final class RealSpeechCrucibleTests: XCTestCase {
         XCTAssertEqual(live, staged.finalText)
         XCTAssertEqual(staged.rawASR, raw)
         XCTAssertNotEqual(staged.afterCohesion, raw)
+        XCTAssertTrue(staged.cleanupLabels.filler)
+        XCTAssertTrue(staged.cleanupLabels.correction)
+        XCTAssertEqual(staged.cleanupLabels.pillDetail, "Filler · Correction")
     }
 
     func testFirstLossIsRawASRWhenEngineMisses() {

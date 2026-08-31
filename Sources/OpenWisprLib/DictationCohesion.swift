@@ -6,15 +6,64 @@ import Foundation
 /// paraphrase, summarize, or invent words. That path is what previously
 /// turned "in the" into "Kun Chen".
 public struct DictationCohesion {
+    /// Labels the HUD can show after a take. These fire only when the
+    /// matching cleanup step actually changed the text. No paraphrase.
+    public struct CleanupLabels: Equatable, Sendable {
+        public var filler: Bool
+        public var correction: Bool
+        public var repetition: Bool
+
+        public static let none = CleanupLabels(
+            filler: false,
+            correction: false,
+            repetition: false
+        )
+
+        public var isEmpty: Bool {
+            !filler && !correction && !repetition
+        }
+
+        /// Short Wispr-style tags for the pill detail slot.
+        public var pillDetail: String? {
+            var parts: [String] = []
+            if filler { parts.append("Filler") }
+            if correction { parts.append("Correction") }
+            if repetition { parts.append("Repeat") }
+            return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        }
+    }
+
     public static func polish(_ text: String) -> String {
-        guard !text.isEmpty else { return text }
-        var result = retractCorrectedValues(text)
-        result = applySelfCorrections(result)
-        result = stripFillers(result)
-        result = collapseRepeatedWords(result)
+        apply(text).text
+    }
+
+    public static func apply(_ text: String) -> (text: String, labels: CleanupLabels) {
+        guard !text.isEmpty else { return (text, .none) }
+        var labels = CleanupLabels.none
+        var result = text
+
+        let afterRetract = retractCorrectedValues(result)
+        let afterScratch = applySelfCorrections(afterRetract)
+        if afterRetract != result || afterScratch != afterRetract {
+            labels.correction = true
+        }
+        result = afterScratch
+
+        let afterFillers = stripFillers(result)
+        if afterFillers != result {
+            labels.filler = true
+        }
+        result = afterFillers
+
+        let afterRepeats = collapseRepeatedWords(result)
+        if afterRepeats != result {
+            labels.repetition = true
+        }
+        result = afterRepeats
+
         result = formatSpokenLists(result)
         result = collapseWhitespace(result)
-        return result
+        return (result, labels)
     }
 
     /// "forty thousand dollars wait, I mean forty-five thousand dollars"

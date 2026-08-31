@@ -104,6 +104,53 @@ final class DictationCohesionTests: XCTestCase {
         XCTAssertTrue(polished.contains("milk"))
         XCTAssertTrue(polished.contains("eggs"))
     }
+
+    func testCleanupLabelsFillerOnly() {
+        let result = DictationCohesion.apply(
+            "Um I think we should ship the update"
+        )
+        XCTAssertTrue(result.labels.filler, "\(result)")
+        XCTAssertFalse(result.labels.correction)
+        XCTAssertFalse(result.labels.repetition)
+        XCTAssertEqual(result.labels.pillDetail, "Filler")
+        XCTAssertEqual(result.text, DictationCohesion.polish(
+            "Um I think we should ship the update"
+        ))
+    }
+
+    func testCleanupLabelsCorrectionOnScratchThat() {
+        let result = DictationCohesion.apply(
+            "Send it to Dylan scratch that send it to Andras."
+        )
+        XCTAssertTrue(result.labels.correction, "\(result)")
+        XCTAssertEqual(result.labels.pillDetail, "Correction")
+        XCTAssertTrue(result.text.lowercased().contains("andras"), result.text)
+        XCTAssertFalse(result.text.lowercased().contains("dylan"), result.text)
+    }
+
+    func testCleanupLabelsRepeat() {
+        let result = DictationCohesion.apply("our our GitHub")
+        XCTAssertTrue(result.labels.repetition, "\(result)")
+        XCTAssertEqual(result.labels.pillDetail, "Repeat")
+        XCTAssertFalse(result.text.lowercased().contains("our our"))
+    }
+
+    func testCleanupLabelsStayQuietWhenNothingChanged() {
+        let result = DictationCohesion.apply(
+            "Grant Accessibility to Local Voice."
+        )
+        XCTAssertEqual(result.labels, .none)
+        XCTAssertNil(result.labels.pillDetail)
+    }
+
+    func testCleanupLabelsCombineFillerAndCorrection() {
+        let result = DictationCohesion.apply(
+            "Send it to Dylan scratch that um send it to Andras."
+        )
+        XCTAssertTrue(result.labels.filler, "\(result)")
+        XCTAssertTrue(result.labels.correction, "\(result)")
+        XCTAssertEqual(result.labels.pillDetail, "Filler · Correction")
+    }
 }
 
 final class OperatorVocabularyTests: XCTestCase {

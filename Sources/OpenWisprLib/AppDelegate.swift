@@ -1065,12 +1065,14 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     text = TextPostProcessor.process(text)
                 }
                 let taught = DictationTeacher.consume(text)
-                text = VocabularyLearner.shared.postProcess(
+                let stages = VocabularyLearner.shared.stagedPostProcess(
                     taught.text,
                     configTerms: self.config.customVocabulary ?? [],
                     visibleSpellings: visibleSpellings,
                     pokerVocabularyEnabled: profileID == .pokerExploit
                 )
+                text = stages.finalText
+                let cleanupDetail = stages.cleanupLabels.pillDetail
 
                 LatencyInstrumentation.shared.mark("llm")
                 let vocab = VocabularyLearner.shared.merged(with: self.config.customVocabulary ?? [])
@@ -1259,6 +1261,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                         self.pillOverlay.show(
                             state: landed ? .transcribing : .error,
                             partialText: hud,
+                            detail: cleanupDetail,
                             playEarcon: false
                         )
                         DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {

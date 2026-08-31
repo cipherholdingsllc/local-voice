@@ -140,9 +140,9 @@ public final class VocabularyLearner {
             ),
             boostTerms: boost
         )
-        let cleaned = DictationCohesion.polish(applied.text)
+        let cohesion = DictationCohesion.apply(applied.text)
         let spelled = NearbyContextSampler.applyVisibleSpellings(
-            cleaned,
+            cohesion.text,
             names: visibleSpellings
         )
         let poker = pokerVocabularyEnabled
@@ -155,11 +155,12 @@ public final class VocabularyLearner {
             vocabularyCorrections: applied.corrections.map {
                 "\($0.heard) -> \($0.term)"
             },
-            afterCohesion: cleaned,
+            afterCohesion: cohesion.text,
             afterNearby: spelled,
             afterPoker: poker,
             afterFigures: figures,
-            nearbyNames: visibleSpellings
+            nearbyNames: visibleSpellings,
+            cleanupLabels: cohesion.labels
         )
     }
 

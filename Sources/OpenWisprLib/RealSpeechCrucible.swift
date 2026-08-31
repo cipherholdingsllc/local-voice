@@ -15,8 +15,31 @@ public struct RealSpeechTextStages: Equatable, Sendable {
     public let afterPoker: String
     public let afterFigures: String
     public let nearbyNames: [String]
+    public let cleanupLabels: DictationCohesion.CleanupLabels
 
     public var finalText: String { afterFigures }
+
+    public init(
+        rawASR: String,
+        afterVocabulary: String,
+        vocabularyCorrections: [String],
+        afterCohesion: String,
+        afterNearby: String,
+        afterPoker: String,
+        afterFigures: String,
+        nearbyNames: [String],
+        cleanupLabels: DictationCohesion.CleanupLabels = .none
+    ) {
+        self.rawASR = rawASR
+        self.afterVocabulary = afterVocabulary
+        self.vocabularyCorrections = vocabularyCorrections
+        self.afterCohesion = afterCohesion
+        self.afterNearby = afterNearby
+        self.afterPoker = afterPoker
+        self.afterFigures = afterFigures
+        self.nearbyNames = nearbyNames
+        self.cleanupLabels = cleanupLabels
+    }
 }
 
 public struct RealSpeechManifest: Codable, Equatable, Sendable {
