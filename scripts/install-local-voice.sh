@@ -36,13 +36,20 @@ ARTIFACTS="${HOME}/Artifacts/local-voice"
 
 # Ad-hoc signing keys TCC grants (Accessibility, Input Monitoring, Post
 # Event) to the build's cdhash, so every rebuild silently loses them. When a
-# stable "Local Voice Dev" codesigning identity exists in the login
-# keychain, sign with it so grants survive upgrades.
-if [[ -z "${LOCAL_VOICE_CODESIGN_IDENTITY:-}" ]] \
-    && security find-certificate -c "Local Voice Dev" \
-        ~/Library/Keychains/login.keychain-db >/dev/null 2>&1; then
-    export LOCAL_VOICE_CODESIGN_IDENTITY="Local Voice Dev"
-    echo "==> Signing with stable identity 'Local Voice Dev'"
+# stable "Local Voice Dev" codesigning identity exists — login keychain, or
+# the headless signing keychain used over SSH — sign with it so grants
+# survive upgrades.
+if [[ -z "${LOCAL_VOICE_CODESIGN_IDENTITY:-}" ]]; then
+    for KC in \
+        "${HOME}/Library/Keychains/login.keychain-db" \
+        "${HOME}/Library/Keychains/local-voice-signing.keychain-db"; do
+        if [[ -f "$KC" ]] && security find-certificate -c "Local Voice Dev" \
+                "$KC" >/dev/null 2>&1; then
+            export LOCAL_VOICE_CODESIGN_IDENTITY="Local Voice Dev"
+            echo "==> Signing with stable identity 'Local Voice Dev' (${KC})"
+            break
+        fi
+    done
 fi
 
 if [[ $BUILD -eq 1 ]]; then

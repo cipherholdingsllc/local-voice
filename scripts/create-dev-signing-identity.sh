@@ -9,12 +9,18 @@
 set -euo pipefail
 
 CERT_NAME="Local Voice Dev"
-KEYCHAIN="${HOME}/Library/Keychains/login.keychain-db"
+LOGIN_KC="${HOME}/Library/Keychains/login.keychain-db"
+HEADLESS_KC="${HOME}/Library/Keychains/local-voice-signing.keychain-db"
+# Fixed password: this keychain holds only a self-signed dev identity, and a
+# headless session cannot unlock interactively at all.
+HEADLESS_PASS="local-voice-dev"
 
-if security find-certificate -c "$CERT_NAME" "$KEYCHAIN" >/dev/null 2>&1; then
-    echo "'$CERT_NAME' already exists in the login keychain."
-    exit 0
-fi
+for KC in "$LOGIN_KC" "$HEADLESS_KC"; do
+    if security find-certificate -c "$CERT_NAME" "$KC" >/dev/null 2>&1; then
+        echo "'$CERT_NAME' already exists in $KC."
+        exit 0
+    fi
+done
 
 TMPD="$(mktemp -d)"
 trap 'rm -rf "$TMPD"' EXIT
@@ -39,7 +45,23 @@ openssl pkcs12 -export $LEGACY_FLAG -macalg SHA1 \
     -out "$TMPD/lv.p12" -inkey "$TMPD/key.pem" -in "$TMPD/cert.pem" \
     -passout "pass:$PASS"
 
-security import "$TMPD/lv.p12" -k "$KEYCHAIN" -P "$PASS" -T /usr/bin/codesign
+if security import "$TMPD/lv.p12" -k "$LOGIN_KC" -P "$PASS" \
+        -T /usr/bin/codesign 2>/dev/null; then
+    echo "Created '$CERT_NAME' in the login keychain."
+else
+    # SSH/headless sessions cannot unlock the login keychain — fall back to a
+    # dedicated signing keychain and add it to the user's search list so
+    # codesign can resolve the identity.
+    security create-keychain -p "$HEADLESS_PASS" "$HEADLESS_KC"
+    security import "$TMPD/lv.p12" -k "$HEADLESS_KC" -P "$PASS" \
+        -T /usr/bin/codesign
+    security unlock-keychain -p "$HEADLESS_PASS" "$HEADLESS_KC"
+    # Never auto-lock: codesign runs unattended during installs.
+    security set-keychain-settings "$HEADLESS_KC"
+    EXISTING="$(security list-keychains | tr -d '"' | xargs)"
+    # shellcheck disable=SC2086
+    security list-keychains -s $EXISTING "$HEADLESS_KC"
+    echo "Created '$CERT_NAME' in $HEADLESS_KC (headless fallback)."
+fi
 
-echo "Created '$CERT_NAME' in the login keychain."
 echo "Future builds keep TCC grants: codesign DR is identifier + cert leaf."
