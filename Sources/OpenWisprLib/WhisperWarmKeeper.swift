@@ -16,13 +16,28 @@ enum WhisperWarmKeeper {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("local-flow-warmup-\(UUID().uuidString).wav")
 
-        let format = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: Double(sampleRate), channels: 1, interleaved: true)!
-        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(frameCount))!
-        buffer.frameLength = AVAudioFrameCount(frameCount)
-        memset(buffer.int16ChannelData![0], 0, frameCount * MemoryLayout<Int16>.size)
+        let dataSize = UInt32(frameCount * MemoryLayout<Int16>.size)
+        var wav = Data()
+        func append<T: FixedWidthInteger>(_ value: T) {
+            var little = value.littleEndian
+            wav.append(Data(bytes: &little, count: MemoryLayout<T>.size))
+        }
+        wav.append(contentsOf: Array("RIFF".utf8))
+        append(UInt32(36) + dataSize)
+        wav.append(contentsOf: Array("WAVE".utf8))
+        wav.append(contentsOf: Array("fmt ".utf8))
+        append(UInt32(16))
+        append(UInt16(1))
+        append(UInt16(1))
+        append(UInt32(sampleRate))
+        append(UInt32(sampleRate * MemoryLayout<Int16>.size))
+        append(UInt16(MemoryLayout<Int16>.size))
+        append(UInt16(16))
+        wav.append(contentsOf: Array("data".utf8))
+        append(dataSize)
+        wav.append(Data(count: Int(dataSize)))
 
-        let file = try AVAudioFile(forWriting: url, settings: format.settings)
-        try file.write(from: buffer)
+        try wav.write(to: url, options: .atomic)
         return url
     }
 }
