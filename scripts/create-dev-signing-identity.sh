@@ -58,6 +58,10 @@ else
     security unlock-keychain -p "$HEADLESS_PASS" "$HEADLESS_KC"
     # Never auto-lock: codesign runs unattended during installs.
     security set-keychain-settings "$HEADLESS_KC"
+    # Authorize codesign on the key's partition list — without this a
+    # headless codesign dies with errSecInternalComponent.
+    security set-key-partition-list -S apple-tool:,apple: \
+        -s -k "$HEADLESS_PASS" "$HEADLESS_KC" >/dev/null
     EXISTING="$(security list-keychains | tr -d '"' | xargs)"
     # shellcheck disable=SC2086
     security list-keychains -s $EXISTING "$HEADLESS_KC"
