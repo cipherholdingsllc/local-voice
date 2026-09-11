@@ -27,8 +27,15 @@ openssl req -x509 -newkey rsa:2048 -nodes \
     -addext "basicConstraints=critical,CA:false"
 
 # macOS's `security import` only accepts the legacy PKCS12 profile.
+# `-legacy` exists on OpenSSL 3; stock macOS LibreSSL already defaults
+# to the compatible format and rejects the flag.
+LEGACY_FLAG=""
+if openssl pkcs12 -help 2>&1 | grep -q -- "-legacy"; then
+    LEGACY_FLAG="-legacy"
+fi
 PASS="local-voice-dev-$$"
-openssl pkcs12 -export -legacy -macalg SHA1 \
+# shellcheck disable=SC2086
+openssl pkcs12 -export $LEGACY_FLAG -macalg SHA1 \
     -out "$TMPD/lv.p12" -inkey "$TMPD/key.pem" -in "$TMPD/cert.pem" \
     -passout "pass:$PASS"
 
