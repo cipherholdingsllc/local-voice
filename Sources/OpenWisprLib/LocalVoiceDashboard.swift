@@ -883,358 +883,137 @@ private struct PrivacyView: View {
                     .frame(width: 330)
                     .cardStyle()
                 }
-
-                PrivacySweepPanel()
             }
             .padding(32)
         }
     }
 }
 
-private struct PrivacySweepPanel: View {
-    @ObservedObject private var caseStore: PrivacyCaseStore
-    @State private var fullName = ""
-    @State private var emailOrPhone = ""
-    @State private var location = ""
-    @State private var searches: [PrivacySweepSearch] = []
-    @State private var findingLabel = ""
-    @State private var findingURL = ""
-    @State private var feedback: String?
+struct ShortcutRecorderField: View {
+    let hotkey: HotkeyConfig
+    let captureStateChanged: (Bool) -> Void
+    let commit: (HotkeyConfig) -> String?
 
-    init(caseStore: PrivacyCaseStore = .shared) {
-        self.caseStore = caseStore
-    }
+    @State private var capturing = false
+    @State private var monitor: Any?
+    @State private var errorText: String?
+
+    private static let modifierOnlyKeyCodes: Set<UInt16> = [54, 55, 56, 58, 59, 60, 61, 62, 63]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack(alignment: .top, spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(LocalVoiceTheme.accent.opacity(0.12))
-                    Image(systemName: "person.text.rectangle")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(LocalVoiceTheme.accent)
-                }
-                .frame(width: 44, height: 44)
-
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("Privacy Sweep")
-                        .font(.system(size: 18, weight: .semibold))
-                    Text("Find likely people-search exposures, verify each match yourself, and track removal work locally.")
-                        .font(.system(size: 12.5))
-                        .foregroundColor(LocalVoiceTheme.secondary)
-                }
-
-                Spacer()
-
-                Text("PREVIEW ONLY · LOCAL CASES")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .tracking(0.8)
-                    .foregroundColor(LocalVoiceTheme.accent)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(
-                        Capsule()
-                            .fill(LocalVoiceTheme.accent.opacity(0.1))
+        VStack(alignment: .leading, spacing: 8) {
+            Button(action: toggleCapture) {
+                HStack(spacing: 10) {
+                    Image(systemName: capturing ? "keyboard" : "command")
+                        .foregroundColor(capturing ? LocalVoiceTheme.accent : LocalVoiceTheme.secondary)
+                    Text(
+                        capturing
+                            ? "Press a key or hold a modifier… (esc to cancel)"
+                            : KeyCodes.displayName(keyCode: hotkey.keyCode, modifiers: hotkey.modifiers)
                     )
-            }
-
-            Text("Search details stay in memory and are not saved by Local Voice. Opening a result sends that query to the search provider; nothing is scanned or submitted in the background.")
-                .font(.system(size: 11.5))
-                .foregroundColor(LocalVoiceTheme.muted)
-                .lineSpacing(3)
-
-            HStack(spacing: 10) {
-                SweepField(title: "Full legal name", text: $fullName)
-                SweepField(title: "Email or phone (optional)", text: $emailOrPhone)
-                SweepField(title: "City and state (optional)", text: $location)
-            }
-
-            HStack(spacing: 10) {
-                Button("Build exposure search", action: buildSearches)
-                    .buttonStyle(AccentButtonStyle())
-                    .disabled(fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                Button("Open California DROP") {
-                    NSWorkspace.shared.open(PrivacySweepPlanner.californiaDROPURL)
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundColor(LocalVoiceTheme.primary)
+                    Spacer()
+                    Text(capturing ? "Listening" : "Change")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(capturing ? LocalVoiceTheme.accent : LocalVoiceTheme.muted)
                 }
-                .buttonStyle(.plain)
-                .font(.system(size: 12.5, weight: .semibold))
-                .foregroundColor(LocalVoiceTheme.secondary)
-                .padding(.horizontal, 15)
-                .frame(height: 38)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 11)
                 .background(
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(LocalVoiceTheme.panel)
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(LocalVoiceTheme.raised)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .stroke(LocalVoiceTheme.line, lineWidth: 1)
-                )
-
-                Spacer()
-            }
-
-            if !searches.isEmpty {
-                VStack(spacing: 0) {
-                    ForEach(searches) { search in
-                        HStack(spacing: 12) {
-                            Image(systemName: "magnifyingglass")
-                                .foregroundColor(LocalVoiceTheme.accent)
-                                .frame(width: 20)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(search.title)
-                                    .font(.system(size: 12.5, weight: .semibold))
-                                Text(search.detail)
-                                    .font(.system(size: 11))
-                                    .foregroundColor(LocalVoiceTheme.muted)
-                            }
-                            Spacer()
-                            Button("Open") {
-                                NSWorkspace.shared.open(search.url)
-                            }
-                            .buttonStyle(.borderless)
-                            .foregroundColor(LocalVoiceTheme.accent)
-                        }
-                        .padding(.horizontal, 14)
-                        .frame(minHeight: 54)
-
-                        if search.id != searches.last?.id {
-                            Divider().overlay(LocalVoiceTheme.line)
-                        }
-                    }
-                }
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(LocalVoiceTheme.panel.opacity(0.72))
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(capturing ? LocalVoiceTheme.accent : LocalVoiceTheme.line, lineWidth: 1)
                 )
             }
+            .buttonStyle(.plain)
 
-            Divider().overlay(LocalVoiceTheme.line)
-
-            VStack(alignment: .leading, spacing: 12) {
-                SectionHeader(
-                    title: "Removal tracker",
-                    detail: "\(caseStore.cases.count) versioned cases saved locally"
-                )
-
-                if let next = PrivacySchedule.queue(
-                    cases: caseStore.cases
-                ).first {
-                    HStack(spacing: 10) {
-                        Image(systemName: "calendar.badge.clock")
-                            .foregroundColor(LocalVoiceTheme.accent)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Next privacy action")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(LocalVoiceTheme.secondary)
-                            Text(next.action)
-                                .font(.system(size: 12.5, weight: .semibold))
-                        }
-                        Spacer()
-                        Text(next.dueAt.formatted(date: .abbreviated, time: .omitted))
-                            .font(.system(size: 11.5, weight: .medium))
-                            .foregroundColor(
-                                next.urgency == .upcoming
-                                    ? LocalVoiceTheme.muted
-                                    : LocalVoiceTheme.warning
-                            )
-                    }
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(LocalVoiceTheme.panel.opacity(0.72))
-                    )
-                }
-
-                HStack(spacing: 10) {
-                    SweepField(title: "Source label (optional)", text: $findingLabel)
-                    SweepField(title: "Exact exposure URL", text: $findingURL)
-                    Button("Save finding", action: saveFinding)
-                        .buttonStyle(AccentButtonStyle())
-                        .disabled(findingURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-
-                if let message = feedback ?? caseStore.lastError {
-                    Text(message)
-                        .font(.system(size: 11.5, weight: .medium))
-                        .foregroundColor(
-                            caseStore.lastError == nil
-                                ? LocalVoiceTheme.accent
-                                : LocalVoiceTheme.warning
-                        )
-                }
-
-                if caseStore.cases.isEmpty {
-                    Text("Confirm a result belongs to you, then paste its exact page here. Local Voice creates a local case and never submits a removal request automatically.")
-                        .font(.system(size: 11.5))
-                        .foregroundColor(LocalVoiceTheme.muted)
-                        .padding(.vertical, 6)
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(caseStore.cases) { removalCase in
-                            PrivacyCaseRow(
-                                removalCase: removalCase,
-                                transition: {
-                                    caseStore.transition(
-                                        id: removalCase.id,
-                                        to: $0
-                                    )
-                                },
-                                copyDraft: {
-                                    copyRemovalDraft(for: removalCase)
-                                }
-                            )
-                            if removalCase.id != caseStore.cases.last?.id {
-                                Divider().overlay(LocalVoiceTheme.line)
-                            }
-                        }
-                    }
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(LocalVoiceTheme.panel.opacity(0.72))
-                    )
+            if let errorText {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(LocalVoiceTheme.warning)
+                    Text(errorText)
+                        .font(.system(size: 12))
+                        .foregroundColor(LocalVoiceTheme.secondary)
                 }
             }
         }
-        .padding(22)
-        .cardStyle()
+        .onDisappear { stopCapture() }
     }
 
-    private func buildSearches() {
-        searches = PrivacySweepPlanner.searches(
-            fullName: fullName,
-            emailOrPhone: emailOrPhone,
-            location: location
-        )
-        feedback = nil
-    }
-
-    private func saveFinding() {
-        guard caseStore.addCase(label: findingLabel, urlString: findingURL) else {
-            feedback = nil
-            return
+    private func toggleCapture() {
+        if capturing {
+            stopCapture()
+        } else {
+            startCapture()
         }
-        findingLabel = ""
-        findingURL = ""
-        feedback = "Finding saved only on this Mac."
     }
 
-    private func copyRemovalDraft(for removalCase: PrivacyRemovalCase) {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(
-            caseStore.removalDraft(for: removalCase),
-            forType: .string
-        )
-        if removalCase.state == .identityConfirmed {
-            caseStore.transition(id: removalCase.id, to: .draftReady)
+    private func startCapture() {
+        errorText = nil
+        capturing = true
+        captureStateChanged(true)
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { event in
+            handle(event)
+            return nil
         }
-        feedback = "Deletion-request draft copied. Review it before sending."
     }
-}
 
-private struct SweepField: View {
-    let title: String
-    @Binding var text: String
-
-    var body: some View {
-        TextField(title, text: $text)
-            .textFieldStyle(.plain)
-            .font(.system(size: 12.5))
-            .padding(.horizontal, 12)
-            .frame(height: 38)
-            .background(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(LocalVoiceTheme.panel)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .stroke(LocalVoiceTheme.line, lineWidth: 1)
-            )
-    }
-}
-
-private struct PrivacyCaseRow: View {
-    let removalCase: PrivacyRemovalCase
-    let transition: (PrivacyCaseState) -> Void
-    let copyDraft: () -> Void
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(
-                systemName: removalCase.state == .removed
-                    ? "checkmark.seal.fill"
-                    : "shield.lefthalf.filled"
-            )
-                .foregroundColor(
-                    removalCase.state == .removed
-                        ? LocalVoiceTheme.accent
-                        : LocalVoiceTheme.secondary
-                )
-                .frame(width: 20)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(removalCase.label)
-                    .font(.system(size: 12.5, weight: .semibold))
-                Text(
-                    [
-                        removalCase.exposureURL.host
-                            ?? removalCase.exposureURL.absoluteString,
-                        "\(removalCase.events.count) timeline events",
-                    ]
-                    .joined(separator: " · ")
-                )
-                    .font(.system(size: 11))
-                    .foregroundColor(LocalVoiceTheme.muted)
-                    .lineLimit(1)
-            }
-
-            Spacer()
-
-            Button("Open") {
-                NSWorkspace.shared.open(removalCase.exposureURL)
-            }
-            .buttonStyle(.borderless)
-
-            if let brokerID = removalCase.brokerID,
-               let broker = PrivacyBrokerRegistry.broker(id: brokerID) {
-                Button("Official opt-out") {
-                    NSWorkspace.shared.open(broker.optOutURL)
-                }
-                .buttonStyle(.borderless)
-                .help(
-                    "Verified \(broker.workflowVerifiedAt.formatted(date: .abbreviated, time: .omitted)); requires \(broker.verificationMethods.map { $0.label }.joined(separator: ", "))"
-                )
-            }
-
-            Button("Copy draft", action: copyDraft)
-                .buttonStyle(.borderless)
-                .disabled(
-                    ![.identityConfirmed, .draftReady, .awaitingUserSubmission]
-                        .contains(removalCase.state)
-                )
-
-            Menu(removalCase.state.label) {
-                ForEach(
-                    PrivacyWorkflow.allowedTransitions(from: removalCase.state)
-                        .filter { $0 != .removed },
-                    id: \.self
-                ) { state in
-                    Button(state.label) {
-                        transition(state)
-                    }
-                }
-                if PrivacyWorkflow.allowedTransitions(
-                    from: removalCase.state
-                ).contains(.removed) {
-                    Text("Removal needs confirmation evidence")
-                }
-            }
-            .frame(width: 150)
+    private func stopCapture() {
+        if let monitor {
+            NSEvent.removeMonitor(monitor)
         }
-        .padding(.horizontal, 14)
-        .frame(minHeight: 56)
+        monitor = nil
+        if capturing {
+            capturing = false
+            captureStateChanged(false)
+        }
+    }
+
+    private func handle(_ event: NSEvent) {
+        switch event.type {
+        case .flagsChanged:
+            guard Self.modifierOnlyKeyCodes.contains(event.keyCode),
+                  Self.modifierIsPressed(event) else { return }
+            finish(HotkeyConfig(keyCode: event.keyCode, modifiers: []))
+        case .keyDown:
+            if event.keyCode == 53 {
+                stopCapture()
+                return
+            }
+            finish(HotkeyConfig(keyCode: event.keyCode, modifiers: Self.modifierNames(event.modifierFlags)))
+        default:
+            break
+        }
+    }
+
+    private func finish(_ newHotkey: HotkeyConfig) {
+        stopCapture()
+        errorText = commit(newHotkey)
+    }
+
+    private static func modifierIsPressed(_ event: NSEvent) -> Bool {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        switch event.keyCode {
+        case 63: return flags.contains(.function)
+        case 54, 55: return flags.contains(.command)
+        case 56, 60: return flags.contains(.shift)
+        case 58, 61: return flags.contains(.option)
+        case 59, 62: return flags.contains(.control)
+        default: return false
+        }
+    }
+
+    private static func modifierNames(_ flags: NSEvent.ModifierFlags) -> [String] {
+        var names: [String] = []
+        if flags.contains(.command) { names.append("cmd") }
+        if flags.contains(.control) { names.append("ctrl") }
+        if flags.contains(.option) { names.append("opt") }
+        if flags.contains(.shift) { names.append("shift") }
+        return names
     }
 }
 
