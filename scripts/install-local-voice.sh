@@ -46,6 +46,13 @@ if [[ -z "${LOCAL_VOICE_CODESIGN_IDENTITY:-}" ]]; then
         if [[ -f "$KC" ]] && security find-certificate -c "Local Voice Dev" \
                 "$KC" >/dev/null 2>&1; then
             export LOCAL_VOICE_CODESIGN_IDENTITY="Local Voice Dev"
+            if [[ "$KC" == *local-voice-signing* ]]; then
+                # Dedicated headless keychain: unlock it and tell codesign
+                # where the identity lives — SSH sessions cannot resolve
+                # identities through the default search list.
+                export LOCAL_VOICE_CODESIGN_KEYCHAIN="$KC"
+                security unlock-keychain -p "local-voice-dev" "$KC" || true
+            fi
             echo "==> Signing with stable identity 'Local Voice Dev' (${KC})"
             break
         fi
