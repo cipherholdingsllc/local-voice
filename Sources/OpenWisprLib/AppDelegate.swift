@@ -264,8 +264,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.setShortcutCaptureActive(active)
                 },
                 setShortcut: { [weak self] hotkey in
-                    self?.setShortcut(hotkey)
-                        ?? "Local Voice is not available to update the shortcut."
+                    guard let self else {
+                        return "Local Voice is not available to update the shortcut."
+                    }
+                    return self.setShortcut(hotkey)
                 }
             )
         )
