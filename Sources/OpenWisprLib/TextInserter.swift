@@ -79,20 +79,34 @@ class TextInserter {
     }
 
     /// Type the transcript as keystrokes. Does not touch the clipboard.
+    ///
+    /// Posts UTF-16 batches rather than one event pair per scalar: a long
+    /// take otherwise floods the HID tap with thousands of synchronous posts,
+    /// starving the main runloop (which can get our own event tap killed).
+    /// Working in UTF-16 units also keeps surrogate pairs intact — a
+    /// per-scalar `UniChar(scalar.value)` traps on anything past the BMP.
     private func insertViaUnicode(_ text: String) {
         if let unicodeWriter {
             unicodeWriter(text)
             return
         }
         guard let source = CGEventSource(stateID: .hidSystemState) else { return }
-        for scalar in text.unicodeScalars {
-            var chars = [UniChar(scalar.value)]
+        let units = Array(text.utf16)
+        var index = 0
+        let batchSize = 16
+        while index < units.count {
+            let count = min(batchSize, units.count - index)
+            var chunk = Array(units[index..<index + count])
             if let down = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
                let up = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) {
-                down.keyboardSetUnicodeString(stringLength: 1, unicodeString: &chars)
-                up.keyboardSetUnicodeString(stringLength: 1, unicodeString: &chars)
+                down.keyboardSetUnicodeString(stringLength: count, unicodeString: &chunk)
+                up.keyboardSetUnicodeString(stringLength: count, unicodeString: &chunk)
                 down.post(tap: .cghidEventTap)
                 up.post(tap: .cghidEventTap)
+            }
+            index += count
+            if index < units.count {
+                Thread.sleep(forTimeInterval: 0.003)
             }
         }
     }

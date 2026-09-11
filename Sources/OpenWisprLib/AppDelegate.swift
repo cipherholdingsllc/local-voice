@@ -397,21 +397,48 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         insertTranscribedText(text)
     }
 
-    @discardableResult
-    private func insertTranscribedText(_ text: String) -> TextInsertOutcome {
-        restoreCaptureAppFocus()
-        let outcome = inserter.insert(text: text)
-        persistLastInsert(text: text, outcome: outcome)
-        refreshPermissionState(force: true)
-        return outcome
+    /// Inserts on a background queue: activate is asynchronous, so the field
+    /// must be frontmost before AX writes or keystroke events — otherwise a
+    /// fast finish types into whatever still has focus and the take appears
+    /// to never paste.
+    private func insertTranscribedText(
+        _ text: String,
+        completion: ((TextInsertOutcome) -> Void)? = nil
+    ) {
+        let bundle = captureBundleIdentifier
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            self.restoreCaptureAppFocus(bundle: bundle)
+            let outcome = self.inserter.insert(text: text)
+            DispatchQueue.main.async {
+                self.persistLastInsert(text: text, outcome: outcome)
+                self.refreshPermissionState(force: true)
+                completion?(outcome)
+            }
+        }
     }
 
-    private func restoreCaptureAppFocus() {
-        guard let bundle = captureBundleIdentifier,
-              bundle != "com.cipherholdings.localvoice" else { return }
-        NSRunningApplication.runningApplications(withBundleIdentifier: bundle)
-            .first?
-            .activate(options: [.activateIgnoringOtherApps])
+    private func restoreCaptureAppFocus(bundle: String?) {
+        guard let bundle,
+              bundle != "com.cipherholdings.localvoice",
+              let app = NSRunningApplication
+                  .runningApplications(withBundleIdentifier: bundle)
+                  .first
+        else { return }
+        if !app.isActive {
+            app.activate(options: [.activateIgnoringOtherApps])
+        }
+        // Bounded wait for the activation to land — then a short settle so the
+        // app has marked a focused element before we write into it.
+        let deadline = Date().addingTimeInterval(1.0)
+        while Date() < deadline {
+            if NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+                == bundle {
+                Thread.sleep(forTimeInterval: 0.04)
+                return
+            }
+            Thread.sleep(forTimeInterval: 0.02)
+        }
     }
 
     private func persistLastInsert(text: String, outcome: TextInsertOutcome) {
@@ -810,6 +837,16 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             )
             isPressed = false
             isLockMode = false
+        } else if isPressed {
+            // A fresh key-down while a take is still running means the earlier
+            // release was dropped while the event tap was dead. Flush the
+            // stale take (silence is rejected downstream) instead of
+            // swallowing every press until the session cap fires.
+            fputs(
+                "Local Voice: flushing stale take; fn release was missed\n",
+                stderr
+            )
+            handleRecordingStop()
         }
 
         let isToggle = config.toggleMode?.value ?? false
@@ -847,10 +884,15 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         captureModeName = AppPromptProfiles.profile(for: captureBundleIdentifier).name
         captureRequestID = UUID()
         streamingSessionGate.begin(captureRequestID)
-        captureProfileID = VoiceContractProfileID.localVoiceProfile(
-            bundleIdentifier: captureBundleIdentifier,
-            modeName: captureModeName
-        )
+        // A double-tap lock fires onLockChanged before onKeyDown — the locked
+        // profile it already promoted must survive start or the take silently
+        // reverts to the app's short hold cap.
+        if !isLockMode {
+            captureProfileID = VoiceContractProfileID.localVoiceProfile(
+                bundleIdentifier: captureBundleIdentifier,
+                modeName: captureModeName
+            )
+        }
         streamingPartial = ""
         liveComposer.reset()
         captureVisibleSpellings = []
@@ -1158,24 +1200,43 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                             }
                         }
                     }
-                    var insertOutcome: TextInsertOutcome?
+                    let finishInsertHUD: (TextInsertOutcome) -> Void = { outcome in
+                        guard self.config.showCursorHUD?.value ?? true else { return }
+                        let dest = self.captureApplicationName.isEmpty
+                            ? "the field"
+                            : self.captureApplicationName
+                        let snippet = String(text.prefix(80))
+                        let landed = outcome.didConfirmFieldInsert
+                        let hud = landed
+                            ? "\(dest): \(snippet)"
+                            : "History only (\(dest)): \(snippet)"
+                        self.pillOverlay.show(
+                            state: landed ? .transcribing : .error,
+                            partialText: hud,
+                            detail: cleanupDetail,
+                            playEarcon: false
+                        )
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+                            self.pillOverlay.hide()
+                        }
+                    }
                     if !text.isEmpty {
                         self.lastTranscription = text
                         if self.dashboardCaptureMode {
-                            insertOutcome = self.insertTranscribedText(text)
+                            self.insertTranscribedText(text, completion: finishInsertHUD)
                         } else if self.liveComposer.hasLiveInsertion {
                             if self.liveComposer.commitFinal(text) {
-                                insertOutcome = .insertedViaLiveComposer
                                 self.persistLastInsert(
                                     text: text,
                                     outcome: .insertedViaLiveComposer
                                 )
+                                finishInsertHUD(.insertedViaLiveComposer)
                             } else {
-                                insertOutcome = self.insertTranscribedText(text)
+                                self.insertTranscribedText(text, completion: finishInsertHUD)
                             }
                             VoiceCommandExecutor.shared.flush()
                         } else {
-                            insertOutcome = self.insertTranscribedText(text)
+                            self.insertTranscribedText(text, completion: finishInsertHUD)
                             VoiceCommandExecutor.shared.flush()
                         }
                         self.captureVisibleSpellings = []
@@ -1251,25 +1312,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
                     self.statusBar.sttEngineName = self.sttRouter.activeEngineName()
                     self.statusBar.state = .idle
-                    if !text.isEmpty, self.config.showCursorHUD?.value ?? true {
-                        let dest = self.captureApplicationName.isEmpty
-                            ? "the field"
-                            : self.captureApplicationName
-                        let snippet = String(text.prefix(80))
-                        let landed = insertOutcome?.didConfirmFieldInsert ?? false
-                        let hud = landed
-                            ? "\(dest): \(snippet)"
-                            : "History only (\(dest)): \(snippet)"
-                        self.pillOverlay.show(
-                            state: landed ? .transcribing : .error,
-                            partialText: hud,
-                            detail: cleanupDetail,
-                            playEarcon: false
-                        )
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
-                            self.pillOverlay.hide()
-                        }
-                    } else if taught.message == nil {
+                    if text.isEmpty, taught.message == nil {
                         self.pillOverlay.hide()
                     }
                     self.statusBar.buildMenu()
@@ -1337,7 +1380,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 DispatchQueue.main.async {
                     if !text.isEmpty {
                         self.lastTranscription = text
-                        _ = self.insertTranscribedText(text)
+                        self.insertTranscribedText(text)
                         self.statusBar.state = .idle
                         self.statusBar.buildMenu()
                     } else {

@@ -58,7 +58,21 @@ func cmdStart() {
         exit(0)
     }
 
+    // pkill / install scripts send SIGTERM. Route it through AppKit so
+    // applicationWillTerminate runs and the persistent whisper-server child
+    // is shut down instead of orphaned.
+    signal(SIGTERM, SIG_IGN)
+    let sigtermSource = DispatchSource.makeSignalSource(
+        signal: SIGTERM,
+        queue: .main
+    )
+    sigtermSource.setEventHandler {
+        NSApp.terminate(nil)
+    }
+    sigtermSource.resume()
+
     app.run()
+    withExtendedLifetime(sigtermSource) {}
 }
 
 func cmdDashboardPreview() {

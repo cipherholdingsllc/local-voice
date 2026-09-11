@@ -25,9 +25,19 @@ final class CGEventHotkeyManager {
     private var lastShortReleaseTime: TimeInterval = 0
     private var lastHandledEventTimestamp: CGEventTimestamp = 0
     private var hidTapActive = false
+    /// Set when a take ends programmatically (session cap, cancel) while the
+    /// key is still physically held. Suppresses presses until the real release
+    /// so a post-stop tap reconcile cannot start a phantom take mid-hold.
+    private var suppressUntilKeyUp = false
+    /// Physical down timestamp, used to tell tap-like presses from real holds.
+    private var physicalDownTime: TimeInterval?
 
     private static let holdThreshold: TimeInterval = 0.22
     private static let doubleTapWindow: TimeInterval = 0.55
+    /// A hold released within this window is a tap, not dictation — the
+    /// speculative take is cancelled and the release counts toward a
+    /// double-tap lock instead of transcribing a fraction of a second.
+    private static let tapLikeHoldMax: TimeInterval = 0.40
 
     init(keyCode: UInt16, modifiers: UInt64 = 0, activationMode: HotkeyActivationMode = .hold) {
         self.keyCode = keyCode
@@ -120,6 +130,9 @@ final class CGEventHotkeyManager {
         isLockEngaged = false
         keyHeld = false
         holdConfirmed = false
+        if modifierPhysicallyDown {
+            suppressUntilKeyUp = true
+        }
     }
 
     func stop() {
@@ -141,6 +154,8 @@ final class CGEventHotkeyManager {
         keyHeld = false
         holdConfirmed = false
         isLockEngaged = false
+        suppressUntilKeyUp = false
+        physicalDownTime = nil
         onKeyCancel = nil
     }
 
@@ -195,8 +210,27 @@ final class CGEventHotkeyManager {
             guard modifiersMatch(event) else { return }
 
             let isDown = Self.modifierFlagIsDown(flags: event.flags, keyCode: keyCode)
-            guard isDown != modifierPhysicallyDown else { return }
-            modifierPhysicallyDown = isDown
+
+            if suppressUntilKeyUp {
+                modifierPhysicallyDown = isDown
+                if !isDown {
+                    suppressUntilKeyUp = false
+                }
+                return
+            }
+
+            if isDown == modifierPhysicallyDown {
+                if !isDown { return }
+                // A second physical down can only happen after a release —
+                // the key-up was dropped while the tap was dead. Flush the
+                // stale gesture first so the hold cannot wedge the hotkey.
+                modifierPhysicallyDown = false
+                handleModifierUp()
+                modifierPhysicallyDown = true
+                keyHeld = false
+            } else {
+                modifierPhysicallyDown = isDown
+            }
 
             if isDown {
                 handleModifierDown()
@@ -232,6 +266,7 @@ final class CGEventHotkeyManager {
         case .holdAndDoubleTapLock:
             // When locked, still accept taps for double-tap unlock (down ignored; up handles unlock).
             if isLockEngaged { return }
+            physicalDownTime = ProcessInfo.processInfo.systemUptime
             holdPendingWork?.cancel()
             let work = DispatchWorkItem { [weak self] in
                 guard let self = self, self.modifierPhysicallyDown, !self.isLockEngaged else { return }
@@ -271,7 +306,20 @@ final class CGEventHotkeyManager {
                 holdConfirmed = false
                 guard !isLockEngaged else { return }
                 keyHeld = false
-                onKeyUp?()
+                let heldFor = ProcessInfo.processInfo.systemUptime
+                    - (physicalDownTime ?? ProcessInfo.processInfo.systemUptime)
+                physicalDownTime = nil
+                if heldFor < Self.tapLikeHoldMax {
+                    // Tap-length press: drop the speculative take instead of
+                    // transcribing dead air, and let it count toward a
+                    // double-tap so slower taps still lock.
+                    onKeyCancel?()
+                    if isDoubleTap() {
+                        toggleLock()
+                    }
+                } else {
+                    onKeyUp?()
+                }
                 return
             }
             if isDoubleTap() {
@@ -283,6 +331,10 @@ final class CGEventHotkeyManager {
     }
 
     private func toggleLock() {
+        // The release that toggles must not seed the next double-tap window —
+        // otherwise a stray tap within 550ms of engaging instantly unlocks,
+        // and the unlock release can immediately re-arm a lock.
+        lastShortReleaseTime = 0
         if isLockEngaged {
             isLockEngaged = false
             keyHeld = false
@@ -306,7 +358,14 @@ final class CGEventHotkeyManager {
     // MARK: - Regular keys
 
     private func fireKeyDownIfNeeded() {
-        guard !keyHeld else { return }
+        if keyHeld {
+            // A second keyDown can only arrive after a release — the key-up
+            // was dropped while the tap was dead. Flush the stale gesture so
+            // this press is not swallowed forever.
+            fireKeyUpIfNeeded()
+            keyHeld = false
+            holdConfirmed = false
+        }
         switch activationMode {
         case .hold, .toggle:
             keyHeld = true
@@ -347,6 +406,10 @@ final class CGEventHotkeyManager {
             physicallyDown = keyHeld
         }
         modifierPhysicallyDown = physicallyDown
+        if suppressUntilKeyUp {
+            if physicallyDown { return }
+            suppressUntilKeyUp = false
+        }
         switch HotkeyHoldReconcile.action(
             keyHeld: keyHeld,
             physicallyDown: physicallyDown,

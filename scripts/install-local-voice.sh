@@ -34,6 +34,17 @@ DEST="${DEST_DIR}/${APP_NAME}"
 BINARY="${REPO_ROOT}/.build/release/local-voice"
 ARTIFACTS="${HOME}/Artifacts/local-voice"
 
+# Ad-hoc signing keys TCC grants (Accessibility, Input Monitoring, Post
+# Event) to the build's cdhash, so every rebuild silently loses them. When a
+# stable "Local Voice Dev" codesigning identity exists in the login
+# keychain, sign with it so grants survive upgrades.
+if [[ -z "${LOCAL_VOICE_CODESIGN_IDENTITY:-}" ]] \
+    && security find-certificate -c "Local Voice Dev" \
+        ~/Library/Keychains/login.keychain-db >/dev/null 2>&1; then
+    export LOCAL_VOICE_CODESIGN_IDENTITY="Local Voice Dev"
+    echo "==> Signing with stable identity 'Local Voice Dev'"
+fi
+
 if [[ $BUILD -eq 1 ]]; then
     echo "==> Building release binary"
     swift build -c release --product local-voice
