@@ -3,13 +3,11 @@ import Foundation
 public enum UsefulEngine: String, Codable, CaseIterable, Sendable {
     case ollama
     case template
-    case auto
 
     public var title: String {
         switch self {
         case .ollama: return "Ollama"
         case .template: return "Template"
-        case .auto: return "Auto"
         }
     }
 }
@@ -36,15 +34,13 @@ public final class UsefulTransformer {
             return OllamaCleanup.isReachable() ? .ollama : .template
         case .template:
             return .template
-        case .auto:
-            return OllamaCleanup.isReachable() ? .ollama : .template
         }
     }
 
     public func draft(
         record: LocalVoiceRecord,
         type: ArtifactType,
-        engine: UsefulEngine = .auto
+        engine: UsefulEngine = .ollama
     ) -> UsefulDraft {
         let resolved = effectiveEngine(engine)
         if resolved == .ollama {

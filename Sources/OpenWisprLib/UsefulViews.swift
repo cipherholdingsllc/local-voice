@@ -160,7 +160,7 @@ public struct MakeUsefulView: View {
     let record: LocalVoiceRecord
     @Environment(\.dismiss) private var dismiss
     @State private var type: ArtifactType = .prompt
-    @State private var engine: UsefulEngine = .auto
+    @State private var engine: UsefulEngine = .ollama
     @State private var content = ""
     @State private var isGenerating = false
     @State private var isSaved = false
