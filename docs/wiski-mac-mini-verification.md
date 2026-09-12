@@ -1,4 +1,4 @@
-# Mac mini — Whicki first-slice verification checklist
+# Mac mini — Wiski first-slice verification checklist
 
 Run this over `ssh macmini` (or the equivalent SSH alias). All `~/.config/local-voice` paths are relative to the Mac mini user as noted in `local-voice-doctor`.
 
