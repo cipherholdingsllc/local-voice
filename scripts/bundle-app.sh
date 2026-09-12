@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -eo pipefail
 
 BINARY="${1:-.build/release/local-voice}"
 APP_DIR="${2:-Local Voice.app}"

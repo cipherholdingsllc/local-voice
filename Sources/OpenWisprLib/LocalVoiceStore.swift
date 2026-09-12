@@ -207,6 +207,34 @@ public final class LocalVoiceStore: ObservableObject {
         return values[midpoint]
     }
 
+    public func related(to record: LocalVoiceRecord) -> [LocalVoiceRecord] {
+        let tokens = Self.tokens(from: record.text)
+        guard !tokens.isEmpty else { return [] }
+        let candidates = records.filter { $0.id != record.id }
+        guard !candidates.isEmpty else { return [] }
+        let scored = candidates
+            .map { ($0, Set(Self.tokens(from: $0.text)).intersection(tokens).count) }
+            .filter { $0.1 > 0 }
+            .sorted { $0.1 > $1.1 }
+            .prefix(20)
+            .map { $0.0 }
+        return scored
+    }
+
+    private static let stopWords: Set<String> = [
+        "a", "an", "the", "and", "or", "but", "to", "of", "in", "on", "at", "for",
+        "with", "is", "are", "was", "were", "it", "that", "this", "i", "you", "he",
+        "she", "we", "they", "have", "has", "had", "be", "been", "do", "does", "did",
+        "can", "will", "would", "could", "should", "may", "might", "not", "no", "yes"
+    ]
+
+    private static func tokens(from text: String) -> Set<String> {
+        let cleaned = text.lowercased().components(separatedBy: CharacterSet.letters.inverted)
+        return Set(cleaned.filter { word in
+            word.count > 3 && !stopWords.contains(word)
+        })
+    }
+
     public func updateRuntime(_ transform: @escaping (inout LocalVoiceRuntimeSnapshot) -> Void) {
         if !Thread.isMainThread {
             DispatchQueue.main.async { [weak self] in

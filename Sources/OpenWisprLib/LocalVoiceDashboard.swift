@@ -147,6 +147,8 @@ public struct LocalVoiceDashboard: View {
             PrivacyView(store: store, actions: actions)
         case .settings:
             SettingsView(actions: actions)
+        case .artifacts:
+            ArtifactsView()
         }
     }
 }
@@ -160,6 +162,7 @@ private enum DashboardSection: String, CaseIterable, Identifiable {
     case models
     case privacy
     case settings
+    case artifacts
 
     var id: String { rawValue }
 
@@ -173,6 +176,7 @@ private enum DashboardSection: String, CaseIterable, Identifiable {
         case .models: return "Models"
         case .privacy: return "Privacy"
         case .settings: return "Settings"
+        case .artifacts: return "Artifacts"
         }
     }
 
@@ -186,6 +190,7 @@ private enum DashboardSection: String, CaseIterable, Identifiable {
         case .models: return "cpu"
         case .privacy: return "lock.shield"
         case .settings: return "gearshape"
+        case .artifacts: return "doc.plaintext"
         }
     }
 }
@@ -525,6 +530,8 @@ private struct RuntimeCard: View {
 private struct HistoryView: View {
     @ObservedObject var store: LocalVoiceStore
     @State private var query = ""
+    @State private var usefulRecord: LocalVoiceRecord?
+    @State private var relatedRecord: LocalVoiceRecord?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -564,7 +571,11 @@ private struct HistoryView: View {
                 ScrollView {
                     LazyVStack(spacing: 10) {
                         ForEach(filtered) { record in
-                            HistoryCard(record: record)
+                            HistoryCard(
+                                record: record,
+                                makeUseful: { usefulRecord = record },
+                                related: { relatedRecord = record }
+                            )
                         }
                     }
                 }
@@ -572,6 +583,12 @@ private struct HistoryView: View {
         }
         .padding(32)
         .background(LocalVoiceTheme.background)
+        .sheet(item: $usefulRecord) { record in
+            MakeUsefulView(record: record)
+        }
+        .sheet(item: $relatedRecord) { record in
+            RelatedRecordsView(record: record)
+        }
     }
 
     private var filtered: [LocalVoiceRecord] {
@@ -1286,6 +1303,8 @@ private struct RecordRow: View {
 
 private struct HistoryCard: View {
     let record: LocalVoiceRecord
+    let makeUseful: () -> Void
+    let related: () -> Void
     @State private var copied = false
     @State private var copiedContract = false
 
@@ -1304,6 +1323,28 @@ private struct HistoryCard: View {
                 }
                 Spacer()
                 SmallTag(text: record.modeName)
+                Button {
+                    makeUseful()
+                } label: {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(LocalVoiceTheme.secondary)
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(LocalVoiceTheme.raised))
+                }
+                .buttonStyle(.plain)
+                .help("Make useful")
+                Button {
+                    related()
+                } label: {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(LocalVoiceTheme.secondary)
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(LocalVoiceTheme.raised))
+                }
+                .buttonStyle(.plain)
+                .help("Find related")
                 if let contractJSON = record.contractJSON {
                     Button {
                         NSPasteboard.general.clearContents()
@@ -1376,7 +1417,7 @@ private struct HistoryCard: View {
     }
 }
 
-private struct AppGlyph: View {
+struct AppGlyph: View {
     let name: String
 
     var body: some View {
