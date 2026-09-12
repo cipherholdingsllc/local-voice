@@ -1,10 +1,10 @@
-# Whicki / Local Voice — 5-layer architecture
+# Whiski / Local Voice — 5-layer architecture
 
 This is the data-flow architecture for Nate's personal voice-to-capability system, built on top of the existing `local-voice` substrate.
 
 ## North Star
 
-Whicki turns dictated speech into compounding capability: every dictation can become a reviewed, reusable artifact (prompt, note, task, decision record, idea brief, checklist, reusable instruction, or skill candidate) that is exported with provenance and reused in future agent sessions. Everything stays local and operator-approved — the machine drafts, the human decides.
+Whiski turns dictated speech into compounding capability: every dictation can become a reviewed, reusable artifact (prompt, note, task, decision record, idea brief, checklist, reusable instruction, or skill candidate) that is exported with provenance and reused in future agent sessions. Everything stays local and operator-approved — the machine drafts, the human decides.
 
 ## Layers
 
@@ -85,7 +85,7 @@ Whicki turns dictated speech into compounding capability: every dictation can be
 - **Slice 1 — done (this branch):** dictate → history → Make Useful draft (all 8 types) → edit → save → approve → export Markdown+clipboard with provenance header → manual reuse record → transcript-delete cascade.
 - **Next:** connect-surface digest — Connect clusters and approved corrections summarized as a reviewable digest.
 - **Then:** agent export formats — agent-consumable output (e.g. SKILL.md-style) so `skillCandidate` and `reusableInstruction` artifacts drop straight into agent tooling.
-- **Then:** sync approved artifacts to the Whicki repo so capability compounds outside this app.
+- **Then:** sync approved artifacts to the Whiski repo so capability compounds outside this app.
 
 ## Nemesis constraints honored
 
