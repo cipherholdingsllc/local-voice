@@ -76,7 +76,14 @@ final class TextPostProcessorTests: XCTestCase {
     }
 
     func testDash() {
-        XCTAssertEqual(TextPostProcessor.process("one dash two"), "one  — two")
+        XCTAssertEqual(TextPostProcessor.process("one dash two"), "one – two")
+        XCTAssertFalse(TextPostProcessor.process("one dash two").contains("\u{2014}"))
+    }
+
+    func testSpokenEmDashBecomesEnDash() {
+        let out = TextPostProcessor.process("one em dash two")
+        XCTAssertEqual(out, "one – two")
+        XCTAssertFalse(out.contains("\u{2014}"))
     }
 
     func testHyphen() {
