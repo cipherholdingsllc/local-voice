@@ -29,19 +29,7 @@ public enum ConnectIntelligence {
             for phrase in feature.bigrams.union(feature.trigrams) { frequencies[phrase, default: 0] += 1 }
         }
         let maximumGenericFrequency = max(2, records.count / 4)
-        var parent = Dictionary(uniqueKeysWithValues: records.map { ($0.id, $0.id) })
-        var edgeScores: [Set<UUID>: Int] = [:]
-
-        func root(_ id: UUID) -> UUID {
-            var current = id
-            while parent[current] != current { current = parent[current]! }
-            return current
-        }
-        func union(_ lhs: UUID, _ rhs: UUID) {
-            let left = root(lhs)
-            let right = root(rhs)
-            if left.uuidString < right.uuidString { parent[right] = left } else { parent[left] = right }
-        }
+        var relationships: [(records: [LocalVoiceRecord], terms: [String], score: Int)] = []
 
         let inverted = invertedIndex(features: features)
         var candidatePairs = Set<Set<UUID>>()
@@ -67,31 +55,28 @@ public enum ConnectIntelligence {
             if lhs.modeName == rhs.modeName { score += 1 }
             if abs(lhs.createdAt.timeIntervalSince(rhs.createdAt)) <= 14 * 86_400 { score += 2 }
             guard score >= minimumScore else { continue }
-            edgeScores[pair] = score
-            union(lhs.id, rhs.id)
-        }
-
-        let connectedIDs = edgeScores.keys.reduce(into: Set<UUID>()) { $0.formUnion($1) }
-        let grouped = Dictionary(grouping: records.filter { connectedIDs.contains($0.id) }) { root($0.id) }
-        return grouped.values.compactMap { members in
-            guard members.count >= 2 else { return nil }
-            let ids = members.map(\.id).sorted { $0.uuidString < $1.uuidString }
-            let common = ids.dropFirst().reduce(features[ids[0]]!.all) { $0.intersection(features[$1]!.all) }
-            let terms = common.sorted { lhs, rhs in
+            let terms = sharedTrigrams.union(sharedBigrams).union(sharedTokens).sorted { lhs, rhs in
                 let leftWords = lhs.split(separator: " ").count
                 let rightWords = rhs.split(separator: " ").count
                 return leftWords == rightWords ? lhs < rhs : leftWords > rightWords
             }
-            let score = edgeScores.filter { $0.key.isSubset(of: Set(ids)) }.values.reduce(0, +)
+            relationships.append((records: [lhs, rhs], terms: terms, score: score))
+        }
+
+        return relationships.map { relationship in
+            let members = relationship.records
+            let ids = members.map(\.id).sorted { $0.uuidString < $1.uuidString }
             return RelatedThoughtCluster(
                 id: ids.map(\.uuidString).joined(separator: ":"),
                 recordIDs: ids,
-                sharedTerms: Array(terms.prefix(5)),
-                score: score,
+                sharedTerms: Array(relationship.terms.prefix(5)),
+                score: relationship.score,
                 earliest: members.map(\.createdAt).min()!,
                 latest: members.map(\.createdAt).max()!
             )
-        }.sorted { $0.latest == $1.latest ? $0.score > $1.score : $0.latest > $1.latest }
+        }.sorted {
+            $0.score == $1.score ? $0.latest > $1.latest : $0.score > $1.score
+        }.prefix(50).map { $0 }
     }
 
     private struct Features {
