@@ -101,4 +101,12 @@ final class TextPostProcessorTests: XCTestCase {
     func testEnsureSpaceAfterPunctuation() {
         XCTAssertEqual(TextPostProcessor.process("hello,world"), "hello, world")
     }
+
+    func testDotDotDotBecomesEllipsis() {
+        XCTAssertEqual(TextPostProcessor.process("wait dot dot dot what"), "wait... what")
+    }
+
+    func testSingleDotStaysLiteral() {
+        XCTAssertEqual(TextPostProcessor.process("the dot com bubble"), "the dot com bubble")
+    }
 }

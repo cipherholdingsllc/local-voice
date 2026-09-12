@@ -11,3 +11,5 @@
 .vscode/
 docs/superpowers/
 .worktrees/
+Benchmarks/real-speech-crucible/audio/
+Benchmarks/real-speech-crucible/traces/

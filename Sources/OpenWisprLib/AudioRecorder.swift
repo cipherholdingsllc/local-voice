@@ -4,7 +4,7 @@ import Foundation
 
 class AudioRecorder {
     private var audioEngine: AVAudioEngine?
-    private var isRecording = false
+    private(set) var isRecording = false
     private var currentOutputURL: URL?
     var preferredDeviceID: AudioDeviceID?
     var onLevel: ((Float) -> Void)?

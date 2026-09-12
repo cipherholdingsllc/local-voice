@@ -89,6 +89,16 @@ public class Transcriber {
         "INAUDIBLE", "inaudible",
     ]
 
+    /// Bracketed spans made only of these words are Whisper audio-event
+    /// markers, not speech — "(dramatic music)", "[MUSIC PLAYING]", etc.
+    private static let markerWords: Set<String> = [
+        "music", "playing", "dramatic", "applause", "laughter", "laughing",
+        "silence", "sound", "sounds", "noise", "noises", "inaudible",
+        "blank", "audio", "background", "static", "crowd", "cheering",
+        "sighs", "sighing", "coughing", "instrumental", "softly", "faint",
+        "beep", "beeping", "ringing", "upbeat", "gentle",
+    ]
+
     private static let markerRegex = try! NSRegularExpression(
         pattern: "[\\[\\(]\\s*([^\\]\\)]+?)\\s*[\\]\\)]"
     )
@@ -100,7 +110,14 @@ public class Transcriber {
         for match in matches.reversed() {
             let innerRange = match.range(at: 1)
             let inner = nsText.substring(with: innerRange)
-            if knownMarkers.contains(inner) {
+            let innerWords = inner
+                .lowercased()
+                .components(separatedBy: CharacterSet.alphanumerics.inverted)
+                .filter { !$0.isEmpty }
+            let isMarker = knownMarkers.contains(inner)
+                || (!innerWords.isEmpty
+                    && innerWords.allSatisfy(markerWords.contains))
+            if isMarker {
                 let fullRange = Range(match.range, in: result)!
                 result.replaceSubrange(fullRange, with: "")
             }

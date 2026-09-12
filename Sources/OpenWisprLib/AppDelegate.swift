@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import AVFoundation
 
 private enum RecordingStopReason {
@@ -37,6 +38,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     private var permissionRepairOpenedCapability:
         LocalVoicePermissionCapability?
     private var wakeObserver: NSObjectProtocol?
+    private var frontmostObserver: NSObjectProtocol?
+    private var lastFrontmostBundleID: String?
     private var vocabularyObserver: NSObjectProtocol?
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
@@ -47,6 +50,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         statusBar = StatusBarController()
         recorder = AudioRecorder()
         startWakeMonitoring()
+        startFrontmostMonitoring()
         showDashboard()
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -122,10 +126,12 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
         if !AXIsProcessTrusted() {
             print("Accessibility: not granted")
-            Permissions.promptAccessibility()
         } else {
             print("Accessibility: granted")
         }
+        // Ask the OS for permission to type into the focused field.
+        // Do not open Settings here — that steals the dictation target.
+        PostEventAccess.requestOnce()
 
         if !Transcriber.modelExists(modelSize: config.modelSize) {
             DispatchQueue.main.async {
@@ -175,6 +181,11 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             LocalVoiceStore.shared.updateRuntime {
                 $0.privacyVerified = privacy.passed
                 $0.whisperReady = Transcriber.findWhisperBinary() != nil
+                $0.parakeetReady = self.sttRouter.parakeetIsRunning()
+                $0.parakeetHealthy = self.sttRouter.parakeetMarkedHealthy()
+                $0.engineName = self.sttRouter.activeEngineName()
+                $0.modelName = self.sttRouter.activeEngineModelName()
+                    ?? self.config.modelSize
             }
             self.refreshPermissionState(force: true)
         }
@@ -253,8 +264,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.setShortcutCaptureActive(active)
                 },
                 setShortcut: { [weak self] hotkey in
-                    self?.setShortcut(hotkey)
-                        ?? "Local Voice is not available to update the shortcut."
+                    guard let self else {
+                        return "Local Voice is not available to update the shortcut."
+                    }
+                    return self.setShortcut(hotkey)
                 }
             )
         )
@@ -281,6 +294,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
             self.wakeObserver = nil
         }
+        if let frontmostObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(frontmostObserver)
+            self.frontmostObserver = nil
+        }
         for manager in hotkeyManagers { manager.stop() }
         hotkeyManagers = []
         sttRouter?.shutdown(preserveParakeet: false)
@@ -296,22 +313,66 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func recoverAfterSystemWake() {
-        guard isReady, !isPressed else { return }
+    private func startFrontmostMonitoring() {
+        lastFrontmostBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        frontmostObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            self?.surviveFrontmostChange(note)
+        }
+    }
 
-        // Core Audio and local model processes can become stale across sleep.
-        // Re-arm capture immediately, then restore warm-model latency away
-        // from the main thread.
+    /// Cursor installs a session tap when it becomes frontmost and macOS
+    /// disables ours. Re-enable in place — do not call startListening().
+    private func surviveFrontmostChange(_ note: Notification) {
+        guard isReady, !shortcutCaptureActive else { return }
+        let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+        let current = app?.bundleIdentifier
+            ?? NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let previous = lastFrontmostBundleID
+        lastFrontmostBundleID = current
+        guard HotkeyTapSurvival.shouldRearmOnFrontmostChange(
+            previousBundleID: previous,
+            currentBundleID: current
+        ) else { return }
+        for manager in hotkeyManagers {
+            manager.surviveFrontmostChange(bundleID: current)
+        }
+        if HotkeyTapSurvival.isCompetingEditor(current) {
+            fputs(
+                "Local Voice: re-enabled fn tap after switch to \(current ?? "cursor")\n",
+                stderr
+            )
+        }
+    }
+
+    private func recoverAfterSystemWake() {
+        guard isReady else { return }
+
+        // A missed fn key-up leaves isPressed true, which used to skip this
+        // entire recovery and swallow every later hold. Cancel the stale
+        // session, then recreate the event tap. reload() tears down audio, so
+        // it must not run against a live take.
+        if isPressed {
+            handleRecordingCancel()
+        }
+        isLockMode = false
+
         recorder.reload()
+        if !shortcutCaptureActive {
+            startListening()
+        }
 
         guard config.keepModelWarm?.value ?? true,
               let router = sttRouter else {
-            print("Wake recovery: audio re-armed")
+            print("Wake recovery: hotkey and audio re-armed")
             return
         }
         DispatchQueue.global(qos: .userInitiated).async {
             router.warmup()
-            print("Wake recovery: audio re-armed; local model warm")
+            print("Wake recovery: hotkey and audio re-armed; local model warm")
         }
     }
 
@@ -333,7 +394,86 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
     func toggleRawPolished() {
         let text = TranscriptStore.shared.toggle()
-        inserter.insert(text: text)
+        insertTranscribedText(text)
+    }
+
+    /// Inserts on a background queue: activate is asynchronous, so the field
+    /// must be frontmost before AX writes or keystroke events — otherwise a
+    /// fast finish types into whatever still has focus and the take appears
+    /// to never paste.
+    private func insertTranscribedText(
+        _ text: String,
+        completion: ((TextInsertOutcome) -> Void)? = nil
+    ) {
+        let bundle = captureBundleIdentifier
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            self.restoreCaptureAppFocus(bundle: bundle)
+            let outcome = self.inserter.insert(text: text)
+            DispatchQueue.main.async {
+                self.persistLastInsert(text: text, outcome: outcome)
+                self.refreshPermissionState(force: true)
+                completion?(outcome)
+            }
+        }
+    }
+
+    private func restoreCaptureAppFocus(bundle: String?) {
+        guard let bundle,
+              bundle != "com.cipherholdings.localvoice",
+              let app = NSRunningApplication
+                  .runningApplications(withBundleIdentifier: bundle)
+                  .first
+        else { return }
+        if !app.isActive {
+            app.activate(options: [.activateIgnoringOtherApps])
+        }
+        // Bounded wait for the activation to land — then a short settle so the
+        // app has marked a focused element before we write into it.
+        let deadline = Date().addingTimeInterval(1.0)
+        while Date() < deadline {
+            if NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+                == bundle {
+                Thread.sleep(forTimeInterval: 0.04)
+                return
+            }
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+    }
+
+    private func persistLastInsert(text: String, outcome: TextInsertOutcome) {
+        try? LocalVoiceLastInsertProbe(
+            outcome: outcome,
+            accessibilityTrusted: AXIsProcessTrusted(),
+            postEventTrusted: PostEventAccess.isGranted(),
+            targetBundle: captureBundleIdentifier,
+            text: text
+        ).write()
+        let engineName = sttRouter?.activeEngineName() ?? "unknown engine"
+        LocalVoiceStore.shared.updateRuntime {
+            $0.lastTakeDetail = SpeechRouteDisplay.lastTakeDetail(
+                outcome: outcome,
+                engineName: engineName,
+                destination: self.captureApplicationName
+            )
+            $0.lastTakeLandedInField = outcome.didConfirmFieldInsert
+            if let router = self.sttRouter {
+                $0.engineName = router.activeEngineName()
+                $0.modelName = router.activeEngineModelName() ?? self.config.modelSize
+                $0.parakeetReady = router.parakeetIsRunning()
+                $0.parakeetHealthy = router.parakeetMarkedHealthy()
+            }
+        }
+    }
+
+    private func persistPermissionProbe() {
+        let snapshot = permissionCoordinator.latestSnapshot ?? Permissions.snapshot()
+        try? LocalVoicePermissionProbe.make(
+            snapshot: snapshot,
+            hotkeyMonitorReady: permissionCoordinator.hotkeyMonitorReady,
+            tapAttempted: !config.hotkeys.isEmpty,
+            tapStarted: !hotkeyManagers.isEmpty
+        ).write()
     }
 
     private func startListening() {
@@ -341,10 +481,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyManagers = []
         permissionCoordinator.updateHotkeyMonitorReady(false)
 
-        let permissions = permissionCoordinator.refresh().current
         let globalToggle = config.toggleMode?.value ?? false
-        if permissions.inputMonitoring {
-            for hk in config.hotkeys {
+        InputMonitoringAccess.registerWithTCC()
+        for hk in config.hotkeys {
                 let mode = hk.resolvedActivationMode(globalToggle: globalToggle)
                 let manager = CGEventHotkeyManager(
                     keyCode: hk.keyCode,
@@ -392,12 +531,19 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                         stderr
                     )
                 }
-            }
         }
         permissionCoordinator.updateHotkeyMonitorReady(
             !config.hotkeys.isEmpty
             && hotkeyManagers.count == config.hotkeys.count
         )
+
+        let probeSnapshot = permissionCoordinator.refresh().current
+        try? LocalVoicePermissionProbe.make(
+            snapshot: probeSnapshot,
+            hotkeyMonitorReady: permissionCoordinator.hotkeyMonitorReady,
+            tapAttempted: !config.hotkeys.isEmpty,
+            tapStarted: !hotkeyManagers.isEmpty
+        ).write()
 
         isReady = true
         statusBar.sttEngineName = sttRouter.activeEngineName()
@@ -405,11 +551,13 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             .first(where: { $0.code == config.language })?.name ?? config.language
         LocalVoiceStore.shared.updateRuntime {
             $0.engineName = self.sttRouter.activeEngineName()
-            $0.modelName = self.config.modelSize
+            $0.modelName = self.sttRouter.activeEngineModelName() ?? self.config.modelSize
             $0.languageName = languageName
             $0.whisperReady = Transcriber.findWhisperBinary() != nil
+            $0.parakeetReady = self.sttRouter.parakeetIsRunning()
+            $0.parakeetHealthy = self.sttRouter.parakeetMarkedHealthy()
         }
-        applyPermissionSnapshot(permissions)
+        applyPermissionSnapshot(probeSnapshot)
 
         let hotkeyDesc = config.hotkeySummary()
         print("Local Voice v\(OpenWispr.version)")
@@ -434,6 +582,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     private func refreshPermissionState(force: Bool = false) {
         let refresh = permissionCoordinator.refresh()
         let snapshot = refresh.current
+        persistPermissionProbe()
         guard isReady else {
             LocalVoiceStore.shared.updateRuntime {
                 $0.accessibilityReady = snapshot.accessibility
@@ -681,6 +830,25 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         // startListening() restarts and would silently swallow live Fn presses.
         guard isReady, !hotkeyManagers.isEmpty else { return }
 
+        if isPressed, !recorder.isRecording {
+            fputs(
+                "Local Voice: clearing stale fn hold; recorder was not running\n",
+                stderr
+            )
+            isPressed = false
+            isLockMode = false
+        } else if isPressed {
+            // A fresh key-down while a take is still running means the earlier
+            // release was dropped while the event tap was dead. Flush the
+            // stale take (silence is rejected downstream) instead of
+            // swallowing every press until the session cap fires.
+            fputs(
+                "Local Voice: flushing stale take; fn release was missed\n",
+                stderr
+            )
+            handleRecordingStop()
+        }
+
         let isToggle = config.toggleMode?.value ?? false
 
         if isToggle {
@@ -716,10 +884,15 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         captureModeName = AppPromptProfiles.profile(for: captureBundleIdentifier).name
         captureRequestID = UUID()
         streamingSessionGate.begin(captureRequestID)
-        captureProfileID = VoiceContractProfileID.localVoiceProfile(
-            bundleIdentifier: captureBundleIdentifier,
-            modeName: captureModeName
-        )
+        // A double-tap lock fires onLockChanged before onKeyDown — the locked
+        // profile it already promoted must survive start or the take silently
+        // reverts to the app's short hold cap.
+        if !isLockMode {
+            captureProfileID = VoiceContractProfileID.localVoiceProfile(
+                bundleIdentifier: captureBundleIdentifier,
+                modeName: captureModeName
+            )
+        }
         streamingPartial = ""
         liveComposer.reset()
         captureVisibleSpellings = []
@@ -936,12 +1109,14 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     text = TextPostProcessor.process(text)
                 }
                 let taught = DictationTeacher.consume(text)
-                text = VocabularyLearner.shared.postProcess(
+                let stages = VocabularyLearner.shared.stagedPostProcess(
                     taught.text,
                     configTerms: self.config.customVocabulary ?? [],
                     visibleSpellings: visibleSpellings,
                     pokerVocabularyEnabled: profileID == .pokerExploit
                 )
+                text = stages.finalText
+                let cleanupDetail = stages.cleanupLabels.pillDetail
 
                 LatencyInstrumentation.shared.mark("llm")
                 let vocab = VocabularyLearner.shared.merged(with: self.config.customVocabulary ?? [])
@@ -1018,25 +1193,50 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     LatencyInstrumentation.shared.mark("inject")
                     if let message = taught.message {
                         LocalVoiceStore.shared.setState(.ready, detail: message)
-                        if self.config.showCursorHUD?.value ?? true {
+                        if text.isEmpty, self.config.showCursorHUD?.value ?? true {
                             self.pillOverlay.show(state: .transcribing, partialText: message)
                             DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
                                 self.pillOverlay.hide()
                             }
                         }
                     }
+                    let finishInsertHUD: (TextInsertOutcome) -> Void = { outcome in
+                        guard self.config.showCursorHUD?.value ?? true else { return }
+                        let dest = self.captureApplicationName.isEmpty
+                            ? "the field"
+                            : self.captureApplicationName
+                        let snippet = String(text.prefix(80))
+                        let landed = outcome.didConfirmFieldInsert
+                        let hud = landed
+                            ? "\(dest): \(snippet)"
+                            : "History only (\(dest)): \(snippet)"
+                        self.pillOverlay.show(
+                            state: landed ? .transcribing : .error,
+                            partialText: hud,
+                            detail: cleanupDetail,
+                            playEarcon: false
+                        )
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+                            self.pillOverlay.hide()
+                        }
+                    }
                     if !text.isEmpty {
                         self.lastTranscription = text
                         if self.dashboardCaptureMode {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(text, forType: .string)
+                            self.insertTranscribedText(text, completion: finishInsertHUD)
                         } else if self.liveComposer.hasLiveInsertion {
-                            if !self.liveComposer.commitFinal(text) {
-                                self.inserter.insert(text: text)
+                            if self.liveComposer.commitFinal(text) {
+                                self.persistLastInsert(
+                                    text: text,
+                                    outcome: .insertedViaLiveComposer
+                                )
+                                finishInsertHUD(.insertedViaLiveComposer)
+                            } else {
+                                self.insertTranscribedText(text, completion: finishInsertHUD)
                             }
                             VoiceCommandExecutor.shared.flush()
                         } else {
-                            self.inserter.insert(text: text)
+                            self.insertTranscribedText(text, completion: finishInsertHUD)
                             VoiceCommandExecutor.shared.flush()
                         }
                         self.captureVisibleSpellings = []
@@ -1054,7 +1254,12 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     LatencyPanelController.shared.refresh()
 
                     if !text.isEmpty {
-                        VocabularyLearner.shared.observeCorrection(inserted: raw, polished: text)
+                        VocabularyLearner.shared.observeCorrection(
+                            inserted: raw,
+                            polished: text,
+                            sourceRecordID: requestID,
+                            connectEnabled: self.config.connectIntelligenceEnabled?.value ?? false
+                        )
                         let recordMs = LatencyInstrumentation.shared.lastSession["record"] ?? 0
                         let injectionMs =
                             LatencyInstrumentation.shared.lastSession["inject"] ?? 0
@@ -1112,12 +1317,17 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
                     self.statusBar.sttEngineName = self.sttRouter.activeEngineName()
                     self.statusBar.state = .idle
+                    if text.isEmpty, taught.message == nil {
+                        self.pillOverlay.hide()
+                    }
                     self.statusBar.buildMenu()
-                    self.pillOverlay.hide()
                     self.dashboardCaptureMode = false
                     LocalVoiceStore.shared.updateRuntime {
                         $0.engineName = self.sttRouter.activeEngineName()
-                        $0.modelName = self.config.modelSize
+                        $0.modelName = self.sttRouter.activeEngineModelName()
+                            ?? self.config.modelSize
+                        $0.parakeetReady = self.sttRouter.parakeetIsRunning()
+                        $0.parakeetHealthy = self.sttRouter.parakeetMarkedHealthy()
                     }
                     self.refreshPermissionState(force: true)
                 }
@@ -1175,14 +1385,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 DispatchQueue.main.async {
                     if !text.isEmpty {
                         self.lastTranscription = text
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(text, forType: .string)
-                        self.statusBar.state = .copiedToClipboard
+                        self.insertTranscribedText(text)
+                        self.statusBar.state = .idle
                         self.statusBar.buildMenu()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                            self.statusBar.state = .idle
-                            self.statusBar.buildMenu()
-                        }
                     } else {
                         self.statusBar.state = .idle
                     }

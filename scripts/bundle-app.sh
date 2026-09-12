@@ -1,10 +1,16 @@
 #!/bin/bash
-set -euo pipefail
+set -eo pipefail
 
 BINARY="${1:-.build/release/local-voice}"
 APP_DIR="${2:-Local Voice.app}"
 VERSION="${3:-0.54.0}"
 CODESIGN_IDENTITY="${LOCAL_VOICE_CODESIGN_IDENTITY:--}"
+CODESIGN_KEYCHAIN="${LOCAL_VOICE_CODESIGN_KEYCHAIN:-}"
+if [[ "$CODESIGN_IDENTITY" == "-" ]]; then
+    SIGNING_MODE="adhoc"
+else
+    SIGNING_MODE="stable"
+fi
 
 rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS"
@@ -44,14 +50,29 @@ cat > "$APP_DIR/Contents/Info.plist" << PLIST
     <true/>
     <key>NSMicrophoneUsageDescription</key>
     <string>Local Voice uses the microphone only while you dictate and transcribes speech on this Mac.</string>
+    <key>NSInputMonitoringUsageDescription</key>
+    <string>Local Voice needs Input Monitoring to listen for the recording shortcut, including the fn key, while other apps are focused.</string>
+    <key>NSAccessibilityUsageDescription</key>
+    <string>Local Voice needs Accessibility to type dictated text into the app you are using.</string>
+    <key>LocalVoiceSigningMode</key>
+    <string>${SIGNING_MODE}</string>
 </dict>
 </plist>
 PLIST
 
+# Headless/SSH sessions cannot resolve identities across the default
+# keychain list; point codesign at the signing keychain explicitly.
+KEYCHAIN_ARGS=()
+if [[ -n "$CODESIGN_KEYCHAIN" ]]; then
+    KEYCHAIN_ARGS=(--keychain "$CODESIGN_KEYCHAIN")
+fi
+
 codesign \
     --force \
     --sign "$CODESIGN_IDENTITY" \
+    --timestamp=none \
     --identifier com.cipherholdings.localvoice \
+    "${KEYCHAIN_ARGS[@]}" \
     "$APP_DIR"
 
 echo "Built $APP_DIR (signing identity: $CODESIGN_IDENTITY)"

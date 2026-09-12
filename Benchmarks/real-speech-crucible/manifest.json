@@ -1,0 +1,116 @@
+{
+  "schemaVersion": "local-voice-real-speech-crucible.v1",
+  "description": "Frozen operator real-speech corpus. Audio lives in ~/Artifacts/local-voice/real-speech-crucible/audio and is never committed. Each WAV is captured once on the operator's mic with no denoise, trim, or per-engine recapture.",
+  "samples": [
+    {
+      "id": "RS-001",
+      "category": "normal",
+      "condition": "normal conversational volume, 0.4-0.6 m from the Mac mic",
+      "spoken_script": "I need to send Dylan the updated CipherOS brief before the Thursday design review.",
+      "reference": "I need to send Dylan the updated CipherOS brief before the Thursday design review.",
+      "critical_tokens": ["Dylan", "CipherOS", "Thursday"],
+      "audio_file": "RS-001.wav"
+    },
+    {
+      "id": "RS-002",
+      "category": "quiet",
+      "condition": "quiet / low volume, same mic distance",
+      "spoken_script": "Keep the sidecar loopback-only and reject untrusted origins.",
+      "reference": "Keep the sidecar loopback-only and reject untrusted origins.",
+      "critical_tokens": ["sidecar", "loopback-only", "untrusted origins"],
+      "audio_file": "RS-002.wav"
+    },
+    {
+      "id": "RS-003",
+      "category": "fast",
+      "condition": "fast speech, no extra volume",
+      "spoken_script": "Open the models page and confirm Parakeet is the live engine not Whisper base.",
+      "reference": "Open the models page and confirm Parakeet is the live engine not Whisper base.",
+      "critical_tokens": ["Parakeet", "Whisper", "models page"],
+      "audio_file": "RS-003.wav"
+    },
+    {
+      "id": "RS-004",
+      "category": "lazy",
+      "condition": "lazy / reduced articulation, same mic",
+      "spoken_script": "Grant Accessibility to Local Voice in System Settings. Do not toggle it off and on.",
+      "reference": "Grant Accessibility to Local Voice in System Settings. Do not toggle it off and on.",
+      "critical_tokens": ["Accessibility", "Local Voice", "System Settings"],
+      "audio_file": "RS-004.wav"
+    },
+    {
+      "id": "RS-005",
+      "category": "mumbled",
+      "condition": "mumbled, lips barely moving",
+      "spoken_script": "The pill should name Ghostty and show the transcript for four seconds.",
+      "reference": "The pill should name Ghostty and show the transcript for four seconds.",
+      "critical_tokens": ["Ghostty", "transcript", "four seconds"],
+      "audio_file": "RS-005.wav"
+    },
+    {
+      "id": "RS-006",
+      "category": "disfluent",
+      "condition": "um / uh / restarts, normal volume",
+      "spoken_script": "Um I think we should, uh, ship the onboarding update after the permissions test, you know, passes.",
+      "reference": "I think we should ship the onboarding update after the permissions test passes.",
+      "critical_tokens": ["onboarding update", "permissions test"],
+      "audio_file": "RS-006.wav"
+    },
+    {
+      "id": "RS-007",
+      "category": "cough",
+      "condition": "one cough in the middle of the sentence",
+      "spoken_script": "Send the technical brief after lunch.",
+      "reference": "Send the technical brief after lunch.",
+      "critical_tokens": ["technical brief", "lunch"],
+      "audio_file": "RS-007.wav"
+    },
+    {
+      "id": "RS-008",
+      "category": "technical",
+      "condition": "normal volume, operator terms",
+      "spoken_script": "2OPMD uses FORWARD, OGrE, EoH, and RISE. Do not call it a chatbot.",
+      "reference": "2OPMD uses FORWARD, OGrE, EoH, and RISE. Do not call it a chatbot.",
+      "critical_tokens": ["2OPMD", "FORWARD", "OGrE", "EoH", "RISE"],
+      "audio_file": "RS-008.wav"
+    },
+    {
+      "id": "RS-009",
+      "category": "correction",
+      "condition": "explicit self-correction",
+      "spoken_script": "Send it to Dylan scratch that send it to Andras.",
+      "reference": "Send it to Andras.",
+      "critical_tokens": ["Andras"],
+      "audio_file": "RS-009.wav"
+    },
+    {
+      "id": "RS-010",
+      "category": "spelling",
+      "condition": "letter-by-letter spelling plus nearby names",
+      "spoken_script": "The name is spelled C I P H E R, Cipher Holdings.",
+      "reference": "The name is spelled CIPHER, Cipher Holdings.",
+      "critical_tokens": ["CIPHER", "Cipher Holdings"],
+      "nearby_names": ["Cipher Holdings"],
+      "audio_file": "RS-010.wav"
+    },
+    {
+      "id": "RS-011",
+      "category": "poker",
+      "condition": "normal volume, poker profile on",
+      "spoken_script": "He three-bet the cutoff and then check-raise the flop with a hundred big blinds.",
+      "reference": "He three-bet the cutoff and then check-raise the flop with a hundred big blinds.",
+      "critical_tokens": ["three-bet", "cutoff", "check-raise", "big blinds"],
+      "poker_profile": true,
+      "audio_file": "RS-011.wav"
+    },
+    {
+      "id": "RS-012",
+      "category": "quiet-technical",
+      "condition": "quiet volume plus Automic Vault / Post Event terms",
+      "spoken_script": "Automic Vault is not macOS TCC. Post Event is a separate grant under Accessibility.",
+      "reference": "Automic Vault is not macOS TCC. Post Event is a separate grant under Accessibility.",
+      "critical_tokens": ["Automic Vault", "TCC", "Post Event", "Accessibility"],
+      "audio_file": "RS-012.wav"
+    }
+  ]
+}

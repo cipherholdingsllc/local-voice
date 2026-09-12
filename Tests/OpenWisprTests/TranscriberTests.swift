@@ -84,4 +84,29 @@ final class TranscriberTests: XCTestCase {
     func testKnownMarkerStrippedUnknownPreserved() {
         XCTAssertEqual(Transcriber.stripWhisperMarkers("[BLANK_AUDIO] see [1]"), "see [1]")
     }
+
+    func testMultiWordAudioEventMarkers() {
+        XCTAssertEqual(Transcriber.stripWhisperMarkers("[MUSIC PLAYING]"), "")
+        XCTAssertEqual(Transcriber.stripWhisperMarkers("(dramatic music)"), "")
+        XCTAssertEqual(Transcriber.stripWhisperMarkers("[upbeat music playing]"), "")
+        XCTAssertEqual(Transcriber.stripWhisperMarkers("(crowd cheering)"), "")
+    }
+
+    func testMultiWordMarkerMixedWithText() {
+        XCTAssertEqual(
+            Transcriber.stripWhisperMarkers("hello (dramatic music) world"),
+            "hello world"
+        )
+    }
+
+    func testBracketedSpeechWordsPreserved() {
+        XCTAssertEqual(
+            Transcriber.stripWhisperMarkers("(sound good)"),
+            "(sound good)"
+        )
+        XCTAssertEqual(
+            Transcriber.stripWhisperMarkers("note (later)"),
+            "note (later)"
+        )
+    }
 }

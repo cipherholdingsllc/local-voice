@@ -23,6 +23,14 @@ public final class ParakeetDaemon: STTEngine {
         FileManager.default.fileExists(atPath: scriptPath) && (process?.isRunning == true || canLaunchPython())
     }
 
+    /// True only when the daemon process is alive and has printed ready.
+    /// Does not launch Python.
+    public var isProcessRunning: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return process?.isRunning == true && ready
+    }
+
     public func warmup() throws {
         try ensureRunning()
         lock.lock()

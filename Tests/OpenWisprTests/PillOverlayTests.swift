@@ -2,12 +2,17 @@ import XCTest
 @testable import OpenWisprLib
 
 final class PillOverlayTests: XCTestCase {
-    func testListeningPresentationKeepsASingleLabel() {
-        XCTAssertEqual(PillState.listening.title, "Listening")
-        XCTAssertNil(PillState.listening.detail)
+    func testFinishHUDCanCarryCleanupDetailBesideTheTranscript() {
+        let presentation = PillPresentation(
+            title: "Cursor: Send it to Andras.",
+            detail: "Filler · Correction"
+        )
         XCTAssertEqual(
-            PillState.listening.accessibilityLabel,
-            "Listening"
+            presentation.accessibilityLabel,
+            "Cursor: Send it to Andras., Filler · Correction"
+        )
+        XCTAssertTrue(
+            presentation.attributedString.string.contains("Filler · Correction")
         )
     }
 

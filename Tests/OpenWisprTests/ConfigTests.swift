@@ -323,6 +323,26 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(config.hotkeys.count, 1)
     }
 
+    func testConnectIntelligenceDefaultsOffWhenMissing() throws {
+        let json = """
+        {
+            "hotkey": {"keyCode": 63, "modifiers": []},
+            "modelSize": "base.en",
+            "language": "en"
+        }
+        """.data(using: .utf8)!
+        let config = try Config.decode(from: json)
+        XCTAssertFalse(config.connectIntelligenceEnabled?.value ?? false)
+        XCTAssertFalse(Config.defaultConfig.connectIntelligenceEnabled?.value ?? true)
+    }
+
+    func testConnectIntelligenceRoundTrips() throws {
+        var config = Config.defaultConfig
+        config.connectIntelligenceEnabled = FlexBool(true)
+        let decoded = try Config.decode(from: JSONEncoder().encode(config))
+        XCTAssertTrue(decoded.connectIntelligenceEnabled?.value ?? false)
+    }
+
     func testConfigEncodeRoundtripPreservesHotkeys() throws {
         let json = """
         {

@@ -65,6 +65,57 @@ final class DictationCohesionTests: XCTestCase {
         )
     }
 
+    func testLastIntentKeepsTheReplacementTime() {
+        XCTAssertEqual(
+            DictationCohesion.polish("Let's meet at 5 actually 6pm"),
+            "Let's meet at 6pm"
+        )
+        XCTAssertEqual(
+            DictationCohesion.polish("Let's meet at 5... actually 6pm"),
+            "Let's meet at 6pm"
+        )
+        let labeled = DictationCohesion.apply("Let's meet at 5 actually 6pm")
+        XCTAssertTrue(labeled.labels.correction)
+        XCTAssertEqual(labeled.labels.pillDetail, "Correction")
+    }
+
+    func testLastIntentKeepsTheReplacementDay() {
+        XCTAssertEqual(
+            DictationCohesion.polish("Ship on Friday actually Monday"),
+            "Ship on Monday"
+        )
+        XCTAssertEqual(
+            DictationCohesion.polish("Ship on Friday the following Monday"),
+            "Ship on Monday"
+        )
+    }
+
+    func testActuallyWithoutAPriorValueStays() {
+        XCTAssertEqual(
+            DictationCohesion.polish("I actually like this"),
+            "I actually like this"
+        )
+    }
+
+    func testSpokenDashJoinsObviousCompounds() {
+        XCTAssertEqual(
+            DictationCohesion.polish("do 2 for last dash intent"),
+            "Do 2 for last-intent"
+        )
+        XCTAssertEqual(
+            DictationCohesion.polish("oz dash loop"),
+            "Oz-loop"
+        )
+        XCTAssertEqual(
+            DictationCohesion.polish("add a dash of salt"),
+            "Add a dash of salt"
+        )
+        XCTAssertEqual(
+            DictationCohesion.polish("one dash two"),
+            "One dash two"
+        )
+    }
+
     func testInTheSurvivesCohesion() {
         let sentence =
             "Would it land in the real ledger as well as Laird getting a text?"
@@ -79,6 +130,42 @@ final class DictationCohesionTests: XCTestCase {
         XCTAssertEqual(
             DictationCohesion.polish("the the give me the final delivery"),
             "The give me the final delivery"
+        )
+    }
+
+    func testKeepsIntensifierRepetitionAsEmphasis() {
+        XCTAssertEqual(
+            DictationCohesion.polish("very, very important"),
+            "Very, very important"
+        )
+        XCTAssertEqual(
+            DictationCohesion.polish("this is really, really good"),
+            "This is really, really good"
+        )
+    }
+
+    func testKeepsCommaSeparatedPairAsEmphasis() {
+        // Two repeats joined by a comma are treated as deliberate, not a
+        // stutter — e.g. "very, very" emphasis or a self-interruption the
+        // speaker chose to punctuate.
+        XCTAssertEqual(
+            DictationCohesion.polish("I just, I just think it works"),
+            "I just, I just think it works"
+        )
+    }
+
+    func testKeepsGrammaticalAndNameDoubles() {
+        XCTAssertEqual(
+            DictationCohesion.polish("I know that that is true"),
+            "I know that that is true"
+        )
+        XCTAssertEqual(
+            DictationCohesion.polish("I had had enough"),
+            "I had had enough"
+        )
+        XCTAssertEqual(
+            DictationCohesion.polish("Duran Duran is my favorite band"),
+            "Duran Duran is my favorite band"
         )
     }
 
@@ -103,6 +190,53 @@ final class DictationCohesionTests: XCTestCase {
         XCTAssertTrue(polished.contains("- "))
         XCTAssertTrue(polished.contains("milk"))
         XCTAssertTrue(polished.contains("eggs"))
+    }
+
+    func testCleanupLabelsFillerOnly() {
+        let result = DictationCohesion.apply(
+            "Um I think we should ship the update"
+        )
+        XCTAssertTrue(result.labels.filler, "\(result)")
+        XCTAssertFalse(result.labels.correction)
+        XCTAssertFalse(result.labels.repetition)
+        XCTAssertEqual(result.labels.pillDetail, "Filler")
+        XCTAssertEqual(result.text, DictationCohesion.polish(
+            "Um I think we should ship the update"
+        ))
+    }
+
+    func testCleanupLabelsCorrectionOnScratchThat() {
+        let result = DictationCohesion.apply(
+            "Send it to Dylan scratch that send it to Andras."
+        )
+        XCTAssertTrue(result.labels.correction, "\(result)")
+        XCTAssertEqual(result.labels.pillDetail, "Correction")
+        XCTAssertTrue(result.text.lowercased().contains("andras"), result.text)
+        XCTAssertFalse(result.text.lowercased().contains("dylan"), result.text)
+    }
+
+    func testCleanupLabelsRepeat() {
+        let result = DictationCohesion.apply("our our GitHub")
+        XCTAssertTrue(result.labels.repetition, "\(result)")
+        XCTAssertEqual(result.labels.pillDetail, "Repeat")
+        XCTAssertFalse(result.text.lowercased().contains("our our"))
+    }
+
+    func testCleanupLabelsStayQuietWhenNothingChanged() {
+        let result = DictationCohesion.apply(
+            "Grant Accessibility to Local Voice."
+        )
+        XCTAssertEqual(result.labels, .none)
+        XCTAssertNil(result.labels.pillDetail)
+    }
+
+    func testCleanupLabelsCombineFillerAndCorrection() {
+        let result = DictationCohesion.apply(
+            "Send it to Dylan scratch that um send it to Andras."
+        )
+        XCTAssertTrue(result.labels.filler, "\(result)")
+        XCTAssertTrue(result.labels.correction, "\(result)")
+        XCTAssertEqual(result.labels.pillDetail, "Filler · Correction")
     }
 }
 
@@ -286,6 +420,51 @@ final class OperatorVocabularyTests: XCTestCase {
         )
         XCTAssertEqual(text, "Yo Cipher")
         XCTAssertFalse(text.contains("Cipher Lab"), text)
+    }
+
+    func testGeneralBoostOmitsStalePokerPhrases() {
+        let general = VocabularyLearner.shared.safeBoostTerms(
+            pokerVocabularyEnabled: false
+        )
+        XCTAssertFalse(
+            general.contains { $0.caseInsensitiveCompare("pot odds") == .orderedSame },
+            "general boost leaked poker phrase: \(general)"
+        )
+        XCTAssertFalse(
+            general.contains { $0.caseInsensitiveCompare("low jack") == .orderedSame },
+            "general boost leaked poker phrase: \(general)"
+        )
+        XCTAssertTrue(
+            general.contains { $0.caseInsensitiveCompare("Exploit Poker") == .orderedSame },
+            "product name should still boost: \(general)"
+        )
+
+        let poker = VocabularyLearner.shared.safeBoostTerms(
+            pokerVocabularyEnabled: true
+        )
+        XCTAssertTrue(
+            poker.contains { $0.caseInsensitiveCompare("pot odds") == .orderedSame },
+            poker.joined(separator: ", ")
+        )
+    }
+
+    func testGeneralModeDoesNotRewriteOursIntoPotOdds() {
+        let general = VocabularyLearner.shared.postProcess(
+            "take a look at ours and see if it is better",
+            pokerVocabularyEnabled: false
+        )
+        XCTAssertFalse(general.lowercased().contains("pot odds"), general)
+        XCTAssertTrue(general.lowercased().contains("at ours"), general)
+
+        let boosted = VocabularyPostProcessor.apply(
+            "take a look at ours and see if it is better",
+            replacements: [],
+            boostTerms: ["pot odds"]
+        )
+        XCTAssertTrue(
+            boosted.text.lowercased().contains("pot odds"),
+            "matcher still over-matches; general mode must not pass this term. \(boosted.text)"
+        )
     }
 }
 

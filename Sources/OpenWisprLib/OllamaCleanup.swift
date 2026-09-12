@@ -14,21 +14,29 @@ public final class OllamaCleanup {
         self.minLength = minLength
     }
 
-    public func polish(raw: String, systemPrompt: String, vocabulary: [String] = []) throws -> String {
+    /// `executeCommands`: when false, the commands schema is not offered and any
+    /// commands the model returns anyway are ignored. Artifact drafting passes
+    /// false — transcript text must never reach the voice-command executor.
+    public func polish(raw: String, systemPrompt: String, vocabulary: [String] = [], executeCommands: Bool = true) throws -> String {
         guard enabled, raw.count >= minLength else { return raw }
 
         let vocabBlock = vocabulary.isEmpty ? "" : "\nCustom vocabulary (preserve exactly): \(vocabulary.joined(separator: ", "))"
+        let commandsBlock = executeCommands
+            ? """
+            ,"commands":[]}
+
+            Commands schema (execute, do not type literally):
+            - {"type":"new_line"} — insert newline
+            - {"type":"scratch_that"} — delete last insertion
+            - {"type":"all_caps"} — uppercase last sentence
+            - {"type":"send_it"} — press Return/Enter
+            """
+            : "}"
         let prompt = """
         \(systemPrompt)\(vocabBlock)
 
         Return ONLY valid JSON matching this schema:
-        {"text":"polished text","commands":[]}
-
-        Commands schema (execute, do not type literally):
-        - {"type":"new_line"} — insert newline
-        - {"type":"scratch_that"} — delete last insertion
-        - {"type":"all_caps"} — uppercase last sentence
-        - {"type":"send_it"} — press Return/Enter
+        {"text":"polished text"\(commandsBlock)
 
         Raw transcript:
         \(raw)
@@ -74,7 +82,7 @@ public final class OllamaCleanup {
             return raw
         }
 
-        if let commands = parsed["commands"] as? [[String: Any]] {
+        if executeCommands, let commands = parsed["commands"] as? [[String: Any]] {
             VoiceCommandExecutor.shared.enqueue(commands)
         }
 

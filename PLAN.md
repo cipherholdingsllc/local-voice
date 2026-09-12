@@ -49,6 +49,15 @@ First run downloads ~2.5GB HF model. Daemon: `scripts/parakeet_daemon.py`
 | Parakeet CoreML native | Optional upgrade from Python daemon → `parakeet-coreml-swift` SPM |
 | Latency budget proof | Hardware verify on M4 Pro — read Latency Debug panel |
 
+## Whicki program (voice → capability)
+
+| Item | Notes |
+|------|-------|
+| Slice 1 — artifacts | **Shipped on branch** — dictate → history → Make Useful (8 types) → edit → approve → export w/ provenance → manual reuse; see `docs/whicki-architecture.md` |
+| Slice 2 — connect digest | Surface Connect clusters + approved corrections as a reviewable digest |
+| Slice 3 — agent export formats | Agent-consumable output (e.g. SKILL.md) for `skillCandidate`/`reusableInstruction` |
+| Slice 4 — Whicki repo sync | Push approved artifacts into the Whicki repo |
+
 ## Stop condition
 
 If streaming + warm cannot hit 1–2s → set `sttEngine: parakeet` and disable streaming chunks.

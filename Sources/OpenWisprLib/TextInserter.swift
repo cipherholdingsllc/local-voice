@@ -1,139 +1,112 @@
 import AppKit
+import ApplicationServices
 import Foundation
-import Cocoa
-import Carbon.HIToolbox
 
 class TextInserter {
-    let pasteKeyCode: CGKeyCode
+    var accessibilityTrusted: () -> Bool = { AXIsProcessTrusted() }
+    var postEventTrusted: () -> Bool = { PostEventAccess.isGranted() }
+    /// Tests stub AX writes so unit runs do not mutate the focused field.
+    var accessibilityWriter: ((String) -> Bool)?
+    /// Tests stub keystroke injection so unit runs do not type into the focused app.
+    var unicodeWriter: ((String) -> Void)?
 
-    init() {
-        self.pasteKeyCode = TextInserter.resolveKeyCode(for: "v") ?? 9
-    }
+    init() {}
 
-    func insert(text: String) {
+    @discardableResult
+    func insert(text: String) -> TextInsertOutcome {
         let guardResult = SecureFieldGuard.canInjectHere()
-        guard guardResult.allowed else {
+        if !guardResult.allowed {
             if let reason = guardResult.reason {
                 fputs("TextInserter: \(reason)\n", stderr)
             }
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(text, forType: .string)
-            return
+            return .blockedSecureField
         }
 
-        let pasteboard = NSPasteboard.general
-        let savedItems = savePasteboard(pasteboard)
-
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
-        let writeChangeCount = pasteboard.changeCount
-
-        if !simulatePaste() {
-            insertViaUnicode(text)
+        if insertViaAccessibility(text) {
+            return .insertedViaAccessibility
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            guard pasteboard.changeCount == writeChangeCount else { return }
-            self.restorePasteboard(pasteboard, items: savedItems)
+        // Unicode CGEvent.post is a silent no-op without Post Event.
+        // Do not post, and do not claim a field insert, when that grant is missing.
+        guard postEventTrusted() else {
+            return .transcribedOnly
         }
-    }
-
-    private func savePasteboard(_ pasteboard: NSPasteboard) -> [[(NSPasteboard.PasteboardType, Data)]] {
-        guard let items = pasteboard.pasteboardItems else { return [] }
-        return items.map { item in
-            item.types.compactMap { type in
-                guard let data = item.data(forType: type) else { return nil }
-                return (type, data)
-            }
-        }
-    }
-
-    private func restorePasteboard(_ pasteboard: NSPasteboard, items: [[(NSPasteboard.PasteboardType, Data)]]) {
-        pasteboard.clearContents()
-        guard !items.isEmpty else { return }
-        let pasteboardItems = items.map { entries -> NSPasteboardItem in
-            let item = NSPasteboardItem()
-            for (type, data) in entries {
-                item.setData(data, forType: type)
-            }
-            return item
-        }
-        pasteboard.writeObjects(pasteboardItems)
-    }
-
-    private static func resolveKeyCode(for target: Character) -> CGKeyCode? {
-        guard let inputSource = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
-            let rawLayoutData = TISGetInputSourceProperty(inputSource, kTISPropertyUnicodeKeyLayoutData) else {
-            return nil
-        }
-
-        let layoutData = unsafeBitCast(rawLayoutData, to: CFData.self)
-        guard let layoutBytes = CFDataGetBytePtr(layoutData) else {
-            return nil
-        }
-
-        let keyboardLayout = UnsafePointer<UCKeyboardLayout>(OpaquePointer(layoutBytes))
-        let keyboardType = UInt32(LMGetKbdType())
-        let wanted = String(target).lowercased()
-
-        for keyCode in 0..<128 {
-            var deadKeyState: UInt32 = 0
-            var chars = [UniChar](repeating: 0, count: 4)
-            var actualLength: Int = 0
-
-            let status = UCKeyTranslate(
-                keyboardLayout,
-                UInt16(keyCode),
-                UInt16(kUCKeyActionDisplay),
-                0,
-                keyboardType,
-                OptionBits(kUCKeyTranslateNoDeadKeysBit),
-                &deadKeyState,
-                chars.count,
-                &actualLength,
-                &chars
-            )
-
-            guard status == noErr else { continue }
-
-            let produced = String(utf16CodeUnits: chars, count: actualLength).lowercased()
-            if produced == wanted {
-                return CGKeyCode(keyCode)
-            }
-        }
-
-        return nil
+        insertViaUnicode(text)
+        return .insertedViaUnicode
     }
 
     @discardableResult
-    private func simulatePaste() -> Bool {
-        let keyCode = pasteKeyCode
-
-        guard let source = CGEventSource(stateID: .hidSystemState),
-            let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
-            let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) else {
+    private func insertViaAccessibility(_ text: String) -> Bool {
+        if let accessibilityWriter {
+            return accessibilityWriter(text)
+        }
+        let system = AXUIElementCreateSystemWide()
+        var focused: AnyObject?
+        guard AXUIElementCopyAttributeValue(
+            system,
+            kAXFocusedUIElementAttribute as CFString,
+            &focused
+        ) == .success, let element = focused else {
             return false
         }
-
-        keyDown.flags = .maskCommand
-        keyUp.flags = .maskCommand
-
-        keyDown.post(tap: .cghidEventTap)
-        keyUp.post(tap: .cghidEventTap)
-        return true
+        let ax = element as! AXUIElement
+        let before = stringValue(of: ax)
+        guard AXUIElementSetAttributeValue(
+            ax,
+            kAXSelectedTextAttribute as CFString,
+            text as CFString
+        ) == .success else {
+            return false
+        }
+        let after = stringValue(of: ax)
+        return TextInsertPlanner.accessibilityWriteLanded(
+            before: before,
+            after: after,
+            inserted: text
+        )
     }
 
-    /// Fallback for paste-blocking apps (#11) — CGEvent unicode keystroke synthesis.
+    private func stringValue(of ax: AXUIElement) -> String? {
+        var value: AnyObject?
+        guard AXUIElementCopyAttributeValue(
+            ax,
+            kAXValueAttribute as CFString,
+            &value
+        ) == .success else {
+            return nil
+        }
+        return value as? String
+    }
+
+    /// Type the transcript as keystrokes. Does not touch the clipboard.
+    ///
+    /// Posts UTF-16 batches rather than one event pair per scalar: a long
+    /// take otherwise floods the HID tap with thousands of synchronous posts,
+    /// starving the main runloop (which can get our own event tap killed).
+    /// Working in UTF-16 units also keeps surrogate pairs intact — a
+    /// per-scalar `UniChar(scalar.value)` traps on anything past the BMP.
     private func insertViaUnicode(_ text: String) {
+        if let unicodeWriter {
+            unicodeWriter(text)
+            return
+        }
         guard let source = CGEventSource(stateID: .hidSystemState) else { return }
-        for scalar in text.unicodeScalars {
-            var chars = [UniChar(scalar.value)]
+        let units = Array(text.utf16)
+        var index = 0
+        let batchSize = 16
+        while index < units.count {
+            let count = min(batchSize, units.count - index)
+            var chunk = Array(units[index..<index + count])
             if let down = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
                let up = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) {
-                down.keyboardSetUnicodeString(stringLength: 1, unicodeString: &chars)
-                up.keyboardSetUnicodeString(stringLength: 1, unicodeString: &chars)
+                down.keyboardSetUnicodeString(stringLength: count, unicodeString: &chunk)
+                up.keyboardSetUnicodeString(stringLength: count, unicodeString: &chunk)
                 down.post(tap: .cghidEventTap)
                 up.post(tap: .cghidEventTap)
+            }
+            index += count
+            if index < units.count {
+                Thread.sleep(forTimeInterval: 0.003)
             }
         }
     }

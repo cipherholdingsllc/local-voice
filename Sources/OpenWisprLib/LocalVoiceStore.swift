@@ -90,6 +90,36 @@ public struct LocalVoiceRuntimeSnapshot: Equatable, Sendable {
     public var microphoneReady: Bool
     public var inputMonitoringReady: Bool
     public var hotkeyReady: Bool
+    public var permissionRepairDetail: String? = nil
+    public var parakeetReady: Bool = false
+    public var parakeetHealthy: Bool = false
+    public var lastTakeDetail: String? = nil
+    public var lastTakeLandedInField: Bool = false
+
+    public mutating func applyPermissionReadiness(
+        _ snapshot: LocalVoicePermissionSnapshot,
+        hotkeyMonitorReady: Bool,
+        hotkeySummary: String
+    ) {
+        accessibilityReady = snapshot.accessibility
+        microphoneReady = snapshot.microphone
+        inputMonitoringReady = snapshot.inputMonitoring
+        hotkeyReady = hotkeyMonitorReady
+        if state == .listening || state == .transcribing || state == .refining {
+            return
+        }
+        if snapshot.runtimeReady(hotkeyMonitorReady: hotkeyMonitorReady) {
+            if state == .error || state == .preparing {
+                state = .ready
+            }
+            statusDetail = "Hold \(hotkeySummary) to dictate"
+            permissionRepairDetail = nil
+        } else {
+            state = .error
+            statusDetail = snapshot.blockingSummary
+                ?? "The \(hotkeySummary) shortcut monitor could not start"
+        }
+    }
 
     public static let preparing = LocalVoiceRuntimeSnapshot(
         state: .preparing,
@@ -177,6 +207,14 @@ public final class LocalVoiceStore: ObservableObject {
         return values[midpoint]
     }
 
+    public func related(to record: LocalVoiceRecord) -> [LocalVoiceRecord] {
+        guard let cluster = ConnectIntelligence.clusters(from: records).first(where: {
+            $0.recordIDs.contains(record.id)
+        }) else { return [] }
+        let ids = Set(cluster.recordIDs)
+        return records.filter { $0.id != record.id && ids.contains($0.id) }
+    }
+
     public func updateRuntime(_ transform: @escaping (inout LocalVoiceRuntimeSnapshot) -> Void) {
         if !Thread.isMainThread {
             DispatchQueue.main.async { [weak self] in
@@ -216,6 +254,24 @@ public final class LocalVoiceStore: ObservableObject {
             records.removeLast(records.count - maximumRecords)
         }
         persist()
+        if Config.load().connectIntelligenceEnabled?.value ?? false {
+            ConnectStore.shared.rebuildAsync(records: records)
+        }
+    }
+
+    /// Delete a retained transcript. Deletion policy: derived artifacts
+    /// (stored records and their exported Markdown files) are deleted too via
+    /// `ArtifactStore.deleteArtifacts(sourcingFrom:)`; the append-only
+    /// provenance ledger is not rewritten. Audio files are governed separately
+    /// by `RecordingStore`/`maxRecordings`.
+    public func delete(recordID: UUID) {
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in self?.delete(recordID: recordID) }
+            return
+        }
+        records.removeAll { $0.id == recordID }
+        persist()
+        ArtifactStore.shared.deleteArtifacts(sourcingFrom: recordID)
     }
 
     public func replaceRecordsForTesting(_ records: [LocalVoiceRecord]) {
@@ -305,7 +361,9 @@ public final class LocalVoiceStore: ObservableObject {
             accessibilityReady: true,
             microphoneReady: true,
             inputMonitoringReady: true,
-            hotkeyReady: true
+            hotkeyReady: true,
+            parakeetReady: true,
+            parakeetHealthy: true
         )
         return LocalVoiceStore(
             storageURL: nil,

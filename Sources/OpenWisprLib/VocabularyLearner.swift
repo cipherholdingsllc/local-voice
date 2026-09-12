@@ -113,6 +113,22 @@ public final class VocabularyLearner {
         visibleSpellings: [String] = [],
         pokerVocabularyEnabled: Bool = false
     ) -> String {
+        stagedPostProcess(
+            text,
+            configTerms: configTerms,
+            visibleSpellings: visibleSpellings,
+            pokerVocabularyEnabled: pokerVocabularyEnabled
+        ).finalText
+    }
+
+    /// Same order as `postProcess`, with each hop preserved for the real-speech
+    /// crucible. Live dictation still calls `postProcess`; do not reorder.
+    public func stagedPostProcess(
+        _ text: String,
+        configTerms: [String] = [],
+        visibleSpellings: [String] = [],
+        pokerVocabularyEnabled: Bool = false
+    ) -> RealSpeechTextStages {
         let boost = safeBoostTerms(
             configTerms: configTerms,
             pokerVocabularyEnabled: pokerVocabularyEnabled
@@ -124,20 +140,39 @@ public final class VocabularyLearner {
             ),
             boostTerms: boost
         )
-        let cleaned = DictationCohesion.polish(applied.text)
+        let cohesion = DictationCohesion.apply(applied.text)
         let spelled = NearbyContextSampler.applyVisibleSpellings(
-            cleaned,
+            cohesion.text,
             names: visibleSpellings
         )
-        let normalized = pokerVocabularyEnabled
+        let poker = pokerVocabularyEnabled
             ? PokerHandNormalizer.apply(spelled)
             : spelled
-        return SpokenFigureNormalizer.apply(normalized)
+        let figures = SpokenFigureNormalizer.apply(poker)
+        return RealSpeechTextStages(
+            rawASR: text,
+            afterVocabulary: applied.text,
+            vocabularyCorrections: applied.corrections.map {
+                "\($0.heard) -> \($0.term)"
+            },
+            afterCohesion: cohesion.text,
+            afterNearby: spelled,
+            afterPoker: poker,
+            afterFigures: figures,
+            nearbyNames: visibleSpellings,
+            cleanupLabels: cohesion.labels
+        )
     }
 
     /// Multi-word manual dictionary entries only. Single-word fuzzy boost
     /// corrupts common English ("man" -> "Kun"); single-word fixes use
     /// explicit `replacements` instead.
+    ///
+    /// Poker-only phrases stay out of general boost even if an older seed
+    /// wrote them into `learned-vocabulary.json`. "at ours" is two edits
+    /// from "pot odds"; ordinary two-word English is two edits from
+    /// "low jack". Product names that also live in `OperatorVocabulary`
+    /// (Exploit Poker, PokerGod) still boost in general mode.
     func safeBoostTerms(
         configTerms: [String] = [],
         pokerVocabularyEnabled: Bool = false
@@ -150,6 +185,12 @@ public final class VocabularyLearner {
             )
         }
     }
+
+    private static let pokerOnlyBoostKeys: Set<String> = {
+        let operatorKeys = Set(OperatorVocabulary.terms.map { $0.lowercased() })
+        return Set(PokerVocabulary.terms.map { $0.lowercased() })
+            .subtracting(operatorKeys)
+    }()
 
     private func mergedBoostTerms(
         manual: [String],
@@ -165,6 +206,9 @@ public final class VocabularyLearner {
         for term in seeded + manual + configTerms where term.contains(" ") {
             let key = term.lowercased()
             guard !key.isEmpty, !seen.contains(key) else { continue }
+            if !pokerVocabularyEnabled, Self.pokerOnlyBoostKeys.contains(key) {
+                continue
+            }
             seen.insert(key)
             out.append(term)
         }
@@ -234,14 +278,28 @@ public final class VocabularyLearner {
         }
     }
 
-    public func observeCorrection(inserted: String, polished: String, delay: TimeInterval = 2.5) {
+    public func observeCorrection(
+        inserted: String,
+        polished: String,
+        sourceRecordID: UUID = UUID(),
+        connectEnabled: Bool = false,
+        delay: TimeInterval = 2.5
+    ) {
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + delay) { [weak self] in
             guard let self = self else { return }
             guard let current = Self.readFocusedText(), !current.isEmpty else { return }
             guard current != polished, current != inserted else { return }
             if let pair = DictationTeacher.proposedReplacement(inserted: polished, edited: current)
                 ?? DictationTeacher.proposedReplacement(inserted: inserted, edited: current) {
-                _ = self.addReplacement(from: pair.from, to: pair.to)
+                if connectEnabled {
+                    ConnectStore.shared.observe(
+                        from: pair.from,
+                        to: pair.to,
+                        sourceRecordID: sourceRecordID
+                    )
+                } else {
+                    _ = self.addReplacement(from: pair.from, to: pair.to)
+                }
                 return
             }
             let newTerms = Self.extractNewTerms(from: polished, to: current)

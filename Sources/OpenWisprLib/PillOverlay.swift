@@ -37,12 +37,14 @@ final class PillOverlay {
     func show(
         state: PillState,
         partialText: String? = nil,
+        detail: String? = nil,
         playEarcon: Bool = true
     ) {
         DispatchQueue.main.async { [weak self] in
             self?.showOnMain(
                 state: state,
                 partialText: partialText,
+                detail: detail,
                 playEarcon: playEarcon
             )
         }
@@ -50,6 +52,13 @@ final class PillOverlay {
 
     func hide() {
         DispatchQueue.main.async { [weak self] in
+            self?.panel?.orderOut(nil)
+        }
+    }
+
+    func hide(ifState state: PillState) {
+        DispatchQueue.main.async { [weak self] in
+            guard self?.currentState == state else { return }
             self?.panel?.orderOut(nil)
         }
     }
@@ -77,6 +86,7 @@ final class PillOverlay {
     private func showOnMain(
         state: PillState,
         partialText: String?,
+        detail: String?,
         playEarcon: Bool
     ) {
         ensurePanel()
@@ -89,11 +99,21 @@ final class PillOverlay {
 
         let trimmedPartial = partialText?
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedDetail = detail?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         let presentation = PillPresentation(
             title: trimmedPartial?.isEmpty == false
                 ? trimmedPartial!
                 : state.title,
-            detail: trimmedPartial?.isEmpty == false ? nil : state.detail
+            detail: {
+                if let trimmedDetail, !trimmedDetail.isEmpty {
+                    return trimmedDetail
+                }
+                if trimmedPartial?.isEmpty == false {
+                    return nil
+                }
+                return state.detail
+            }()
         )
         applyPresentation(presentation)
         positionPanel()
