@@ -259,6 +259,21 @@ public final class LocalVoiceStore: ObservableObject {
         }
     }
 
+    /// Delete a retained transcript. Deletion policy: derived artifacts
+    /// (stored records and their exported Markdown files) are deleted too via
+    /// `ArtifactStore.deleteArtifacts(sourcingFrom:)`; the append-only
+    /// provenance ledger is not rewritten. Audio files are governed separately
+    /// by `RecordingStore`/`maxRecordings`.
+    public func delete(recordID: UUID) {
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in self?.delete(recordID: recordID) }
+            return
+        }
+        records.removeAll { $0.id == recordID }
+        persist()
+        ArtifactStore.shared.deleteArtifacts(sourcingFrom: recordID)
+    }
+
     public func replaceRecordsForTesting(_ records: [LocalVoiceRecord]) {
         self.records = records.sorted { $0.createdAt > $1.createdAt }
     }

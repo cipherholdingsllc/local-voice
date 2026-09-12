@@ -57,7 +57,21 @@ private struct ArtifactCard: View {
                     }
                 }
                 Spacer()
+                SmallTag(text: artifact.isApproved ? "Approved" : "Draft")
                 SmallTag(text: "Export \(artifact.exportCount)")
+                if !artifact.isApproved {
+                    Button {
+                        store.approve(artifact)
+                    } label: {
+                        Image(systemName: "checkmark.seal")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(LocalVoiceTheme.accent)
+                            .frame(width: 28, height: 28)
+                            .background(Circle().fill(LocalVoiceTheme.raised))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Approve artifact")
+                }
                 Button {
                     _ = store.export(artifact)
                     exported = true
@@ -103,6 +117,39 @@ private struct ArtifactCard: View {
                 .foregroundColor(LocalVoiceTheme.primary)
                 .lineSpacing(4)
                 .textSelection(.enabled)
+
+            HStack(spacing: 8) {
+                SmallTag(text: artifact.engine == "ollama" ? "Ollama" : "Template")
+                if artifact.userEdited {
+                    SmallTag(text: "Edited")
+                }
+                if !artifact.reuseEvents.isEmpty {
+                    SmallTag(text: "Reuse \(artifact.reuseEvents.count)")
+                    if let latest = artifact.reuseEvents.last {
+                        SmallTag(text: latest.outcome.title)
+                    }
+                }
+                Spacer()
+                Menu {
+                    ForEach(ReuseOutcome.allCases) { outcome in
+                        Button {
+                            store.recordReuse(artifact, outcome: outcome)
+                        } label: {
+                            Label(outcome.title, systemImage: outcome.symbol)
+                        }
+                    }
+                } label: {
+                    Text("Mark reused")
+                        .font(.system(size: 9.5, weight: .semibold))
+                        .foregroundColor(LocalVoiceTheme.secondary)
+                        .padding(.horizontal, 8)
+                        .frame(height: 23)
+                        .background(Capsule().fill(LocalVoiceTheme.raised))
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help("Record a reuse outcome")
+            }
         }
         .padding(17)
         .cardStyle()
@@ -118,6 +165,9 @@ public struct MakeUsefulView: View {
     @State private var isGenerating = false
     @State private var isSaved = false
     @State private var isExported = false
+    @State private var generatedDraft: String?
+    @State private var resolvedEngine: UsefulEngine?
+    @State private var savedArtifactId: UUID?
     @ObservedObject private var store: ArtifactStore = .shared
 
     public init(record: LocalVoiceRecord) {
@@ -173,9 +223,17 @@ public struct MakeUsefulView: View {
                 )
             } else {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Draft")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(LocalVoiceTheme.muted)
+                    HStack {
+                        Text("Draft")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(LocalVoiceTheme.muted)
+                        Spacer()
+                        if let generatedDraft {
+                            Text(content == generatedDraft ? "Inferred draft — edit before approving" : "Edited")
+                                .font(.system(size: 10.5))
+                                .foregroundColor(LocalVoiceTheme.muted)
+                        }
+                    }
                     TextEditor(text: $content)
                         .font(.system(size: 13))
                         .foregroundColor(LocalVoiceTheme.primary)
@@ -196,6 +254,13 @@ public struct MakeUsefulView: View {
                 Button(isExported ? "Exported" : "Export") { save(); export() }
                     .buttonStyle(QuietButtonStyle())
                     .disabled(content.isEmpty)
+                if let savedArtifactId, let saved = store.artifact(id: savedArtifactId) {
+                    Button(saved.isApproved ? "Approved" : "Approve") {
+                        store.approve(saved)
+                    }
+                    .buttonStyle(QuietButtonStyle())
+                    .disabled(saved.isApproved)
+                }
                 Spacer()
                 Button("Close") { dismiss() }
                     .buttonStyle(QuietButtonStyle())
@@ -222,25 +287,38 @@ public struct MakeUsefulView: View {
         Task.detached(priority: .userInitiated) { [record, type, engine] in
             let draft = UsefulTransformer.shared.draft(record: record, type: type, engine: engine)
             await MainActor.run {
-                content = draft
+                content = draft.content
+                generatedDraft = draft.content
+                resolvedEngine = draft.engine
                 isGenerating = false
             }
         }
     }
 
     private func save() {
-        let artifact = LocalVoiceArtifact(
-            sourceTranscriptId: record.id,
-            type: type,
-            content: content
-        )
+        let artifact: LocalVoiceArtifact
+        if let savedArtifactId, var existing = store.artifact(id: savedArtifactId) {
+            existing.content = content
+            artifact = existing
+        } else {
+            var fresh = LocalVoiceArtifact(
+                sourceTranscriptId: record.id,
+                type: type,
+                content: content,
+                engine: resolvedEngine?.rawValue,
+                generatedContent: generatedDraft
+            )
+            artifact = fresh
+            fresh.content = content
+            savedArtifactId = artifact.id
+        }
         store.save(artifact)
         isSaved = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { isSaved = false }
     }
 
     private func export() {
-        guard let artifact = store.artifacts.first(where: { $0.sourceTranscriptId == record.id && $0.type == type }) else { return }
+        guard let savedArtifactId, let artifact = store.artifact(id: savedArtifactId) else { return }
         _ = store.export(artifact)
         isExported = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { isExported = false }

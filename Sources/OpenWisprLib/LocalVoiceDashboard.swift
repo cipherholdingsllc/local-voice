@@ -1404,6 +1404,17 @@ private struct HistoryCard: View {
                 }
                 .buttonStyle(.plain)
                 .help("Copy transcript")
+                Button {
+                    LocalVoiceStore.shared.delete(recordID: record.id)
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(LocalVoiceTheme.danger)
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(LocalVoiceTheme.raised))
+                }
+                .buttonStyle(.plain)
+                .help("Delete transcript and derived artifacts")
             }
 
             Text(record.text)

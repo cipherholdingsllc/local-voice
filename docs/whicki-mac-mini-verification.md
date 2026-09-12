@@ -88,15 +88,20 @@ If any are `false`, follow `local-voice-doctor` TCC reset/re-grant steps.
 ### D. MAKE USEFUL
 
 - [ ] Click the **Make useful** (sparkles) button on the same record.
-- [ ] Choose **Prompt** (or Note / Task) and tap **Generate**.
-- [ ] Confirm a draft appears in the editor.
-- [ ] Tap **Save**, then **Export**.
-- [ ] Confirm the contents are copied to the clipboard and the status shows "Exported".
+- [ ] Confirm the artifact-type picker offers all eight types: **Prompt, Note, Task, Decision, Idea brief, Checklist, Instruction, Skill candidate**.
+- [ ] Confirm the engine picker offers **Auto / Ollama / Template**; choose **Template** for a deterministic draft (or Auto to exercise Ollama-if-reachable).
+- [ ] Tap **Generate** and confirm a draft appears in the editor, labeled "Inferred draft — edit before approving".
+- [ ] Edit a line of the draft and confirm the label flips to "Edited".
+- [ ] Tap **Save** and confirm "Saved to Artifacts." appears and an **Approve** button is shown.
+- [ ] Tap **Approve** and confirm it becomes "Approved" (disabled).
+- [ ] Tap **Export** and confirm the contents are copied to the clipboard and the button shows "Exported".
 
 ### E. COMPOUND
 
+- [ ] Open the **Artifacts** tab and confirm the new card shows the correct type, an **Approved** tag, an engine tag (Ollama/Template), and an **Edited** tag.
+- [ ] On a second generated artifact that is saved but not approved, confirm the card shows a **Draft** tag and a **checkmark-seal Approve** button; approve it there and confirm the tag flips to **Approved**.
 - [ ] Paste the exported contents into a text editor.
-- [ ] Confirm the Markdown begins with a provenance header:
+- [ ] Confirm the Markdown begins with a provenance header including the engine, approval, and edit-state fields:
 
 ```markdown
 ---
@@ -104,21 +109,45 @@ source: local-voice://record/<transcript-id>
 transcriptId: <transcript-id>
 artifactId: <id>
 artifactType: prompt
+generatedBy: template        # or ollama
+approved: true
+editedAfterGeneration: true  # false if the draft was exported unedited
 generatedAt: <ISO-8601>
 exportedAt: <ISO-8601>
 ---
+```
+
+- [ ] On the artifact card, open the **Mark reused** menu, choose **Helpful**, and confirm a "Reuse 1" tag and a "Helpful" tag appear. Repeat with **Edited** or **Rejected** if desired.
+- [ ] Confirm `artifacts.json` now carries `reuseEvents` on the artifact and `artifacts-provenance.jsonl` gained a `reuse:<outcome>` line:
+
+```bash
+cat ~/.config/local-voice/artifacts.json
+tail -n 5 ~/.config/local-voice/artifacts-provenance.jsonl   # expect "export" and "reuse:helpful" actions
 ```
 
 - [ ] Confirm the files on disk exist:
 
 ```bash
 ls ~/.config/local-voice/Artifacts/
-cat ~/.config/local-voice/artifacts.json
-tail -n 5 ~/.config/local-voice/artifacts-provenance.jsonl
 ```
+
+### F. Deletion policy
+
+- [ ] Note the artifact ID of an exported artifact and its `Artifacts/<id>.md` file.
+- [ ] In **History**, delete the source transcript via its trash button ("Delete transcript and derived artifacts").
+- [ ] Confirm the derived artifacts disappear from the **Artifacts** tab and from `artifacts.json`, and the exported `.md` files are gone:
+
+```bash
+ls ~/.config/local-voice/Artifacts/ | grep <artifact-id>   # expect no match
+grep <artifact-id> ~/.config/local-voice/artifacts.json    # expect no match
+```
+
+- [ ] Confirm `artifacts-provenance.jsonl` still contains the earlier export/reuse lines for the deleted artifact (append-only ledger, not rewritten).
+- [ ] Separately, delete an artifact directly from its Artifacts card (trash) and confirm its exported `.md` file is removed too.
 
 ## What to report back
 
-- Pass/fail for each of A, B, C, D, E.
+- Pass/fail for each of A, B, C, D, E, F.
 - Exact macOS version and any permission/TCC issues.
 - Contents of `~/.config/local-voice/artifacts.json` after the export test.
+- The last lines of `~/.config/local-voice/artifacts-provenance.jsonl` after the reuse and deletion checks.

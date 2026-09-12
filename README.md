@@ -91,6 +91,9 @@ Build and install the reproducible local app bundle with:
 ./scripts/install-local-voice.sh
 ```
 
+The installer packages the binary via `scripts/bundle-app.sh`; run that
+script directly when you only need the `.app` bundle.
+
 Configuration lives at `~/.config/local-voice/config.json`. On first launch, Local Voice migrates a legacy `~/.config/open-wispr/config.json` if present.
 Model discovery also preserves the legacy OpenWispr cache and supports the
 standard `~/.cache/whisper-cpp` cache.
@@ -172,9 +175,12 @@ See [the iOS implementation notes](ios-spike/README.md) for simulator, device, s
 
 ## Verification
 
+`swift test` requires a full Xcode install — the Command Line Tools alone
+do not ship XCTest. `swift build` works with either.
+
 ```bash
-SWIFTPM_DISABLE_SANDBOX=1 swift test
 swift build -c release --product local-voice
+SWIFTPM_DISABLE_SANDBOX=1 swift test
 xcodebuild \
   -project ios-spike/LocalFlow.xcodeproj \
   -scheme LocalFlow \

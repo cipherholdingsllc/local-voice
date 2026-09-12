@@ -118,6 +118,57 @@ final class LocalVoiceStoreTests: XCTestCase {
         XCTAssertGreaterThan(store.todayWordCount, 0)
     }
 
+    func testDeleteRemovesRecordAndPersists() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("local-voice-delete-\(UUID().uuidString)")
+        let file = directory.appendingPathComponent("history.json")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let doomed = makeRecord(text: "delete me")
+        let kept = makeRecord(text: "keep me")
+        let store = LocalVoiceStore(
+            storageURL: file,
+            records: [doomed, kept],
+            retentionDays: 30,
+            persistenceEnabled: true
+        )
+
+        // NOTE: delete also cascades through ArtifactStore.shared (pointed at
+        // ~/.config/local-voice); a random record ID matches nothing there.
+        // The cascade itself is covered by ArtifactStore.deleteArtifacts tests.
+        store.delete(recordID: doomed.id)
+
+        XCTAssertEqual(store.records, [kept])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
+
+        let reader = LocalVoiceStore(
+            storageURL: file,
+            retentionDays: 30,
+            persistenceEnabled: true
+        )
+        XCTAssertEqual(reader.records, [kept])
+    }
+
+    func testDeleteWithPersistenceDisabledWritesNoFile() {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("local-voice-delete-off-\(UUID().uuidString)")
+        let file = directory.appendingPathComponent("history.json")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let record = makeRecord(text: "session only")
+        let store = LocalVoiceStore(
+            storageURL: file,
+            records: [record],
+            retentionDays: 30,
+            persistenceEnabled: false
+        )
+
+        store.delete(recordID: record.id)
+
+        XCTAssertTrue(store.records.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
+    }
+
     private func makeRecord(
         text: String,
         recordingMs: Double = 1_000,

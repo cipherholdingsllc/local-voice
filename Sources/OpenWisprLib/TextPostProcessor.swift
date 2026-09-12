@@ -13,6 +13,7 @@ public struct TextPostProcessor {
         ("\\bsemicolon\\b", ";"),
         ("\\bsemi colon\\b", ";"),
         ("\\bellipsis\\b", "..."),
+        ("\\bdot\\s+dot\\s+dot\\b", "..."),
         ("\\bem dash\\b", " – "),
         ("\\ben dash\\b", " – "),
         ("\\bendash\\b", " – "),

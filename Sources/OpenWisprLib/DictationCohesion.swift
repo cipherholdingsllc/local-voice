@@ -251,18 +251,54 @@ public struct DictationCohesion {
         return result
     }
 
-    /// Dictation stutters land as "our, our, our GitHub". Keep the first token.
+    /// Dictation stutters land as "our, our, our GitHub" or "the the report".
+    /// Keep the first token — but never strip words that repeat on purpose.
+    /// Intensifiers ("very, very important") and grammatical doubles
+    /// ("that that", "had had") stay. A comma-separated pair stays: the comma
+    /// is the emphasis signal. A capitalized repeat ("Duran Duran") is a name.
+    private static let intensifiers: Set<String> = [
+        "very", "really", "so", "too", "much", "many", "big", "huge",
+        "great", "super", "extremely", "totally", "absolutely", "long",
+        "deep", "hard", "far", "wide", "high", "low", "bad", "good",
+    ]
+
+    private static let legitimateDoubles: Set<String> = [
+        "that", "had", "is", "bye", "night", "ha", "well", "no", "go",
+    ]
+
     private static func collapseRepeatedWords(_ text: String) -> String {
         guard let regex = try? NSRegularExpression(
             pattern: #"\b(\w+)(?:\s*,?\s+\1\b)+"# ,
             options: [.caseInsensitive]
         ) else { return text }
         let range = NSRange(text.startIndex..., in: text)
-        return regex.stringByReplacingMatches(
-            in: text,
-            range: range,
-            withTemplate: "$1"
-        )
+        var result = ""
+        var cursor = text.startIndex
+        regex.enumerateMatches(in: text, range: range) { match, _, _ in
+            guard let match else { return }
+            let matchRange = Range(match.range, in: text)!
+            let wordRange = Range(match.range(at: 1), in: text)!
+            let word = text[wordRange].lowercased()
+            let run = text[matchRange]
+            result += text[cursor..<matchRange.lowerBound]
+            let pieces = run.split(whereSeparator: { $0 == "," || $0.isWhitespace })
+            let count = pieces.count
+            let hasComma = run.contains(",")
+            // Second occurrence's case: capitalized mid-run repeats are names.
+            let second = pieces.count > 1 ? pieces[1] : Substring()
+            let repeatIsCapitalized = second.first?.isUppercase == true
+            if intensifiers.contains(word)
+                || legitimateDoubles.contains(word)
+                || (count == 2 && hasComma)
+                || (count == 2 && repeatIsCapitalized) {
+                result += run
+            } else {
+                result += text[wordRange]
+            }
+            cursor = matchRange.upperBound
+        }
+        result += text[cursor...]
+        return result
     }
 
     private static func collapseWhitespace(_ text: String) -> String {

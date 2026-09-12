@@ -133,6 +133,42 @@ final class DictationCohesionTests: XCTestCase {
         )
     }
 
+    func testKeepsIntensifierRepetitionAsEmphasis() {
+        XCTAssertEqual(
+            DictationCohesion.polish("very, very important"),
+            "Very, very important"
+        )
+        XCTAssertEqual(
+            DictationCohesion.polish("this is really, really good"),
+            "This is really, really good"
+        )
+    }
+
+    func testKeepsCommaSeparatedPairAsEmphasis() {
+        // Two repeats joined by a comma are treated as deliberate, not a
+        // stutter — e.g. "very, very" emphasis or a self-interruption the
+        // speaker chose to punctuate.
+        XCTAssertEqual(
+            DictationCohesion.polish("I just, I just think it works"),
+            "I just, I just think it works"
+        )
+    }
+
+    func testKeepsGrammaticalAndNameDoubles() {
+        XCTAssertEqual(
+            DictationCohesion.polish("I know that that is true"),
+            "I know that that is true"
+        )
+        XCTAssertEqual(
+            DictationCohesion.polish("I had had enough"),
+            "I had had enough"
+        )
+        XCTAssertEqual(
+            DictationCohesion.polish("Duran Duran is my favorite band"),
+            "Duran Duran is my favorite band"
+        )
+    }
+
     func testFormatsSpokenNumberedListsWhenTwoMarkersPresent() {
         let polished = DictationCohesion.polish("number one buy milk number two call Kun")
         XCTAssertTrue(polished.contains("1."))
