@@ -25,8 +25,8 @@ This is the data-flow architecture for Nate's personal voice-to-capability syste
 ┌──────────────────────────┴──────────────────────────────────────────────────┐
 │  LAYER C — CONNECT                                                          │
 │  Surface related thoughts and recurring patterns across history.            │
-│  Heuristic v1: token-overlap similarity on transcript text                  │
-│  Surfaces: "Find related" action on history cards · RelatedRecordsView      │
+│  Deterministic phrase/token index, related clusters, correction review      │
+│  Surfaces: Connect dashboard · "Find related" on history cards              │
 └──────────────────────────┬──────────────────────────────────────────────────┘
                            │  record → LocalVoiceStore.related(to:) → [record]
 ┌──────────────────────────┴──────────────────────────────────────────────────┐
@@ -49,7 +49,7 @@ This is the data-flow architecture for Nate's personal voice-to-capability syste
 
 1. **SPEAK** captures audio, runs the configured STT route, and returns raw/polished text.
 2. The text is inserted into the active app and a `LocalVoiceRecord` is written to **REMEMBER** (`history.json`).
-3. **CONNECT** lets the user ask for transcripts related to any record; v1 uses token overlap.
+3. **CONNECT** is opt-in and builds deterministic related-thought clusters plus a correction review queue. Corrections require two distinct source records and explicit approval.
 4. **MAKE USEFUL** takes a record + artifact type and, using Ollama if present or a deterministic template, drafts a `LocalVoiceArtifact`.
 5. **COMPOUND** exports approved artifacts as Markdown with a provenance header and copies them to the clipboard, incrementing `exportCount` and appending to `artifacts-provenance.jsonl`.
 
@@ -58,6 +58,7 @@ This is the data-flow architecture for Nate's personal voice-to-capability syste
 | File | Layer | Purpose |
 |------|-------|---------|
 | `~/.config/local-voice/history.json` | B | Transcript records. |
+| `~/.config/local-voice/connect-decisions.json` | C | Correction evidence and approval/dismissal decisions. |
 | `~/.config/local-voice/artifacts.json` | D/E | Generated artifact drafts. |
 | `~/.config/local-voice/artifacts-provenance.jsonl` | E | Append-only export log. |
 | `~/.config/local-voice/Artifacts/*.md` | E | Exported Markdown artifacts. |

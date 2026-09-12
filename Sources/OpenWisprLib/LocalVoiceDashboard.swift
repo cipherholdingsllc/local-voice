@@ -135,6 +135,8 @@ public struct LocalVoiceDashboard: View {
             HomeView(store: store, actions: actions)
         case .history:
             HistoryView(store: store)
+        case .connect:
+            ConnectView(reloadConfiguration: actions.reloadConfiguration)
         case .files:
             FileTranscriptionView(store: fileStore)
         case .modes:
@@ -156,6 +158,7 @@ public struct LocalVoiceDashboard: View {
 private enum DashboardSection: String, CaseIterable, Identifiable {
     case home
     case history
+    case connect
     case files
     case modes
     case dictionary
@@ -170,6 +173,7 @@ private enum DashboardSection: String, CaseIterable, Identifiable {
         switch self {
         case .home: return "Command Center"
         case .history: return "History"
+        case .connect: return "Connect"
         case .files: return "Files"
         case .modes: return "Modes"
         case .dictionary: return "Dictionary"
@@ -184,6 +188,7 @@ private enum DashboardSection: String, CaseIterable, Identifiable {
         switch self {
         case .home: return "square.grid.2x2"
         case .history: return "clock.arrow.circlepath"
+        case .connect: return "point.3.connected.trianglepath.dotted"
         case .files: return "doc.badge.waveform"
         case .modes: return "slider.horizontal.3"
         case .dictionary: return "text.book.closed"
@@ -1083,6 +1088,15 @@ private struct SettingsView: View {
                         value: Binding(
                             get: { config.saveTranscriptHistory?.value ?? true },
                             set: { value in update { $0.saveTranscriptHistory = FlexBool(value) } }
+                        )
+                    )
+                    SettingDivider()
+                    SettingToggle(
+                        title: "Connect intelligence",
+                        detail: "Build a local review queue; corrections never activate without approval",
+                        value: Binding(
+                            get: { config.connectIntelligenceEnabled?.value ?? false },
+                            set: { value in update { $0.connectIntelligenceEnabled = FlexBool(value) } }
                         )
                     )
                     SettingDivider()

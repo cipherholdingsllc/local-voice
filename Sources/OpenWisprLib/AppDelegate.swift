@@ -1254,7 +1254,12 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     LatencyPanelController.shared.refresh()
 
                     if !text.isEmpty {
-                        VocabularyLearner.shared.observeCorrection(inserted: raw, polished: text)
+                        VocabularyLearner.shared.observeCorrection(
+                            inserted: raw,
+                            polished: text,
+                            sourceRecordID: requestID,
+                            connectEnabled: self.config.connectIntelligenceEnabled?.value ?? false
+                        )
                         let recordMs = LatencyInstrumentation.shared.lastSession["record"] ?? 0
                         let injectionMs =
                             LatencyInstrumentation.shared.lastSession["inject"] ?? 0

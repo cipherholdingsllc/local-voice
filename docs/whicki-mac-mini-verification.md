@@ -75,9 +75,15 @@ If any are `false`, follow `local-voice-doctor` TCC reset/re-grant steps.
 
 ### C. CONNECT
 
+- [ ] Confirm **Connect intelligence** is off in Settings and plain dictation is unchanged.
+- [ ] Open **Connect** and enable it; confirm the app reloads configuration.
 - [ ] Find the record from step A and click the **Find related** (circular-arrows) button.
-- [ ] If this is the only record, the Related sheet says "No related transcripts".
-- [ ] Dictate a second sentence with overlapping words and click **Find related** again — the second record should appear.
+- [ ] Dictate two thoughts sharing a distinctive phrase; confirm one cluster appears in Connect.
+- [ ] Make the same safe field correction in two separate dictations; confirm it appears only after the second source record.
+- [ ] Confirm the candidate has not changed Dictionary output before approval.
+- [ ] Approve it and confirm a user replacement appears in Dictionary.
+- [ ] Dismiss a separate candidate, restart the app, and confirm it remains absent.
+- [ ] Inspect `~/.config/local-voice/connect-decisions.json` and confirm schema version 1.
 
 ### D. MAKE USEFUL
 

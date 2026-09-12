@@ -29,6 +29,7 @@ public struct Config: Codable {
     public var dictationAccuracyFirst: FlexBool?
     public var saveTranscriptHistory: FlexBool?
     public var historyRetentionDays: Int?
+    public var connectIntelligenceEnabled: FlexBool?
 
     public var hotkey: HotkeyConfig {
         get { hotkeys[0] }
@@ -79,6 +80,7 @@ public struct Config: Codable {
         case dictationAccuracyFirst
         case saveTranscriptHistory
         case historyRetentionDays
+        case connectIntelligenceEnabled
     }
 
     public init(from decoder: Decoder) throws {
@@ -114,6 +116,7 @@ public struct Config: Codable {
         self.dictationAccuracyFirst = try c.decodeIfPresent(FlexBool.self, forKey: .dictationAccuracyFirst)
         self.saveTranscriptHistory = try c.decodeIfPresent(FlexBool.self, forKey: .saveTranscriptHistory)
         self.historyRetentionDays = try c.decodeIfPresent(Int.self, forKey: .historyRetentionDays)
+        self.connectIntelligenceEnabled = try c.decodeIfPresent(FlexBool.self, forKey: .connectIntelligenceEnabled)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -142,6 +145,7 @@ public struct Config: Codable {
         try c.encodeIfPresent(dictationAccuracyFirst, forKey: .dictationAccuracyFirst)
         try c.encodeIfPresent(saveTranscriptHistory, forKey: .saveTranscriptHistory)
         try c.encodeIfPresent(historyRetentionDays, forKey: .historyRetentionDays)
+        try c.encodeIfPresent(connectIntelligenceEnabled, forKey: .connectIntelligenceEnabled)
     }
 
     public init(
@@ -170,7 +174,8 @@ public struct Config: Codable {
         sttEngine: STTEngineKind? = .auto,
         dictationAccuracyFirst: FlexBool? = FlexBool(true),
         saveTranscriptHistory: FlexBool? = FlexBool(true),
-        historyRetentionDays: Int? = 30
+        historyRetentionDays: Int? = 30,
+        connectIntelligenceEnabled: FlexBool? = FlexBool(false)
     ) {
         self.hotkeys = hotkeys.isEmpty
             ? [HotkeyConfig(keyCode: 63, modifiers: [])]
@@ -197,6 +202,7 @@ public struct Config: Codable {
         self.dictationAccuracyFirst = dictationAccuracyFirst
         self.saveTranscriptHistory = saveTranscriptHistory
         self.historyRetentionDays = historyRetentionDays
+        self.connectIntelligenceEnabled = connectIntelligenceEnabled
     }
 
     public static let supportedLanguages: [LanguageOption] = [

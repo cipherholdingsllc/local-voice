@@ -278,14 +278,28 @@ public final class VocabularyLearner {
         }
     }
 
-    public func observeCorrection(inserted: String, polished: String, delay: TimeInterval = 2.5) {
+    public func observeCorrection(
+        inserted: String,
+        polished: String,
+        sourceRecordID: UUID = UUID(),
+        connectEnabled: Bool = false,
+        delay: TimeInterval = 2.5
+    ) {
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + delay) { [weak self] in
             guard let self = self else { return }
             guard let current = Self.readFocusedText(), !current.isEmpty else { return }
             guard current != polished, current != inserted else { return }
             if let pair = DictationTeacher.proposedReplacement(inserted: polished, edited: current)
                 ?? DictationTeacher.proposedReplacement(inserted: inserted, edited: current) {
-                _ = self.addReplacement(from: pair.from, to: pair.to)
+                if connectEnabled {
+                    ConnectStore.shared.observe(
+                        from: pair.from,
+                        to: pair.to,
+                        sourceRecordID: sourceRecordID
+                    )
+                } else {
+                    _ = self.addReplacement(from: pair.from, to: pair.to)
+                }
                 return
             }
             let newTerms = Self.extractNewTerms(from: polished, to: current)
