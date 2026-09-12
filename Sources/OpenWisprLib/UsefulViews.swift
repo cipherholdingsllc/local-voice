@@ -301,15 +301,13 @@ public struct MakeUsefulView: View {
             existing.content = content
             artifact = existing
         } else {
-            var fresh = LocalVoiceArtifact(
+            artifact = LocalVoiceArtifact(
                 sourceTranscriptId: record.id,
                 type: type,
                 content: content,
                 engine: resolvedEngine?.rawValue,
                 generatedContent: generatedDraft
             )
-            artifact = fresh
-            fresh.content = content
             savedArtifactId = artifact.id
         }
         store.save(artifact)
