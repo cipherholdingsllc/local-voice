@@ -47,6 +47,9 @@ The build is ad-hoc signed; each new signature is a new TCC subject. Create the 
 
 On headless/SSH machines the identity lives in `~/Library/Keychains/local-voice-signing.keychain-db` — unlock it first (`security unlock-keychain`) and the bundle script passes `--keychain` automatically.
 
+**`bundle-app.sh` fails with `KEYCHAIN_ARGS[@]: unbound variable`.**
+The `set -u` shell flag treats an empty `KEYCHAIN_ARGS` array as unbound on the `codesign` line. Fix: `scripts/bundle-app.sh` was updated in this branch to `set -eo pipefail`. If you see this on a pre-fix checkout, edit `scripts/bundle-app.sh` line 2 from `set -euo pipefail` to `set -eo pipefail`, or rebase onto this branch.
+
 ## Rules
 
 - Never `tccutil reset All`, never sudo, never toggle other apps' rows.
