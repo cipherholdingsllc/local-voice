@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import XCTest
 @testable import OpenWisprLib
@@ -116,6 +117,12 @@ final class ArtifactStoreTests: XCTestCase {
         XCTAssertTrue(markdown.contains("approved: true"))
         XCTAssertTrue(markdown.contains("editedAfterGeneration: true"))
         XCTAssertTrue(markdown.contains("- [ ] edited by operator"))
+
+        XCTAssertEqual(
+            NSPasteboard.general.string(forType: .string),
+            markdown,
+            "export must copy the exported Markdown to the clipboard"
+        )
 
         var persisted = try XCTUnwrap(store.artifact(id: artifact.id))
         XCTAssertEqual(persisted.exportCount, 1)

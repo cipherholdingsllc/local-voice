@@ -89,7 +89,7 @@ If any are `false`, follow `local-voice-doctor` TCC reset/re-grant steps.
 
 - [ ] Click the **Make useful** (sparkles) button on the same record.
 - [ ] Confirm the artifact-type picker offers all eight types: **Prompt, Note, Task, Decision, Idea brief, Checklist, Instruction, Skill candidate**.
-- [ ] Confirm the engine picker offers **Auto / Ollama / Template**; choose **Template** for a deterministic draft (or Auto to exercise Ollama-if-reachable).
+- [ ] Confirm the engine picker offers **Ollama / Template**; choose **Template** for a deterministic draft (or Ollama to exercise Ollama-if-reachable, falling back to Template otherwise).
 - [ ] Tap **Generate** and confirm a draft appears in the editor, labeled "Inferred draft — edit before approving".
 - [ ] Edit a line of the draft and confirm the label flips to "Edited".
 - [ ] Tap **Save** and confirm "Saved to Artifacts." appears and an **Approve** button is shown.
