@@ -322,9 +322,12 @@ public final class ArtifactStore: ObservableObject {
 
         let canonicalDir = skillsDir.appendingPathComponent(slug)
         let installDir = skillInstallDir.appendingPathComponent(slug)
+        var createdDirs: [URL] = []
         do {
             for dir in [canonicalDir, installDir] {
+                let existedBefore = FileManager.default.fileExists(atPath: dir.path)
                 try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                if !existedBefore { createdDirs.append(dir) }
                 try skillMarkdown.write(
                     to: dir.appendingPathComponent("SKILL.md"),
                     atomically: true,
@@ -332,6 +335,9 @@ public final class ArtifactStore: ObservableObject {
                 )
             }
         } catch {
+            for dir in createdDirs {
+                try? FileManager.default.removeItem(at: dir)
+            }
             return nil
         }
 

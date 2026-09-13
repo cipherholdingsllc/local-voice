@@ -88,8 +88,7 @@ private struct ArtifactCard: View {
                 .help("Export to Markdown and copy to clipboard")
                 if ArtifactStore.isSkillExportable(artifact) {
                     Button {
-                        _ = store.exportSkill(artifact)
-                        skillInstalled = true
+                        skillInstalled = store.exportSkill(artifact) != nil
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { skillInstalled = false }
                     } label: {
                         Image(systemName: (skillInstalled || artifact.skillSlug != nil) ? "checkmark" : "puzzlepiece.extension")
