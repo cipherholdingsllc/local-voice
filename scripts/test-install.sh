@@ -180,7 +180,7 @@ if [ "${1:-}" = "--installer-trust" ]; then
     exit 0
 fi
 
-CONFIG_FILE="$HOME/.config/open-wispr/config.json"
+CONFIG_FILE="$HOME/.config/local-voice/config.json"
 CONFIG_BACKUP=""
 
 backup_config() {
@@ -208,7 +208,7 @@ echo ""
 echo "Building..."
 swift build -c release 2>&1 | tail -1
 
-BIN=".build/release/open-wispr"
+BIN=".build/release/local-voice"
 
 if [ -x "$BIN" ]; then
     pass "Binary is executable"
@@ -217,8 +217,8 @@ else
     exit 1
 fi
 
-check_output "--help shows usage" "Push-to-talk" "$BIN" --help
-check_output "status shows version" "open-wispr v" "$BIN" status
+check_output "--help shows usage" "push-to-talk" "$BIN" --help
+check_output "status shows version" "Local Voice v" "$BIN" status
 check_output "status shows config path" "Config:" "$BIN" status
 check_output "status shows toggle mode" "Toggle:" "$BIN" status
 check_output "get-hotkey works" "Current hotkey:" "$BIN" get-hotkey
@@ -226,7 +226,7 @@ check_output "get-hotkey works" "Current hotkey:" "$BIN" get-hotkey
 backup_config
 trap restore_config EXIT
 
-check_output "set-hotkey f5 works" "Hotkey set to: f5" "$BIN" set-hotkey f5
+check_output "set-hotkey f5 works" "Hotkey set to: F5" "$BIN" set-hotkey f5
 check_output "set-hotkey ctrl+space works" "Hotkey set to: ctrl+space" "$BIN" set-hotkey ctrl+space
 check_output "set-hotkey rejects invalid key" "Unknown key" "$BIN" set-hotkey invalidkey
 check_output "set-model rejects invalid model" "Unknown model" "$BIN" set-model fakemodel
@@ -239,7 +239,7 @@ echo ""
 echo "Testing app bundle..."
 bash scripts/bundle-app.sh "$BIN" /tmp/OpenWisprTest.app 0.0.0-test
 
-if [ -x "/tmp/OpenWisprTest.app/Contents/MacOS/open-wispr" ]; then
+if [ -x "/tmp/OpenWisprTest.app/Contents/MacOS/local-voice" ]; then
     pass "App bundle has executable"
 else
     fail "App bundle missing executable"
@@ -251,7 +251,7 @@ else
     fail "App bundle missing Info.plist"
 fi
 
-if grep -q "com.human37.open-wispr" /tmp/OpenWisprTest.app/Contents/Info.plist; then
+if grep -q "com.cipherholdings.localvoice" /tmp/OpenWisprTest.app/Contents/Info.plist; then
     pass "Info.plist has correct bundle ID"
 else
     fail "Info.plist wrong bundle ID"

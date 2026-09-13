@@ -174,6 +174,76 @@ final class ArtifactStoreTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: exportedURL.path))
     }
 
+    func testExportSkillWritesFrontmatterAndInstallCopy() throws {
+        let (store, directory) = makeStore()
+        var artifact = makeArtifact(
+            type: .skillCandidate,
+            approved: true,
+            content: "# Commit Message Shape\n\nAlways end PR bodies with a test plan checklist."
+        )
+        store.save(artifact)
+
+        let installed = store.exportSkill(store.artifact(id: artifact.id)!)
+
+        let slug = "commit-message-shape"
+        XCTAssertEqual(installed, directory.appendingPathComponent("InstalledSkills/\(slug)/SKILL.md"))
+        let canonical = try String(contentsOf: directory.appendingPathComponent("Skills/\(slug)/SKILL.md"))
+        let installedText = try String(contentsOf: installed!)
+        XCTAssertEqual(canonical, installedText)
+        XCTAssertTrue(installedText.contains("name: commit-message-shape"))
+        XCTAssertTrue(installedText.contains("description: \"Always end PR bodies"))
+        XCTAssertTrue(installedText.contains("artifactType: skillCandidate"))
+        XCTAssertTrue(installedText.contains("approved: true"))
+
+        artifact = store.artifact(id: artifact.id)!
+        XCTAssertEqual(artifact.skillSlug, slug)
+    }
+
+    func testExportSkillRefusesUnapprovedAndNonSkillTypes() {
+        let (store, _) = makeStore()
+        let unapproved = makeArtifact(type: .skillCandidate, content: "# X")
+        store.save(unapproved)
+        XCTAssertNil(store.exportSkill(store.artifact(id: unapproved.id)!))
+
+        let wrongType = makeArtifact(type: .note, approved: true, content: "# X")
+        store.save(wrongType)
+        XCTAssertNil(store.exportSkill(store.artifact(id: wrongType.id)!))
+    }
+
+    func testDeleteRemovesInstalledSkill() throws {
+        let (store, directory) = makeStore()
+        let artifact = makeArtifact(type: .reusableInstruction, approved: true, content: "# Run Tests First")
+        store.save(artifact)
+        XCTAssertNotNil(store.exportSkill(store.artifact(id: artifact.id)!))
+        let slug = store.artifact(id: artifact.id)!.skillSlug!
+
+        store.delete(store.artifact(id: artifact.id)!)
+
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: directory.appendingPathComponent("Skills/\(slug)").path
+        ))
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: directory.appendingPathComponent("InstalledSkills/\(slug)").path
+        ))
+    }
+
+    func testSkillSlugCollisionGetsSuffix() {
+        let (store, _) = makeStore()
+        let first = makeArtifact(type: .skillCandidate, approved: true, content: "# Same Title\nBody one")
+        let second = makeArtifact(type: .skillCandidate, approved: true, content: "# Same Title\nBody two")
+        store.save(first)
+        store.save(second)
+
+        XCTAssertNotNil(store.exportSkill(store.artifact(id: first.id)!))
+        XCTAssertNotNil(store.exportSkill(store.artifact(id: second.id)!))
+
+        let slugA = store.artifact(id: first.id)!.skillSlug!
+        let slugB = store.artifact(id: second.id)!.skillSlug!
+        XCTAssertEqual(slugA, "same-title")
+        XCTAssertNotEqual(slugA, slugB)
+        XCTAssertTrue(slugB.hasPrefix("same-title-"))
+    }
+
     func testUserEditedFlagSemantics() {
         let noDraft = makeArtifact(generatedContent: nil)
         XCTAssertFalse(noDraft.userEdited)
@@ -281,7 +351,9 @@ final class ArtifactStoreTests: XCTestCase {
         let store = ArtifactStore(
             storageURL: directory.appendingPathComponent("artifacts.json"),
             provenanceURL: directory.appendingPathComponent("artifacts-provenance.jsonl"),
-            exportDir: directory.appendingPathComponent("Artifacts")
+            exportDir: directory.appendingPathComponent("Artifacts"),
+            skillsDir: directory.appendingPathComponent("Skills"),
+            skillInstallDir: directory.appendingPathComponent("InstalledSkills")
         )
         return (store, directory)
     }
@@ -289,6 +361,7 @@ final class ArtifactStoreTests: XCTestCase {
     private func makeArtifact(
         sourceTranscriptId: UUID = UUID(),
         type: ArtifactType = .note,
+        approved: Bool = false,
         content: String = "draft content",
         engine: String? = "template",
         generatedContent: String? = nil
@@ -297,6 +370,7 @@ final class ArtifactStoreTests: XCTestCase {
             sourceTranscriptId: sourceTranscriptId,
             type: type,
             content: content,
+            approvedAt: approved ? Date() : nil,
             engine: engine,
             generatedContent: generatedContent
         )

@@ -55,7 +55,7 @@ First run downloads ~2.5GB HF model. Daemon: `scripts/parakeet_daemon.py`
 |------|-------|
 | Slice 1 — artifacts | **Shipped on branch** — dictate → history → Make Useful (8 types) → edit → approve → export w/ provenance → manual reuse; see `docs/whiski-architecture.md` |
 | Slice 2 — connect digest | Surface Connect clusters + approved corrections as a reviewable digest |
-| Slice 3 — agent export formats | Agent-consumable output (e.g. SKILL.md) for `skillCandidate`/`reusableInstruction` |
+| Slice 3 — agent export formats | **Partially shipped** — approved `skillCandidate`/`reusableInstruction` install to `~/.config/devin/skills/<slug>/SKILL.md`; proof receipt: `docs/thought-compiler-proof.md` |
 | Slice 4 — Whiski repo sync | Push approved artifacts into the Whiski repo |
 
 ## Stop condition
