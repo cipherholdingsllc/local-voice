@@ -84,7 +84,7 @@ public struct TextPostProcessor {
 
     private static func ensureSpaceAfterPunctuation(_ text: String) -> String {
         var result = text
-        guard let regex = try? NSRegularExpression(pattern: "([.,?!:;\\u{2013}])(\\w)", options: []) else { return result }
+        guard let regex = try? NSRegularExpression(pattern: "([.,?!:;\\u2013])(\\w)", options: []) else { return result }
         result = regex.stringByReplacingMatches(
             in: result,
             range: NSRange(result.startIndex..., in: result),
