@@ -303,7 +303,7 @@ public final class ArtifactStore: ObservableObject {
         let skillMarkdown = """
         ---
         name: \(slug)
-        description: \(description)
+        description: \(Self.yamlQuoted(description))
         ---
 
         \(artifact.content)
@@ -366,13 +366,24 @@ public final class ArtifactStore: ObservableObject {
         return String(line.prefix(100))
     }
 
+    /// Quote a free-text value for safe use as a YAML frontmatter scalar.
+    static func yamlQuoted(_ value: String) -> String {
+        let escaped = value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        return "\"\(escaped)\""
+    }
+
     /// Unique slug for this artifact: reuses its stored slug, otherwise takes
     /// the content-derived base and suffixes on collision with another
     /// artifact's existing install.
     private func resolvedSkillSlug(for artifact: LocalVoiceArtifact) -> String {
         let base = Self.skillSlugBase(for: artifact)
         let claimed = Set(artifacts.compactMap { $0.id == artifact.id ? nil : $0.skillSlug })
-        guard claimed.contains(base) else { return base }
+        let onDisk = claimed.contains(base) ||
+            FileManager.default.fileExists(atPath: skillsDir.appendingPathComponent(base).path) ||
+            FileManager.default.fileExists(atPath: skillInstallDir.appendingPathComponent(base).path)
+        guard onDisk else { return base }
         return "\(base)-\(artifact.id.uuidString.prefix(4).lowercased())"
     }
 

@@ -191,7 +191,7 @@ final class ArtifactStoreTests: XCTestCase {
         let installedText = try String(contentsOf: installed!)
         XCTAssertEqual(canonical, installedText)
         XCTAssertTrue(installedText.contains("name: commit-message-shape"))
-        XCTAssertTrue(installedText.contains("description: Always end PR bodies"))
+        XCTAssertTrue(installedText.contains("description: \"Always end PR bodies"))
         XCTAssertTrue(installedText.contains("artifactType: skillCandidate"))
         XCTAssertTrue(installedText.contains("approved: true"))
 
@@ -235,7 +235,7 @@ final class ArtifactStoreTests: XCTestCase {
         store.save(second)
 
         XCTAssertNotNil(store.exportSkill(store.artifact(id: first.id)!))
-        XCTAssertNotNil(store.exportSkill(store.artifact(id: second.id)!)
+        XCTAssertNotNil(store.exportSkill(store.artifact(id: second.id)!))
 
         let slugA = store.artifact(id: first.id)!.skillSlug!
         let slugB = store.artifact(id: second.id)!.skillSlug!
