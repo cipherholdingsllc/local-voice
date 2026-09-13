@@ -369,7 +369,11 @@ public final class ArtifactStore: ObservableObject {
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .first { !$0.isEmpty && !$0.hasPrefix("#") } ?? artifact.type.title
-        return String(line.prefix(100))
+        // YAML-safe single line: strip quotes, cap at a word boundary.
+        let cleaned = line.replacingOccurrences(of: "\"", with: "'")
+        guard cleaned.count > 100 else { return cleaned }
+        let truncated = String(cleaned.prefix(100))
+        return truncated.lastIndex(of: " ").map { String(truncated[..<$0]) } ?? truncated
     }
 
     /// Quote a free-text value for safe use as a YAML frontmatter scalar.
