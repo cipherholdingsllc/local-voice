@@ -17,6 +17,7 @@
 | `engine` | String? | Which engine produced the draft: `"template"` or `"ollama"`. Absent on artifacts saved before this field existed. |
 | `generatedContent` | String? | The machine-generated draft before operator edits. When it differs from `content`, the artifact was edited after generation (`userEdited` in code, `editedAfterGeneration` in the export header). |
 | `reuseEvents` | Array | Append-only list of manual reuse outcomes: `{id, outcome, note?, at}` where `outcome` is `helpful`, `edited`, or `rejected`. These are operator-entered signals, not automatic outcome measurement. |
+| `skillSlug` | String? | Directory slug used when this artifact was installed as a SKILL.md via `ArtifactStore.exportSkill`. `null` until the first skill export. |
 
 ## Provenance
 
@@ -25,6 +26,7 @@ Each artifact belongs to one source transcript. A JSONL sidecar, `artifacts-prov
 ```json
 {"artifactId":"...","action":"export","at":"2026-09-11T...","format":"markdown"}
 {"artifactId":"...","action":"reuse:helpful","at":"2026-09-12T...","format":"markdown"}
+{"artifactId":"...","action":"export:skill","at":"2026-09-12T..."}
 ```
 
 Exported Markdown files carry a header:
@@ -43,12 +45,15 @@ exportedAt: <ISO-8601>
 ---
 ```
 
+Approved `skillCandidate`/`reusableInstruction` artifacts can also be installed as a SKILL.md (`ArtifactStore.exportSkill`); see `docs/whiski-architecture.md` for the frontmatter format and install paths.
+
 ## Deletion policy
 
-Deleting a source transcript (`LocalVoiceStore.delete(recordID:)`, surfaced as the trash button on a History card) deletes every derived artifact record and its exported `.md` file. Deleting an artifact directly removes its exported `.md` too. `artifacts-provenance.jsonl` is a ledger and is **not** rewritten — export and reuse lines survive the deletion of the rows they describe.
+Deleting a source transcript (`LocalVoiceStore.delete(recordID:)`, surfaced as the trash button on a History card) deletes every derived artifact record and its exported `.md` file. Deleting an artifact directly removes its exported `.md` and, if installed, its SKILL.md copies too. `artifacts-provenance.jsonl` is a ledger and is **not** rewritten — export and reuse lines survive the deletion of the rows they describe.
 
 ## Storage
 
 - `~/.config/local-voice/artifacts.json` — array of artifact records.
 - `~/.config/local-voice/Artifacts/` — exported `.md` files.
 - `~/.config/local-voice/artifacts-provenance.jsonl` — append-only export/reuse log.
+- Installed-skill paths (`Skills/<slug>/` and `~/.config/devin/skills/<slug>/`) are listed in `docs/whiski-architecture.md`.

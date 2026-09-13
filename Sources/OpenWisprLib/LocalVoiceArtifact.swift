@@ -376,7 +376,9 @@ public final class ArtifactStore: ObservableObject {
 
     /// Unique slug for this artifact: reuses its stored slug, otherwise takes
     /// the content-derived base and suffixes on collision with another
-    /// artifact's existing install.
+    /// artifact's existing install or with any pre-existing directory already
+    /// on disk under `skillsDir`/`skillInstallDir` (e.g. a third-party skill),
+    /// so exportSkill never overwrites or later deletes an unrelated skill.
     private func resolvedSkillSlug(for artifact: LocalVoiceArtifact) -> String {
         let base = Self.skillSlugBase(for: artifact)
         let claimed = Set(artifacts.compactMap { $0.id == artifact.id ? nil : $0.skillSlug })
