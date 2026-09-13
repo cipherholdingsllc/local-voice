@@ -58,7 +58,7 @@ Whiski turns dictated speech into compounding capability: every dictation can be
 3. **CONNECT** is opt-in and builds deterministic related-thought clusters plus a correction review queue. Corrections require two distinct source records and explicit approval.
 4. **MAKE USEFUL** takes a record + artifact type + engine selection and drafts a `LocalVoiceArtifact` via `UsefulTransformer` — Ollama when reachable, otherwise a deterministic template. The draft is editable before saving; saving preserves the machine draft in `generatedContent` and the resolved engine in `engine` (`template` or `ollama`). When the saved `content` differs from `generatedContent`, `userEdited` is true — this is how inferred text is distinguished from operator-approved text.
 5. **Approval** is explicit: the Approve control in MakeUsefulView or on an Artifacts card sets `approvedAt`. Cards show Draft/Approved status plus engine, edited, and reuse tags.
-6. **COMPOUND** exports an artifact as Markdown to `Artifacts/<artifactId>.md` and copies it to the clipboard, incrementing `exportCount` and appending an `{"action":"export"}` line to `artifacts-provenance.jsonl`. The export header carries `source`, `transcriptId`, `artifactId`, `artifactType`, `generatedBy`, `approved`, `editedAfterGeneration`, `generatedAt`, and `exportedAt`.
+6. **COMPOUND** exports an artifact as Markdown to `Artifacts/<artifactId>.md` and copies it to the clipboard, incrementing `exportCount` and appending an `{"action":"export"}` line to `artifacts-provenance.jsonl`. The export header carries `source`, `transcriptId`, `artifactId`, `artifactType`, `generatedBy`, `approved`, `editedAfterGeneration`, `generatedAt`, and `exportedAt`. Approved `skillCandidate` and `reusableInstruction` artifacts additionally support **Install as Skill**: `ArtifactStore.exportSkill` writes `Skills/<slug>/SKILL.md` under the config dir and installs a copy at `~/.config/devin/skills/<slug>/SKILL.md` with `name`/`description` frontmatter and a provenance HTML comment, appending `{"action":"export:skill"}` to the ledger.
 7. **Reuse** is recorded manually from the Artifacts card ("Mark reused" → helpful / edited / rejected), appending a `ReuseEvent` to the artifact and a `reuse:<outcome>` line to the provenance ledger.
 
 ## Deletion policy
@@ -78,13 +78,15 @@ Whiski turns dictated speech into compounding capability: every dictation can be
 | `~/.config/local-voice/artifacts.json` | D/E | Generated artifact drafts, approval state, `generatedContent`/`engine`, and `reuseEvents`. |
 | `~/.config/local-voice/artifacts-provenance.jsonl` | E | Append-only export/reuse ledger. |
 | `~/.config/local-voice/Artifacts/*.md` | E | Exported Markdown artifacts with provenance headers. |
+| `~/.config/local-voice/Skills/<slug>/SKILL.md` | E | Canonical installed-skill copy; deleted on artifact delete. |
+| `~/.config/devin/skills/<slug>/SKILL.md` | E | Agent-loadable install target; deleted on artifact delete. |
 | `~/.config/local-voice/config.json` | A–E | User settings, retention, engine. |
 
 ## Staged roadmap
 
 - **Slice 1 — done (this branch):** dictate → history → Make Useful draft (all 8 types) → edit → save → approve → export Markdown+clipboard with provenance header → manual reuse record → transcript-delete cascade.
 - **Next:** connect-surface digest — Connect clusters and approved corrections summarized as a reviewable digest.
-- **Then:** agent export formats — agent-consumable output (e.g. SKILL.md-style) so `skillCandidate` and `reusableInstruction` artifacts drop straight into agent tooling.
+- **Slice 3 — partial:** SKILL.md export for approved `skillCandidate`/`reusableInstruction` artifacts is implemented (`exportSkill` → `~/.config/devin/skills/`). The Thought Compiler proof receipt lives at `docs/thought-compiler-proof.md`.
 - **Then:** sync approved artifacts to the Whiski repo so capability compounds outside this app.
 
 ## Nemesis constraints honored

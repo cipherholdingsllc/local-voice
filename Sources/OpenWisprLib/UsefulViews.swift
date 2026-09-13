@@ -39,6 +39,7 @@ private struct ArtifactCard: View {
     let artifact: LocalVoiceArtifact
     @State private var exported = false
     @State private var copied = false
+    @State private var skillInstalled = false
     @ObservedObject private var store: ArtifactStore = .shared
 
     var body: some View {
@@ -85,6 +86,21 @@ private struct ArtifactCard: View {
                 }
                 .buttonStyle(.plain)
                 .help("Export to Markdown and copy to clipboard")
+                if ArtifactStore.isSkillExportable(artifact) {
+                    Button {
+                        _ = store.exportSkill(artifact)
+                        skillInstalled = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { skillInstalled = false }
+                    } label: {
+                        Image(systemName: (skillInstalled || artifact.skillSlug != nil) ? "checkmark" : "puzzlepiece.extension")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor((skillInstalled || artifact.skillSlug != nil) ? LocalVoiceTheme.accent : LocalVoiceTheme.secondary)
+                            .frame(width: 28, height: 28)
+                            .background(Circle().fill(LocalVoiceTheme.raised))
+                    }
+                    .buttonStyle(.plain)
+                    .help(artifact.skillSlug.map { "Skill installed at ~/.config/devin/skills/\($0) — reinstall" } ?? "Install as agent skill (SKILL.md)")
+                }
                 Button {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(artifact.content, forType: .string)

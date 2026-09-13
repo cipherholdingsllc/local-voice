@@ -29,6 +29,7 @@ Verified snapshot: 2026-07-28
 | Whiski slice 1 — manual reuse records | Implemented; device confirmation pending | "Mark reused" on an Artifacts card appends `ReuseEvent`s (`helpful`/`edited`/`rejected`) to the artifact and `reuse:<outcome>` lines to `artifacts-provenance.jsonl`; this is an operator-entered signal — automatic outcome measurement is intentionally not implemented |
 | Whiski slice 1 — transcript deletion cascade | Implemented; device confirmation pending | `LocalVoiceStore.delete(recordID:)` (History card trash) removes the transcript, all derived artifacts, and their exported `.md` files; `artifacts-provenance.jsonl` is append-only and not rewritten |
 | Whiski Connect intelligence queue | Implemented; device confirmation pending | Opt-in related-transcript clusters plus a correction review queue gated on ≥2 distinct source records, with explicit approve/dismiss persisted to `connect-decisions.json`; checklist section C covers the on-device pass |
+| Whiski slice 3 — install as skill | Implemented; device confirmation pending | Approved `skillCandidate`/`reusableInstruction` artifacts export to `~/.config/devin/skills/<slug>/SKILL.md` (canonical copy under `~/.config/local-voice/Skills/`) with frontmatter + provenance comment; deletion cascade removes both; headless coverage in `ArtifactStoreTests` and a swiftc proof run |
 
 ## What remains before calling it production-ready
 

@@ -100,6 +100,9 @@ public struct LocalVoiceArtifact: Codable, Identifiable, Equatable, Sendable {
     public var generatedContent: String?
     /// Manual reuse outcomes recorded after export. Append-only.
     public var reuseEvents: [ReuseEvent]
+    /// Directory slug used when this artifact was installed as a SKILL.md.
+    /// Nil until the first skill export.
+    public var skillSlug: String?
 
     public init(
         id: UUID = UUID(),
@@ -112,7 +115,8 @@ public struct LocalVoiceArtifact: Codable, Identifiable, Equatable, Sendable {
         exportCount: Int = 0,
         engine: String? = nil,
         generatedContent: String? = nil,
-        reuseEvents: [ReuseEvent] = []
+        reuseEvents: [ReuseEvent] = [],
+        skillSlug: String? = nil
     ) {
         self.id = id
         self.sourceTranscriptId = sourceTranscriptId
@@ -125,6 +129,7 @@ public struct LocalVoiceArtifact: Codable, Identifiable, Equatable, Sendable {
         self.engine = engine
         self.generatedContent = generatedContent
         self.reuseEvents = reuseEvents
+        self.skillSlug = skillSlug
     }
 
     public var isApproved: Bool { approvedAt != nil }
@@ -139,6 +144,7 @@ public struct LocalVoiceArtifact: Codable, Identifiable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, sourceTranscriptId, type, content, generatedAt, approvedAt
         case exportedAt, exportCount, engine, generatedContent, reuseEvents
+        case skillSlug
     }
 
     public init(from decoder: Decoder) throws {
@@ -154,6 +160,7 @@ public struct LocalVoiceArtifact: Codable, Identifiable, Equatable, Sendable {
         engine = try container.decodeIfPresent(String.self, forKey: .engine)
         generatedContent = try container.decodeIfPresent(String.self, forKey: .generatedContent)
         reuseEvents = try container.decodeIfPresent([ReuseEvent].self, forKey: .reuseEvents) ?? []
+        skillSlug = try container.decodeIfPresent(String.self, forKey: .skillSlug)
     }
 }
 
@@ -165,15 +172,24 @@ public final class ArtifactStore: ObservableObject {
     private let storageURL: URL
     private let provenanceURL: URL
     private let exportDir: URL
+    /// Canonical store-owned copy of installed skills; cascades on delete.
+    private let skillsDir: URL
+    /// Where agents actually load skills from (Devin user-level skills).
+    private let skillInstallDir: URL
 
     public init(
         storageURL: URL = Config.configDir.appendingPathComponent("artifacts.json"),
         provenanceURL: URL = Config.configDir.appendingPathComponent("artifacts-provenance.jsonl"),
-        exportDir: URL = Config.configDir.appendingPathComponent("Artifacts")
+        exportDir: URL = Config.configDir.appendingPathComponent("Artifacts"),
+        skillsDir: URL = Config.configDir.appendingPathComponent("Skills"),
+        skillInstallDir: URL = URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent(".config/devin/skills")
     ) {
         self.storageURL = storageURL
         self.provenanceURL = provenanceURL
         self.exportDir = exportDir
+        self.skillsDir = skillsDir
+        self.skillInstallDir = skillInstallDir
 
         if let data = try? Data(contentsOf: storageURL),
            let decoded = try? JSONDecoder.localVoice.decode([LocalVoiceArtifact].self, from: data) {
@@ -267,6 +283,99 @@ public final class ArtifactStore: ObservableObject {
         return fileURL
     }
 
+    /// Whether this artifact can be installed as an agent skill.
+    public static func isSkillExportable(_ artifact: LocalVoiceArtifact) -> Bool {
+        artifact.isApproved &&
+            (artifact.type == .skillCandidate || artifact.type == .reusableInstruction)
+    }
+
+    /// Install an approved skill candidate / reusable instruction as a
+    /// SKILL.md agents can load. Writes the canonical copy under the
+    /// local-voice config dir (so deletion cascades) and installs a copy into
+    /// the Devin user skills directory.
+    @discardableResult
+    public func exportSkill(_ artifact: LocalVoiceArtifact) -> URL? {
+        guard ArtifactStore.isSkillExportable(artifact) else { return nil }
+
+        let slug = artifact.skillSlug ?? resolvedSkillSlug(for: artifact)
+        let exportedAt = ISO8601DateFormatter().string(from: Date())
+        let description = Self.skillDescription(for: artifact)
+        let skillMarkdown = """
+        ---
+        name: \(slug)
+        description: \(description)
+        ---
+
+        \(artifact.content)
+
+        <!--
+        provenance:
+          source: local-voice://record/\(artifact.sourceTranscriptId.uuidString)
+          artifactId: \(artifact.id.uuidString)
+          artifactType: \(artifact.type.rawValue)
+          generatedBy: \(artifact.engine ?? "unknown")
+          approved: \(artifact.isApproved)
+          editedAfterGeneration: \(artifact.userEdited)
+          exportedAt: \(exportedAt)
+        -->
+        """
+
+        let canonicalDir = skillsDir.appendingPathComponent(slug)
+        let installDir = skillInstallDir.appendingPathComponent(slug)
+        do {
+            for dir in [canonicalDir, installDir] {
+                try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                try skillMarkdown.write(
+                    to: dir.appendingPathComponent("SKILL.md"),
+                    atomically: true,
+                    encoding: .utf8
+                )
+            }
+        } catch {
+            return nil
+        }
+
+        var updated = artifact
+        updated.skillSlug = slug
+        save(updated)
+        appendProvenance(artifactId: artifact.id, action: "export:skill", at: Date())
+        return installDir.appendingPathComponent("SKILL.md")
+    }
+
+    /// Derive a stable directory slug from the artifact content: first Markdown
+    /// heading when present, else the leading words of the first line.
+    static func skillSlugBase(for artifact: LocalVoiceArtifact) -> String {
+        let lines = artifact.content.components(separatedBy: .newlines)
+        let source = (lines.first { $0.hasPrefix("#") } ?? lines.first { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? "")
+            .replacingOccurrences(of: "#", with: "")
+            .trimmingCharacters(in: .whitespaces)
+        let words = source
+            .lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+            .prefix(6)
+        let slug = words.joined(separator: "-")
+        return slug.isEmpty ? "skill-\(artifact.id.uuidString.prefix(8).lowercased())" : String(slug.prefix(40))
+    }
+
+    static func skillDescription(for artifact: LocalVoiceArtifact) -> String {
+        let line = artifact.content
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty && !$0.hasPrefix("#") } ?? artifact.type.title
+        return String(line.prefix(100))
+    }
+
+    /// Unique slug for this artifact: reuses its stored slug, otherwise takes
+    /// the content-derived base and suffixes on collision with another
+    /// artifact's existing install.
+    private func resolvedSkillSlug(for artifact: LocalVoiceArtifact) -> String {
+        let base = Self.skillSlugBase(for: artifact)
+        let claimed = Set(artifacts.compactMap { $0.id == artifact.id ? nil : $0.skillSlug })
+        guard claimed.contains(base) else { return base }
+        return "\(base)-\(artifact.id.uuidString.prefix(4).lowercased())"
+    }
+
     public func delete(_ artifact: LocalVoiceArtifact) {
         if !Thread.isMainThread {
             DispatchQueue.main.async { [weak self] in self?.delete(artifact) }
@@ -276,6 +385,10 @@ public final class ArtifactStore: ObservableObject {
         try? FileManager.default.removeItem(
             at: exportDir.appendingPathComponent("\(artifact.id.uuidString).md")
         )
+        if let slug = artifact.skillSlug {
+            try? FileManager.default.removeItem(at: skillsDir.appendingPathComponent(slug))
+            try? FileManager.default.removeItem(at: skillInstallDir.appendingPathComponent(slug))
+        }
         persist()
     }
 
