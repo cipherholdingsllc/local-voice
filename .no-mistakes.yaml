@@ -1,0 +1,29 @@
+# no-mistakes repo config for local-voice.
+# Gate-control fields here are honored by the daemon only from origin/main.
+
+disable_project_settings: true
+
+protected_paths:
+  - ".github/**"
+  - ".no-mistakes.yaml"
+  - "Formula/**"
+  - "scripts/install.sh"
+  - "scripts/uninstall.sh"
+  - "scripts/deploy.sh"
+  - "scripts/create-dev-signing-identity.sh"
+
+auto_fix:
+  review: 0
+  rebase: 3
+  test: 3
+  document: 3
+  lint: 3
+  ci: 3
+
+ci:
+  rerun_transient: 1
+  revalidate_repairs: true
+
+providers:
+  github:
+    draft_pull_requests: false
