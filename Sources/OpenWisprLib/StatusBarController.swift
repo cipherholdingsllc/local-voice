@@ -16,6 +16,7 @@ class StatusBarController: NSObject {
     private var copiedFeedback = false
     private var menuItemTargets: [MenuItemTarget] = []
     private var stateMenuItem: NSMenuItem?
+    private var statusMenu: NSMenu?
 
     var reprocessHandler: ((URL) -> Void)?
     var onConfigChange: ((Config) -> Void)?
@@ -23,6 +24,7 @@ class StatusBarController: NSObject {
     var onShowLatency: (() -> Void)?
     var onToggleRawPolished: (() -> Void)?
     var onOpenDashboard: (() -> Void)?
+    var onToggleCapture: (() -> Void)?
     var onRepairPermissions: (() -> Void)?
     var sttEngineName: String?
     var privacyStatus: String?
@@ -39,7 +41,10 @@ class StatusBarController: NSObject {
     }
 
     var state: State = .idle {
-        didSet { updateIcon() }
+        didSet {
+            updateIcon()
+            buildMenu()
+        }
     }
 
     override init() {
@@ -49,6 +54,10 @@ class StatusBarController: NSObject {
         if let button = statusItem.button {
             button.image = StatusBarController.drawLogo(active: false)
             button.image?.isTemplate = true
+            button.target = self
+            button.action = #selector(statusItemButtonActivated(_:))
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            button.toolTip = StatusBarController.captureTooltip(recording: false)
         }
 
         buildMenu()
@@ -126,6 +135,24 @@ class StatusBarController: NSObject {
             engineItem.isEnabled = false
             menu.addItem(engineItem)
         }
+
+        menu.addItem(NSMenuItem.separator())
+
+        let captureTarget = MenuItemTarget { [weak self] in
+            self?.onToggleCapture?()
+        }
+        menuItemTargets.append(captureTarget)
+        let capturing: Bool = {
+            if case .recording = state { return true }
+            return false
+        }()
+        let captureItem = NSMenuItem(
+            title: capturing ? "Stop Dictation" : "Start Dictation",
+            action: #selector(MenuItemTarget.invoke),
+            keyEquivalent: ""
+        )
+        captureItem.target = captureTarget
+        menu.addItem(captureItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -320,6 +347,23 @@ class StatusBarController: NSObject {
         toggleItem.state = (config.toggleMode?.value ?? false) ? .on : .off
         menu.addItem(toggleItem)
 
+        let lockTarget = MenuItemTarget { [weak self] in
+            var cfg = Config.load()
+            let current = Config.effectiveLockModeEnabled(cfg.lockModeEnabled)
+            cfg.lockModeEnabled = FlexBool(!current)
+            try? cfg.save()
+            self?.onConfigChange?(cfg)
+        }
+        menuItemTargets.append(lockTarget)
+        let lockItem = NSMenuItem(
+            title: "Lock Mode (double-tap Fn)",
+            action: #selector(MenuItemTarget.invoke),
+            keyEquivalent: ""
+        )
+        lockItem.target = lockTarget
+        lockItem.state = Config.effectiveLockModeEnabled(config.lockModeEnabled) ? .on : .off
+        menu.addItem(lockItem)
+
         let rawToggleTarget = MenuItemTarget { [weak self] in
             self?.onToggleRawPolished?()
         }
@@ -395,7 +439,30 @@ class StatusBarController: NSObject {
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
 
-        statusItem.menu = menu
+        statusMenu = menu
+        // Do not assign statusItem.menu — that would steal primary click from PTT.
+    }
+
+    @objc private func statusItemButtonActivated(_ sender: Any?) {
+        guard let event = NSApp.currentEvent else {
+            onToggleCapture?()
+            return
+        }
+        switch StatusItemClickPolicy.kind(
+            eventType: event.type,
+            modifierFlags: event.modifierFlags
+        ) {
+        case .toggleCapture:
+            onToggleCapture?()
+        case .showMenu:
+            showStatusMenu()
+        }
+    }
+
+    private func showStatusMenu() {
+        guard let menu = statusMenu, let button = statusItem.button else { return }
+        let location = NSPoint(x: 0, y: button.bounds.height)
+        menu.popUp(positioning: nil, at: location, in: button)
     }
 
     @objc private func reloadConfiguration() {
@@ -412,8 +479,24 @@ class StatusBarController: NSObject {
         NSWorkspace.shared.open(configFile)
     }
 
+    private static func captureTooltip(recording: Bool) -> String {
+        if recording {
+            return "Click to stop dictation. Right-click or Control-click for menu."
+        }
+        return "Click to start dictation. Right-click or Control-click for menu."
+    }
+
     private func updateIcon() {
         stopAnimation()
+        let recording: Bool
+        if case .recording = state {
+            recording = true
+        } else {
+            recording = false
+        }
+        DispatchQueue.main.async { [weak self] in
+            self?.statusItem.button?.toolTip = StatusBarController.captureTooltip(recording: recording)
+        }
 
         switch state {
         case .idle:
