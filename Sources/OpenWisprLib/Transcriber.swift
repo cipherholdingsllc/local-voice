@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 public class Transcriber {
@@ -47,18 +48,34 @@ public class Transcriber {
 
         try process.run()
 
+        let timeout = InferenceTimeout.cliSeconds(forAudioURL: audioURL)
         var stderrData = Data()
-        let stderrThread = Thread {
+        var stdoutData = Data()
+        let finished = DispatchSemaphore(value: 0)
+        let stderrDone = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .utility).async {
             stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+            stderrDone.signal()
         }
-        stderrThread.start()
-
-        let data = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-        while !stderrThread.isFinished { Thread.sleep(forTimeInterval: 0.01) }
-        process.waitUntilExit()
+        DispatchQueue.global(qos: .userInitiated).async {
+            stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            finished.signal()
+        }
+        if finished.wait(timeout: .now() + timeout) == .timedOut {
+            let pid = process.processIdentifier
+            process.terminate()
+            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 2) {
+                if process.isRunning {
+                    Darwin.kill(pid, SIGKILL)
+                }
+            }
+            throw TranscriberError.timeout
+        }
+        _ = stderrDone.wait(timeout: .now() + 1)
 
         let output = Transcriber.stripWhisperMarkers(
-            String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            String(data: stdoutData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         )
 
         if process.terminationStatus != 0 {
@@ -221,6 +238,7 @@ enum TranscriberError: LocalizedError {
     case whisperNotFound
     case modelNotFound(String)
     case transcriptionFailed
+    case timeout
 
     var errorDescription: String? {
         switch self {
@@ -230,6 +248,8 @@ enum TranscriberError: LocalizedError {
             return "Whisper model '\(size)' not found. Download it with: local-voice download-model \(size)"
         case .transcriptionFailed:
             return "Transcription failed"
+        case .timeout:
+            return "whisper-cli timed out"
         }
     }
 }

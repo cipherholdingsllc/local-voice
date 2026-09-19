@@ -146,31 +146,7 @@ public final class STTRouter {
     }
 
     public func transcribe(audioURL: URL) throws -> String {
-        if shouldUseParakeet(), parakeetCanRun() {
-            do {
-                let text = try parakeet.transcribe(audioURL: audioURL)
-                setParakeetHealthy(true)
-                setLastUsedEngine(parakeet)
-                return text
-            } catch {
-                setParakeetHealthy(false)
-                fputs("STTRouter: Parakeet failed (\(error.localizedDescription)), falling back to Whisper\n", stderr)
-            }
-        }
-        if whisperCanRun() {
-            do {
-                let text = try whisper.transcribe(audioURL: audioURL)
-                setWhisperHealthy(true)
-                setLastUsedEngine(whisper)
-                return text
-            } catch {
-                setWhisperHealthy(false)
-                fputs("STTRouter: whisper-server failed (\(error.localizedDescription)), falling back to CLI\n", stderr)
-            }
-        }
-        let text = try whisperFallback.transcribe(audioURL: audioURL)
-        setLastUsedEngine(whisperFallback)
-        return text
+        try transcribeRecovering(audioURL: audioURL, recordingMilliseconds: nil)
     }
 
     public func transcribeInteractive(
@@ -182,22 +158,105 @@ public final class STTRouter {
               recordingMilliseconds
                 <= Self.interactiveWhisperMaxMilliseconds,
               whisperCanRun() else {
-            return try transcribe(audioURL: audioURL)
+            return try transcribeRecovering(
+                audioURL: audioURL,
+                recordingMilliseconds: recordingMilliseconds
+            )
         }
 
         do {
             let text = try whisper.transcribe(audioURL: audioURL)
-            setWhisperHealthy(true)
-            setLastUsedEngine(whisper)
-            return text
+            if let accepted = acceptedTranscript(
+                text,
+                recordingMilliseconds: recordingMilliseconds
+            ) {
+                setWhisperHealthy(true)
+                setLastUsedEngine(whisper)
+                return accepted
+            }
+            fputs(
+                "STTRouter: short-route whisper returned empty; recovering from full file\n",
+                stderr
+            )
         } catch {
-            setWhisperHealthy(false)
+            if !InferenceTimeout.isTimeout(error) {
+                setWhisperHealthy(false)
+            }
             fputs(
                 "STTRouter: short-route whisper failed (\(error.localizedDescription)); using Parakeet\n",
                 stderr
             )
-            return try transcribe(audioURL: audioURL)
         }
+        return try transcribeRecovering(
+            audioURL: audioURL,
+            recordingMilliseconds: recordingMilliseconds
+        )
+    }
+
+    /// Persistent engines first, then whisper-cli. Long locked takes treat
+    /// empty or timed-out results as failure so the full WAV is still decoded.
+    func transcribeRecovering(
+        audioURL: URL,
+        recordingMilliseconds: Double?
+    ) throws -> String {
+        if shouldUseParakeet(), parakeetCanRun() {
+            do {
+                let text = try parakeet.transcribe(audioURL: audioURL)
+                if let accepted = acceptedTranscript(
+                    text,
+                    recordingMilliseconds: recordingMilliseconds
+                ) {
+                    setParakeetHealthy(true)
+                    setLastUsedEngine(parakeet)
+                    return accepted
+                }
+                fputs(
+                    "STTRouter: Parakeet returned empty for a long take; falling back\n",
+                    stderr
+                )
+            } catch {
+                setParakeetHealthy(false)
+                fputs("STTRouter: Parakeet failed (\(error.localizedDescription)), falling back to Whisper\n", stderr)
+            }
+        }
+        if whisperCanRun() {
+            do {
+                let text = try whisper.transcribe(audioURL: audioURL)
+                if let accepted = acceptedTranscript(
+                    text,
+                    recordingMilliseconds: recordingMilliseconds
+                ) {
+                    setWhisperHealthy(true)
+                    setLastUsedEngine(whisper)
+                    return accepted
+                }
+                fputs(
+                    "STTRouter: whisper-server returned empty for a long take; falling back to CLI\n",
+                    stderr
+                )
+            } catch {
+                if !InferenceTimeout.isTimeout(error) {
+                    setWhisperHealthy(false)
+                }
+                fputs("STTRouter: whisper-server failed (\(error.localizedDescription)), falling back to CLI\n", stderr)
+            }
+        }
+        let text = try whisperFallback.transcribe(audioURL: audioURL)
+        setLastUsedEngine(whisperFallback)
+        return text
+    }
+
+    private func acceptedTranscript(
+        _ text: String,
+        recordingMilliseconds: Double?
+    ) -> String? {
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           InferenceTimeout.shouldRecoverFromEmptyTranscript(
+            recordingMilliseconds: recordingMilliseconds
+           ) {
+            return nil
+        }
+        return text
     }
 
     public func chunkEngine() -> STTEngine? {

@@ -368,6 +368,87 @@ final class STTRouterTests: XCTestCase {
         XCTAssertEqual(router.activeExecutionRoute(), .localProcess)
     }
 
+    func testLongInteractiveEmptyPersistentResultFallsBackToCLI() throws {
+        let parakeet = EngineStub(
+            name: "parakeet",
+            route: .localProcess,
+            transcript: ""
+        )
+        let whisper = EngineStub(
+            name: "whisper-server",
+            route: .localLoopback,
+            transcribeError: TestError.expected
+        )
+        let cli = EngineStub(
+            name: "whisper-cli",
+            route: .localProcess,
+            transcript: "full wav recovery"
+        )
+        let router = makeRouter(
+            preferred: .auto,
+            parakeet: parakeet,
+            whisper: whisper,
+            cli: cli
+        )
+
+        let text = try router.transcribeInteractive(
+            audioURL: fixtureURL(),
+            recordingMilliseconds: 180_000
+        )
+
+        XCTAssertEqual(text, "full wav recovery")
+        XCTAssertEqual(parakeet.transcribeCount, 1)
+        XCTAssertEqual(whisper.transcribeCount, 1)
+        XCTAssertEqual(cli.transcribeCount, 1)
+    }
+
+    func testLongInteractiveTimeoutFallsBackToCLIWithoutTreatingEmptyShortTakesAsFailure() throws {
+        let parakeet = EngineStub(
+            name: "parakeet",
+            route: .localProcess,
+            transcribeError: WhisperServerError.timeout
+        )
+        let whisper = EngineStub(
+            name: "whisper-server",
+            route: .localLoopback,
+            transcribeError: WhisperServerError.timeout
+        )
+        let cli = EngineStub(
+            name: "whisper-cli",
+            route: .localProcess,
+            transcript: "cli after timeout"
+        )
+        let router = makeRouter(
+            preferred: .auto,
+            parakeet: parakeet,
+            whisper: whisper,
+            cli: cli
+        )
+
+        let recovered = try router.transcribeInteractive(
+            audioURL: fixtureURL(),
+            recordingMilliseconds: 200_000
+        )
+        XCTAssertEqual(recovered, "cli after timeout")
+
+        let short = EngineStub(
+            name: "parakeet",
+            route: .localProcess,
+            transcript: ""
+        )
+        let shortRouter = makeRouter(
+            preferred: .auto,
+            parakeet: short,
+            whisper: EngineStub(name: "whisper-server", route: .localLoopback)
+        )
+        let empty = try shortRouter.transcribeInteractive(
+            audioURL: fixtureURL(),
+            recordingMilliseconds: 2_000
+        )
+        XCTAssertEqual(empty, "")
+        XCTAssertEqual(short.transcribeCount, 1)
+    }
+
     func testPrivacySelfTestReportsLocalRouteWithoutClaimingPacketIsolation() {
         let parakeet = EngineStub(
             name: "parakeet",

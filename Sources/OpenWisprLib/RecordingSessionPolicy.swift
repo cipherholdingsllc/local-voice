@@ -38,4 +38,11 @@ public enum RecordingSessionPolicy {
             )
         ) / 1_000
     }
+
+    public static func remainingCapSeconds(
+        fullCapSeconds: TimeInterval,
+        elapsedSeconds: TimeInterval
+    ) -> TimeInterval {
+        max(1, fullCapSeconds - max(0, elapsedSeconds))
+    }
 }

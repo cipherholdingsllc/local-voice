@@ -18,6 +18,7 @@ class AudioRecorder {
     private var streamingChunker: StreamingAudioChunker?
     private var sessionCapTimer: Timer?
     private var sessionCapGeneration: UInt64 = 0
+    private var recordingStartedAt: TimeInterval?
     private var silenceTimer: Timer?
     private var lastLoudTime: Date = Date()
     private var silenceThreshold: Float = 0.02
@@ -63,8 +64,8 @@ class AudioRecorder {
     func teardown() {
         if isRecording {
             audioEngine?.inputNode.removeTap(onBus: 0)
-            isRecording = false
-            currentOutputURL = nil
+        isRecording = false
+        recordingStartedAt = nil
         }
         audioEngine?.stop()
         audioEngine = nil
@@ -188,6 +189,7 @@ class AudioRecorder {
 
         currentOutputURL = outputURL
         isRecording = true
+        recordingStartedAt = ProcessInfo.processInfo.systemUptime
         updateSessionCap(seconds: sessionCapSeconds)
 
         if silenceTimeoutSeconds != nil {
@@ -200,6 +202,10 @@ class AudioRecorder {
     /// Replaces the active session limit. Passing nil removes the limit.
     /// A generation token prevents an asynchronously scheduled timer from a
     /// cancelled speculative fn tap from arming a later locked recording.
+    ///
+    /// The timer is always remaining time from `recordingStartedAt`. A lock
+    /// promotion that passes the one-hour long-form cap therefore cannot be
+    /// shortened by re-arming a hold cap "from now".
     func updateSessionCap(seconds: TimeInterval?) {
         guard Thread.isMainThread else {
             DispatchQueue.main.async { [weak self] in
@@ -214,8 +220,18 @@ class AudioRecorder {
         sessionCapTimer = nil
 
         guard isRecording, let seconds, seconds > 0 else { return }
+        let elapsed: TimeInterval
+        if let recordingStartedAt {
+            elapsed = ProcessInfo.processInfo.systemUptime - recordingStartedAt
+        } else {
+            elapsed = 0
+        }
+        let remaining = RecordingSessionPolicy.remainingCapSeconds(
+            fullCapSeconds: seconds,
+            elapsedSeconds: elapsed
+        )
         sessionCapTimer = Timer.scheduledTimer(
-            withTimeInterval: seconds,
+            withTimeInterval: remaining,
             repeats: false
         ) { [weak self] _ in
             guard let self,
@@ -286,6 +302,7 @@ class AudioRecorder {
     func stopRecording() -> URL? {
         guard isRecording else { return nil }
         isRecording = false
+        recordingStartedAt = nil
 
         sessionCapGeneration &+= 1
         sessionCapTimer?.invalidate()

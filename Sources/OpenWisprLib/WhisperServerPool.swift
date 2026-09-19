@@ -87,7 +87,17 @@ public final class WhisperServerPool: STTEngine {
         throw WhisperServerError.startTimeout
     }
 
+    /// One in-flight /inference at a time so a stuck streaming chunk cannot
+    /// starve the full-file finalize that recovers a locked take.
+    private let inferenceQueue = DispatchQueue(label: "local-flow.whisper-server.inference")
+
     public func transcribe(audioURL: URL) throws -> String {
+        try inferenceQueue.sync {
+            try transcribeSerialized(audioURL: audioURL)
+        }
+    }
+
+    private func transcribeSerialized(audioURL: URL) throws -> String {
         try ensureRunning()
         let boundary = "LocalVoice-\(UUID().uuidString)"
         var body = Data()
@@ -102,16 +112,17 @@ public final class WhisperServerPool: STTEngine {
         body.append("json\r\n".data(using: .utf8)!)
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)
 
+        let httpTimeout = InferenceTimeout.httpSeconds(forAudioURL: audioURL)
         var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/inference")!)
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.httpBody = body
-        request.timeoutInterval = 120
+        request.timeoutInterval = httpTimeout
 
         let sem = DispatchSemaphore(value: 0)
         var responseData: Data?
         var responseError: Error?
-        URLSession.shared.dataTask(with: request) { data, response, error in
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
             responseData = data
             if let http = response as? HTTPURLResponse, http.statusCode != 200 {
                 responseError = WhisperServerError.httpError(http.statusCode)
@@ -119,8 +130,13 @@ public final class WhisperServerPool: STTEngine {
                 responseError = error
             }
             sem.signal()
-        }.resume()
-        _ = sem.wait(timeout: .now() + 125)
+        }
+        task.resume()
+        let waitSeconds = InferenceTimeout.processWaitSeconds(httpSeconds: httpTimeout)
+        if sem.wait(timeout: .now() + waitSeconds) == .timedOut {
+            task.cancel()
+            throw WhisperServerError.timeout
+        }
         if let responseError { throw responseError }
         guard let data = responseData else { throw WhisperServerError.emptyResponse }
 
@@ -237,6 +253,7 @@ public final class WhisperServerPool: STTEngine {
 enum WhisperServerError: LocalizedError {
     case notConfigured
     case startTimeout
+    case timeout
     case httpError(Int)
     case emptyResponse
 
@@ -244,6 +261,7 @@ enum WhisperServerError: LocalizedError {
         switch self {
         case .notConfigured: return "whisper-server or model not found"
         case .startTimeout: return "whisper-server failed to start"
+        case .timeout: return "whisper-server inference timed out"
         case .httpError(let c): return "whisper-server HTTP \(c)"
         case .emptyResponse: return "whisper-server returned empty response"
         }

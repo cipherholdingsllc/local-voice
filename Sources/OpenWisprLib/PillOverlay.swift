@@ -288,7 +288,7 @@ enum PillState: String, CaseIterable {
 
     var detail: String? {
         switch self {
-        case .locked: return "double-tap fn to finish"
+        case .locked: return "double-tap fn to finish (⌘fn locks)"
         default: return nil
         }
     }

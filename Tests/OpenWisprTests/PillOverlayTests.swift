@@ -20,11 +20,11 @@ final class PillOverlayTests: XCTestCase {
         XCTAssertEqual(PillState.locked.title, "Locked")
         XCTAssertEqual(
             PillState.locked.detail,
-            "double-tap fn to finish"
+            "double-tap fn to finish (⌘fn locks)"
         )
         XCTAssertEqual(
             PillState.locked.accessibilityLabel,
-            "Locked, double-tap fn to finish"
+            "Locked, double-tap fn to finish (⌘fn locks)"
         )
     }
 
