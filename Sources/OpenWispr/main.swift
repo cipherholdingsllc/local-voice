@@ -233,6 +233,8 @@ func cmdStatus() {
     print("Language:    \(langName) (\(config.language))")
     let toggleMode = config.toggleMode?.value ?? false
     print("Toggle:      \(toggleMode ? "on (press to start/stop)" : "off (hold to talk)")")
+    let lockMode = Config.effectiveLockModeEnabled(config.lockModeEnabled)
+    print("Lock mode:   \(lockMode ? "on (double-tap Fn / Command+Fn)" : "off (hold only; opt-in)")")
     let permissions = Permissions.snapshot()
     print("Microphone:  \(permissions.microphone ? "granted" : "required")")
     print("Accessibility: \(permissions.accessibility ? "granted" : "required")")
