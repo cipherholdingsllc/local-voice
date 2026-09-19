@@ -505,6 +505,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                                 configuredCapSeconds: self.config.sessionCapSeconds
                             )
                         )
+                        // Live AX partials are a preview. Locked takes finish
+                        // with a full-file STT + paste even if AX died mid-way.
+                        self.liveComposer.cancel()
                     }
                     DispatchQueue.main.async {
                         if locked {
@@ -565,6 +568,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             print("Privacy: local speech process or loopback route; no hosted STT configured")
         }
         print("Hotkey: \(hotkeyDesc)")
+        print("Lock: double-tap Fn to lock/unlock; Command+Fn also locks")
         print("STT: \(sttRouter.activeEngineName())")
         print("Model: \(config.modelSize)")
         if permissionCoordinator.hotkeyMonitorReady {
@@ -898,7 +902,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         captureVisibleSpellings = []
         if !dashboardCaptureMode {
             captureVisibleSpellings = NearbyContextSampler.sampleVisibleSpellings()
-            liveComposer.begin()
+            if !isLockMode {
+                liveComposer.begin()
+            }
         }
         LatencyInstrumentation.shared.reset()
         LatencyInstrumentation.shared.mark("record")
@@ -924,7 +930,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             self?.handleRecordingStop(reason: .sessionLimit)
         }
         recorder.onSilenceTimeout = {
-            // Lock mode ends only via double-tap fn or session cap — never silence.
+            // Lock mode ends only via double-tap fn, Command+Fn lock's
+            // matching unlock (double-tap), or session cap — never silence.
         }
 
         // Silence never auto-stops a take. Hold recordings retain the profile
@@ -1024,7 +1031,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 )
                 self.streamingPartial = cleaned
                 self.pillOverlay.updatePartial(self.streamingPartial)
-                if !self.dashboardCaptureMode {
+                if !self.dashboardCaptureMode, !self.isLockMode {
                     self.liveComposer.updatePartial(self.streamingPartial)
                 }
             }
@@ -1034,6 +1041,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     private func handleRecordingStop(reason: RecordingStopReason = .user) {
         guard isPressed else { return }
         isPressed = false
+        let wasLockSession = isLockMode
+            || captureProfileID == RecordingSessionPolicy.lockedProfile
         isLockMode = false
         streamingSessionGate.end(captureRequestID)
         for m in hotkeyManagers { m.resetLockState() }
@@ -1224,7 +1233,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                         self.lastTranscription = text
                         if self.dashboardCaptureMode {
                             self.insertTranscribedText(text, completion: finishInsertHUD)
-                        } else if self.liveComposer.hasLiveInsertion {
+                        } else if LockedDictationFinalization.shouldCommitViaLiveComposer(
+                            wasLockSession: wasLockSession,
+                            hasLiveInsertion: self.liveComposer.hasLiveInsertion
+                        ) {
                             if self.liveComposer.commitFinal(text) {
                                 self.persistLastInsert(
                                     text: text,
@@ -1236,6 +1248,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                             }
                             VoiceCommandExecutor.shared.flush()
                         } else {
+                            if wasLockSession {
+                                self.liveComposer.cancel()
+                            }
                             self.insertTranscribedText(text, completion: finishInsertHUD)
                             VoiceCommandExecutor.shared.flush()
                         }

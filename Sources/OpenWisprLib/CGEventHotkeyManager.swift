@@ -206,7 +206,25 @@ final class CGEventHotkeyManager {
 
         if isModifierOnlyKey(keyCode) {
             guard type == .flagsChanged else { return }
-            guard UInt16(event.getIntegerValueField(.keyboardEventKeycode)) == keyCode else { return }
+            let eventKey = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
+            let commandDown = event.flags.contains(.maskCommand)
+            let fnDown = Self.modifierFlagIsDown(flags: event.flags, keyCode: 63)
+            if keyCode == 63,
+               eventKey == 63,
+               fnDown,
+               !suppressUntilKeyUp,
+               LockGesturePolicy.shouldEngageExplicitLock(
+                activationMode: activationMode,
+                alreadyLocked: isLockEngaged,
+                commandDown: commandDown,
+                fnJustPressed: true
+               ) {
+                modifierPhysicallyDown = true
+                physicalDownTime = ProcessInfo.processInfo.systemUptime
+                engageExplicitLock()
+                return
+            }
+            guard eventKey == keyCode else { return }
             guard modifiersMatch(event) else { return }
 
             let isDown = Self.modifierFlagIsDown(flags: event.flags, keyCode: keyCode)
@@ -348,6 +366,24 @@ final class CGEventHotkeyManager {
         }
     }
 
+    /// Command already down when Fn is pressed. Does not unlock.
+    /// Command pressed during an existing Fn hold is ignored so Cmd+C is safe.
+    private func engageExplicitLock() {
+        holdPendingWork?.cancel()
+        holdPendingWork = nil
+        lastShortReleaseTime = 0
+        guard !isLockEngaged else { return }
+        isLockEngaged = true
+        holdConfirmed = true
+        if keyHeld {
+            onLockChanged?(true)
+            return
+        }
+        keyHeld = true
+        onLockChanged?(true)
+        onKeyDown?()
+    }
+
     private func isDoubleTap() -> Bool {
         let now = ProcessInfo.processInfo.systemUptime
         let hit = (now - lastShortReleaseTime) < Self.doubleTapWindow
@@ -454,6 +490,7 @@ public enum HotkeyActivationMode: String, Codable, Sendable {
     case hold
     case toggle
     /// Hold fn to talk; double-tap fn to lock until double-tap again.
+    /// Command+Fn also engages lock (does not unlock).
     case holdAndDoubleTapLock
     case doubleTapArm
 }

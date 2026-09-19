@@ -97,7 +97,20 @@ public final class ParakeetDaemon: STTEngine {
 
         guard let out = proc.standardOutput as? Pipe else { throw ParakeetError.noOutput }
         let handle = out.fileHandleForReading
-        guard let line = readLine(from: handle),
+        let timeout = InferenceTimeout.httpSeconds(forAudioURL: audioURL)
+        let waitSeconds = InferenceTimeout.processWaitSeconds(httpSeconds: timeout)
+        var line: String?
+        let done = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .userInitiated).async {
+            line = self.readLine(from: handle)
+            done.signal()
+        }
+        if done.wait(timeout: .now() + waitSeconds) == .timedOut {
+            fputs("Parakeet: transcription timed out; restarting daemon\n", stderr)
+            stopLocked()
+            throw ParakeetError.timeout
+        }
+        guard let line,
               let data = line.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw ParakeetError.parseFailed
@@ -255,6 +268,7 @@ private extension UInt16 {
 enum ParakeetError: LocalizedError {
     case pythonMissing
     case startTimeout
+    case timeout
     case notRunning
     case encodeFailed
     case noOutput
@@ -265,6 +279,7 @@ enum ParakeetError: LocalizedError {
         switch self {
         case .pythonMissing: return "Parakeet not installed — run: ./scripts/install-parakeet.sh"
         case .startTimeout: return "Parakeet daemon failed to start — re-run: ./scripts/install-parakeet.sh"
+        case .timeout: return "Parakeet transcription timed out"
         case .notRunning: return "Parakeet daemon not running"
         case .encodeFailed: return "Failed to encode Parakeet request"
         case .noOutput: return "Parakeet daemon produced no output"

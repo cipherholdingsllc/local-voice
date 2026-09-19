@@ -30,6 +30,7 @@ enum FailurePresenter {
             case .whisperNotFound: return "Whisper not installed — run: brew install whisper-cpp"
             case .modelNotFound(let size): return "Model '\(size)' missing — run: local-voice download-model \(size)"
             case .transcriptionFailed: return "Transcription failed — check mic and model"
+            case .timeout: return "Transcription timed out — try a shorter take or wait and unlock again"
             }
         }
         if let oe = error as? OllamaCleanupError {

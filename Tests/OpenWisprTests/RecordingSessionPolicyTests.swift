@@ -47,5 +47,26 @@ final class RecordingSessionPolicyTests: XCTestCase {
             ),
             3_600
         )
+        XCTAssertEqual(
+            RecordingSessionPolicy.capSeconds(
+                for: profile,
+                configuredCapSeconds: 120
+            ),
+            3_600
+        )
+        XCTAssertEqual(
+            RecordingSessionPolicy.remainingCapSeconds(
+                fullCapSeconds: 3_600,
+                elapsedSeconds: 90
+            ),
+            3_510
+        )
+        XCTAssertEqual(
+            RecordingSessionPolicy.remainingCapSeconds(
+                fullCapSeconds: 120,
+                elapsedSeconds: 90
+            ),
+            30
+        )
     }
 }
