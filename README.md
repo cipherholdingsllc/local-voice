@@ -11,8 +11,10 @@ Private, system-wide dictation for macOS with a native iPhone companion. Local V
 ## What is implemented
 
 - Native SwiftUI command center with History, Files, Modes, Dictionary, Models, Privacy, and Settings
-- Menu-bar push-to-talk with configurable global hotkeys, live Fn readiness,
-  guided permission repair, and an optional Launch at Login control
+- Menu-bar push-to-talk: primary click (or press) on the status item starts
+  capture and click again stops, including locked sessions. Right-click or
+  Control-click opens the menu (Quit, settings, Lock Mode opt-in). Speakers
+  never start a capture; recording starts only on explicit Fn hold or button.
 - Concept C Signal Blades floating state surface with a restrained metallic-
   mint Listening formation, an interlocked Locked seal, distinct
   finishing/error states, and a microphone-free visual QA harness driven by
@@ -53,7 +55,10 @@ swift build -c release --product local-voice
 ```
 
 Grant Microphone, Accessibility, and Input Monitoring when macOS asks. The
-default hotkey is Globe/Fn. Local Voice never resets these permissions during
+default hotkey is Globe/Fn **hold-to-talk**. Double-tap Fn / Command+Fn lock
+is off unless you enable **Lock Mode (double-tap Fn)** in the menu bar or set
+`lockModeEnabled` to `true` in `config.json`. Toggle mode stays off by default.
+Local Voice never resets these permissions during
 an upgrade. If macOS permission state changes while the app is open, the
 hotkey monitor recovers automatically without a restart.
 
@@ -95,6 +100,8 @@ The installer packages the binary via `scripts/bundle-app.sh`; run that
 script directly when you only need the `.app` bundle.
 
 Configuration lives at `~/.config/local-voice/config.json`. On first launch, Local Voice migrates a legacy `~/.config/open-wispr/config.json` if present.
+`toggleMode` defaults false (hold-to-talk). `lockModeEnabled` defaults false so
+a double-tap cannot leave a capture running until the one-hour session cap.
 Model discovery also preserves the legacy OpenWispr cache and supports the
 standard `~/.cache/whisper-cpp` cache.
 

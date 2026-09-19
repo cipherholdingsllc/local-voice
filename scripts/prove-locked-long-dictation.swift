@@ -16,9 +16,14 @@ enum LockedLongDictationProve {
 
     static func main() {
         expectEqual(
-            InferenceTimeout.httpSeconds(durationSeconds: 88),
+            InferenceTimeout.httpSeconds(durationSeconds: 10),
             120,
-            "88s take stays on the historic 120s floor"
+            "just-above-chunk takes stay on the historic 120s floor"
+        )
+        expectEqual(
+            InferenceTimeout.httpSeconds(durationSeconds: 88),
+            88 * 2.5 + 90,
+            "88s take scales past the 120s floor"
         )
         let threeMinute = InferenceTimeout.httpSeconds(durationSeconds: 180)
         expect(threeMinute > 120, "3-minute lock must outrun the 120s HTTP ceiling")

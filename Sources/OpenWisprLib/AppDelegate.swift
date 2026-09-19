@@ -109,6 +109,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             self.statusBar.onOpenDashboard = { [weak self] in
                 self?.showDashboard()
             }
+            self.statusBar.onToggleCapture = { [weak self] in
+                self?.toggleDashboardCapture()
+            }
             self.statusBar.onRepairPermissions = { [weak self] in
                 self?.repairPermissions()
             }
@@ -378,9 +381,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func toggleDashboardCapture() {
         guard isReady else { return }
-        if isPressed {
+        switch CaptureButtonPolicy.action(isCapturing: isPressed) {
+        case .stopAndUnlock:
             handleRecordingStop()
-        } else {
+        case .start:
             dashboardCaptureMode = true
             handleRecordingStart()
         }
@@ -482,9 +486,13 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         permissionCoordinator.updateHotkeyMonitorReady(false)
 
         let globalToggle = config.toggleMode?.value ?? false
+        let lockModeEnabled = Config.effectiveLockModeEnabled(config.lockModeEnabled)
         InputMonitoringAccess.registerWithTCC()
         for hk in config.hotkeys {
-                let mode = hk.resolvedActivationMode(globalToggle: globalToggle)
+                let mode = hk.resolvedActivationMode(
+                    globalToggle: globalToggle,
+                    lockModeEnabled: lockModeEnabled
+                )
                 let manager = CGEventHotkeyManager(
                     keyCode: hk.keyCode,
                     modifiers: hk.modifierFlags,
@@ -930,12 +938,12 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             self?.handleRecordingStop(reason: .sessionLimit)
         }
         recorder.onSilenceTimeout = {
-            // Lock mode ends only via double-tap fn, Command+Fn lock's
-            // matching unlock (double-tap), or session cap — never silence.
+            // Hold and locked takes do not auto-stop on silence. Stop is
+            // explicit: Fn release, dashboard/menu-bar button, or session cap.
         }
 
-        // Silence never auto-stops a take. Hold recordings retain the profile
-        // safety cap; double-tap lock removes it until the user unlocks.
+        // Silence never auto-starts or auto-stops a take. Lock is opt-in
+        // (lockModeEnabled); button stop always unlocks.
         let silenceTimeout: Double? = nil
 
         do {

@@ -13,6 +13,9 @@ public struct Config: Codable {
     public var spokenPunctuation: FlexBool?
     public var maxRecordings: Int?
     public var toggleMode: FlexBool?
+    /// When true, Globe/Fn may double-tap (or Command+Fn) into lock.
+    /// Default false: Fn is hold-to-talk only.
+    public var lockModeEnabled: FlexBool?
     public var audioInputDeviceID: UInt32?
     public var audioInputDeviceUID: String?
     public var showCursorHUD: FlexBool?
@@ -64,6 +67,7 @@ public struct Config: Codable {
         case spokenPunctuation
         case maxRecordings
         case toggleMode
+        case lockModeEnabled
         case audioInputDeviceID
         case audioInputDeviceUID
         case showCursorHUD
@@ -100,6 +104,7 @@ public struct Config: Codable {
         self.spokenPunctuation = try c.decodeIfPresent(FlexBool.self, forKey: .spokenPunctuation)
         self.maxRecordings = try c.decodeIfPresent(Int.self, forKey: .maxRecordings)
         self.toggleMode = try c.decodeIfPresent(FlexBool.self, forKey: .toggleMode)
+        self.lockModeEnabled = try c.decodeIfPresent(FlexBool.self, forKey: .lockModeEnabled)
         self.audioInputDeviceID = try c.decodeIfPresent(UInt32.self, forKey: .audioInputDeviceID)
         self.audioInputDeviceUID = try c.decodeIfPresent(String.self, forKey: .audioInputDeviceUID)
         self.showCursorHUD = try c.decodeIfPresent(FlexBool.self, forKey: .showCursorHUD)
@@ -129,6 +134,7 @@ public struct Config: Codable {
         try c.encodeIfPresent(spokenPunctuation, forKey: .spokenPunctuation)
         try c.encodeIfPresent(maxRecordings, forKey: .maxRecordings)
         try c.encodeIfPresent(toggleMode, forKey: .toggleMode)
+        try c.encodeIfPresent(lockModeEnabled, forKey: .lockModeEnabled)
         try c.encodeIfPresent(audioInputDeviceID, forKey: .audioInputDeviceID)
         try c.encodeIfPresent(audioInputDeviceUID, forKey: .audioInputDeviceUID)
         try c.encodeIfPresent(showCursorHUD, forKey: .showCursorHUD)
@@ -156,6 +162,7 @@ public struct Config: Codable {
         spokenPunctuation: FlexBool?,
         maxRecordings: Int?,
         toggleMode: FlexBool?,
+        lockModeEnabled: FlexBool? = FlexBool(false),
         audioInputDeviceID: UInt32? = nil,
         audioInputDeviceUID: String? = nil,
         showCursorHUD: FlexBool? = FlexBool(true),
@@ -186,6 +193,7 @@ public struct Config: Codable {
         self.spokenPunctuation = spokenPunctuation
         self.maxRecordings = maxRecordings
         self.toggleMode = toggleMode
+        self.lockModeEnabled = lockModeEnabled
         self.audioInputDeviceID = audioInputDeviceID
         self.audioInputDeviceUID = audioInputDeviceUID
         self.showCursorHUD = showCursorHUD
@@ -345,6 +353,13 @@ public struct Config: Codable {
         return min(max(1, raw), 100)
     }
 
+    /// Lock (double-tap Fn / Command+Fn) is opt-in. Missing key → false.
+    public static let defaultLockModeEnabled = false
+
+    public static func effectiveLockModeEnabled(_ value: FlexBool?) -> Bool {
+        value?.value ?? Config.defaultLockModeEnabled
+    }
+
     public static let defaultConfig = Config(
         hotkeys: [HotkeyConfig(keyCode: 63, modifiers: [])],
         modelPath: nil,
@@ -352,7 +367,8 @@ public struct Config: Codable {
         language: "en",
         spokenPunctuation: FlexBool(false),
         maxRecordings: nil,
-        toggleMode: FlexBool(false)
+        toggleMode: FlexBool(false),
+        lockModeEnabled: FlexBool(false)
     )
 
     public static var configDir: URL {
@@ -436,11 +452,16 @@ public struct HotkeyConfig: Codable, Equatable {
         self.activationMode = activationMode
     }
 
-    public func resolvedActivationMode(globalToggle: Bool) -> HotkeyActivationMode {
+    public func resolvedActivationMode(
+        globalToggle: Bool,
+        lockModeEnabled: Bool = Config.defaultLockModeEnabled
+    ) -> HotkeyActivationMode {
         if globalToggle { return .toggle }
-        if let mode = activationMode { return mode }
-        if keyCode == 63 { return .holdAndDoubleTapLock }
-        return .hold
+        let mode = activationMode ?? (keyCode == 63 ? HotkeyActivationMode.holdAndDoubleTapLock : .hold)
+        if mode == .holdAndDoubleTapLock && !lockModeEnabled {
+            return .hold
+        }
+        return mode
     }
 
     public var modifierFlags: UInt64 {

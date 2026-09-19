@@ -4,6 +4,10 @@ import Foundation
 ///
 /// Permanent lock is **double-tap Fn**. Command+Fn is an explicit lock
 /// engage for operators who treat that chord as "keep recording".
+///
+/// Lock is **opt-in**. `Config.lockModeEnabled` defaults false so Fn is
+/// hold-to-talk only unless the operator enables lock from the menu or
+/// `config.json`. Button stop still unlocks a locked take.
 public enum LockGesturePolicy {
     public static func shouldEngageExplicitLock(
         activationMode: HotkeyActivationMode,
