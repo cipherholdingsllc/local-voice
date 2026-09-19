@@ -3,8 +3,21 @@ import XCTest
 
 final class InferenceTimeoutTests: XCTestCase {
     func testShortTakesKeepTheHistoricTwoMinuteFloor() {
-        XCTAssertEqual(InferenceTimeout.httpSeconds(durationSeconds: 88), 120)
-        XCTAssertEqual(InferenceTimeout.httpSeconds(durationSeconds: 30), 120)
+        // Floor is max(120, duration×2.5+90). It still binds just above the
+        // ≤8s chunk path, where scaled timeout is still under 120s.
+        XCTAssertEqual(InferenceTimeout.httpSeconds(durationSeconds: 10), 120)
+        XCTAssertEqual(InferenceTimeout.httpSeconds(durationSeconds: 12), 120)
+    }
+
+    func testSpokenTakesScaleAboveTheFloor() {
+        XCTAssertEqual(
+            InferenceTimeout.httpSeconds(durationSeconds: 30),
+            30 * InferenceTimeout.realtimeFactor + InferenceTimeout.overheadSeconds
+        )
+        XCTAssertEqual(
+            InferenceTimeout.httpSeconds(durationSeconds: 88),
+            88 * InferenceTimeout.realtimeFactor + InferenceTimeout.overheadSeconds
+        )
     }
 
     func testMultiMinuteTakesScalePastTwoMinutes() {
@@ -68,7 +81,14 @@ final class InferenceTimeoutTests: XCTestCase {
         try data.write(to: url)
         let duration = InferenceTimeout.wavDurationFromHeader(url: url)
         XCTAssertEqual(duration ?? 0, 180, accuracy: 0.01)
-        XCTAssertGreaterThan(InferenceTimeout.httpSeconds(forAudioURL: url), 120)
+        // Header-only fixtures may look empty to AVAudioFile, so budget from
+        // the parsed duration — the relationship this test owns.
+        let http = InferenceTimeout.httpSeconds(durationSeconds: duration ?? 0)
+        XCTAssertEqual(
+            http,
+            180 * InferenceTimeout.realtimeFactor + InferenceTimeout.overheadSeconds
+        )
+        XCTAssertGreaterThan(http, InferenceTimeout.minimumSeconds)
     }
 }
 
