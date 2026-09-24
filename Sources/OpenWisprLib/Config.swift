@@ -28,6 +28,7 @@ public struct Config: Codable {
     public var showPrivacyBadge: FlexBool?
     public var sessionCapSeconds: Double?
     public var silenceTimeoutSeconds: Double?
+    public var inputGainBoost: Double?
     public var sttEngine: STTEngineKind?
     public var dictationAccuracyFirst: FlexBool?
     public var saveTranscriptHistory: FlexBool?
@@ -80,6 +81,7 @@ public struct Config: Codable {
         case showPrivacyBadge
         case sessionCapSeconds
         case silenceTimeoutSeconds
+        case inputGainBoost
         case sttEngine
         case dictationAccuracyFirst
         case saveTranscriptHistory
@@ -117,6 +119,7 @@ public struct Config: Codable {
         self.showPrivacyBadge = try c.decodeIfPresent(FlexBool.self, forKey: .showPrivacyBadge)
         self.sessionCapSeconds = try c.decodeIfPresent(Double.self, forKey: .sessionCapSeconds)
         self.silenceTimeoutSeconds = try c.decodeIfPresent(Double.self, forKey: .silenceTimeoutSeconds)
+        self.inputGainBoost = try c.decodeIfPresent(Double.self, forKey: .inputGainBoost)
         self.sttEngine = try c.decodeIfPresent(STTEngineKind.self, forKey: .sttEngine)
         self.dictationAccuracyFirst = try c.decodeIfPresent(FlexBool.self, forKey: .dictationAccuracyFirst)
         self.saveTranscriptHistory = try c.decodeIfPresent(FlexBool.self, forKey: .saveTranscriptHistory)
@@ -147,6 +150,7 @@ public struct Config: Codable {
         try c.encodeIfPresent(showPrivacyBadge, forKey: .showPrivacyBadge)
         try c.encodeIfPresent(sessionCapSeconds, forKey: .sessionCapSeconds)
         try c.encodeIfPresent(silenceTimeoutSeconds, forKey: .silenceTimeoutSeconds)
+        try c.encodeIfPresent(inputGainBoost, forKey: .inputGainBoost)
         try c.encodeIfPresent(sttEngine, forKey: .sttEngine)
         try c.encodeIfPresent(dictationAccuracyFirst, forKey: .dictationAccuracyFirst)
         try c.encodeIfPresent(saveTranscriptHistory, forKey: .saveTranscriptHistory)
@@ -178,6 +182,7 @@ public struct Config: Codable {
         showPrivacyBadge: FlexBool? = FlexBool(true),
         sessionCapSeconds: Double? = 600,
         silenceTimeoutSeconds: Double? = nil,
+        inputGainBoost: Double? = nil,
         sttEngine: STTEngineKind? = .auto,
         dictationAccuracyFirst: FlexBool? = FlexBool(true),
         saveTranscriptHistory: FlexBool? = FlexBool(true),
@@ -206,6 +211,7 @@ public struct Config: Codable {
         self.showPrivacyBadge = showPrivacyBadge
         self.sessionCapSeconds = sessionCapSeconds
         self.silenceTimeoutSeconds = silenceTimeoutSeconds
+        self.inputGainBoost = inputGainBoost
         self.sttEngine = sttEngine
         self.dictationAccuracyFirst = dictationAccuracyFirst
         self.saveTranscriptHistory = saveTranscriptHistory
