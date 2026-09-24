@@ -29,15 +29,8 @@ final class CGEventHotkeyManager {
     /// key is still physically held. Suppresses presses until the real release
     /// so a post-stop tap reconcile cannot start a phantom take mid-hold.
     private var suppressUntilKeyUp = false
-    /// Physical down timestamp, used to tell tap-like presses from real holds.
-    private var physicalDownTime: TimeInterval?
-
-    private static let holdThreshold: TimeInterval = 0.22
-    private static let doubleTapWindow: TimeInterval = 0.55
-    /// A hold released within this window is a tap, not dictation — the
-    /// speculative take is cancelled and the release counts toward a
-    /// double-tap lock instead of transcribing a fraction of a second.
-    private static let tapLikeHoldMax: TimeInterval = 0.40
+    private static let holdThreshold = HoldAndDoubleTapLockPolicy.holdThreshold
+    private static let doubleTapWindow = HoldAndDoubleTapLockPolicy.doubleTapWindow
 
     init(keyCode: UInt16, modifiers: UInt64 = 0, activationMode: HotkeyActivationMode = .hold) {
         self.keyCode = keyCode
@@ -155,7 +148,6 @@ final class CGEventHotkeyManager {
         holdConfirmed = false
         isLockEngaged = false
         suppressUntilKeyUp = false
-        physicalDownTime = nil
         onKeyCancel = nil
     }
 
@@ -220,7 +212,6 @@ final class CGEventHotkeyManager {
                 fnJustPressed: true
                ) {
                 modifierPhysicallyDown = true
-                physicalDownTime = ProcessInfo.processInfo.systemUptime
                 engageExplicitLock()
                 return
             }
@@ -284,7 +275,6 @@ final class CGEventHotkeyManager {
         case .holdAndDoubleTapLock:
             // When locked, still accept taps for double-tap unlock (down ignored; up handles unlock).
             if isLockEngaged { return }
-            physicalDownTime = ProcessInfo.processInfo.systemUptime
             holdPendingWork?.cancel()
             let work = DispatchWorkItem { [weak self] in
                 guard let self = self, self.modifierPhysicallyDown, !self.isLockEngaged else { return }
@@ -314,34 +304,18 @@ final class CGEventHotkeyManager {
         case .toggle:
             break
         case .holdAndDoubleTapLock:
-            if isLockEngaged {
+            switch HoldAndDoubleTapLockPolicy.releaseAction(
+                holdConfirmed: holdConfirmed,
+                lockEngaged: isLockEngaged
+            ) {
+            case .finishDictation:
+                holdConfirmed = false
+                keyHeld = false
+                onKeyUp?()
+            case .countAsTap, .maybeUnlock:
                 if isDoubleTap() {
                     toggleLock()
                 }
-                return
-            }
-            if holdConfirmed {
-                holdConfirmed = false
-                guard !isLockEngaged else { return }
-                keyHeld = false
-                let heldFor = ProcessInfo.processInfo.systemUptime
-                    - (physicalDownTime ?? ProcessInfo.processInfo.systemUptime)
-                physicalDownTime = nil
-                if heldFor < Self.tapLikeHoldMax {
-                    // Tap-length press: drop the speculative take instead of
-                    // transcribing dead air, and let it count toward a
-                    // double-tap so slower taps still lock.
-                    onKeyCancel?()
-                    if isDoubleTap() {
-                        toggleLock()
-                    }
-                } else {
-                    onKeyUp?()
-                }
-                return
-            }
-            if isDoubleTap() {
-                toggleLock()
             }
         case .doubleTapArm:
             break
@@ -489,7 +463,8 @@ final class CGEventHotkeyManager {
 public enum HotkeyActivationMode: String, Codable, Sendable {
     case hold
     case toggle
-    /// Hold fn to talk; double-tap fn to lock until double-tap again.
+    /// Hold fn past `HoldAndDoubleTapLockPolicy.holdThreshold` to talk;
+    /// double-tap shorter presses to lock until double-tap again.
     /// Command+Fn also engages lock (does not unlock).
     case holdAndDoubleTapLock
     case doubleTapArm

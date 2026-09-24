@@ -982,9 +982,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Discards the speculative recording made by the first short fn tap.
-    /// The hotkey manager deliberately keeps its gesture state so a second tap
-    /// can engage lock mode without sacrificing instant audio onset.
+    /// Discards a take that started then was abandoned (session cancel).
+    /// Short Fn taps never start recording; once a hold crosses the dictation
+    /// threshold, release finishes the take instead of calling this.
     private func handleRecordingCancel() {
         guard isPressed else { return }
         isPressed = false
