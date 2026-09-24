@@ -32,6 +32,9 @@ enum LocalVoiceSingleInstanceGuard {
         if flock(descriptor, LOCK_EX | LOCK_NB) == 0 {
             lockDescriptor = descriptor
             terminateLegacyPeers()
+            DispatchQueue.global(qos: .userInitiated).async {
+                WhisperServerOrphanCleaner.terminateOrphans()
+            }
             return true
         }
 

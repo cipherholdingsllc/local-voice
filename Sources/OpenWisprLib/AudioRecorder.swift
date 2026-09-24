@@ -183,7 +183,10 @@ class AudioRecorder {
         do {
             try engine.start()
         } catch {
-            engine.inputNode.removeTap(onBus: 0)
+            // A failed start can leave the engine/aggregate device in a bad
+            // state; reset fully so the next recording begins with a clean
+            // engine rather than retrying on stale CoreAudio state.
+            teardown()
             throw error
         }
 
