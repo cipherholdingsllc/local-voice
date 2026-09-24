@@ -49,6 +49,7 @@ public final class WhisperServerPool: STTEngine {
     public func ensureRunning() throws {
         if process?.isRunning == true, ping() { return }
         stop()
+        WhisperServerOrphanCleaner.terminateOrphans()
         guard let serverPath = Self.findServerBinary(),
               let modelPath = Transcriber.findModel(modelSize: modelSize) else {
             throw WhisperServerError.notConfigured

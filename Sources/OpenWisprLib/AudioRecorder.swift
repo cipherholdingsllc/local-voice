@@ -32,6 +32,10 @@ class AudioRecorder {
     /// Default off; enable only when verified on the operator's hardware.
     var voiceProcessingRequested = false
     private(set) var voiceProcessingActive = false
+    /// Software gain applied to the 16 kHz mono stream before level metering,
+    /// speech-activity detection, file write, and streaming chunks. 1.0 =
+    /// pass-through. Values > 1 help quiet/whispered input reach the model.
+    var inputGainBoost: Float = 1.0
 
     func prewarm() {
         guard audioEngine == nil else { return }
@@ -138,12 +142,6 @@ class AudioRecorder {
         engine.inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFmt) { [weak self] buffer, _ in
             guard let self = self, let converter = converter else { return }
 
-            let rms = Self.rmsLevel(buffer: buffer)
-            self.onLevel?(rms)
-            if rms > self.silenceThreshold {
-                self.lastLoudTime = Date()
-            }
-
             let convertedBuffer = AVAudioPCMBuffer(
                 pcmFormat: recordingFormat,
                 frameCapacity: AVAudioFrameCount(
@@ -157,33 +155,46 @@ class AudioRecorder {
                 return buffer
             }
 
-            if error == nil && convertedBuffer.frameLength > 0 {
-                try? file.write(from: convertedBuffer)
-                if let channel = convertedBuffer.floatChannelData?[0] {
-                    let samples = Array(
-                        UnsafeBufferPointer(
-                            start: channel,
-                            count: Int(convertedBuffer.frameLength)
-                        )
-                    )
-                    self.speechActivityLock.withLock {
-                        self.speechActivity.observe(samples)
-                    }
-                    if streamPreviewEnabled, let streamCallback {
-                        self.enqueueStreamingSamples(
-                            samples,
-                            outputURL: outputURL,
-                            onChunkReady: streamCallback
-                        )
-                    }
+            guard error == nil, convertedBuffer.frameLength > 0,
+                  let channel = convertedBuffer.floatChannelData?[0]
+            else { return }
+
+            let frameLength = Int(convertedBuffer.frameLength)
+            if self.inputGainBoost != 1.0 {
+                for i in 0..<frameLength {
+                    channel[i] *= self.inputGainBoost
                 }
+            }
+
+            let samples = Array(
+                UnsafeBufferPointer(start: channel, count: frameLength)
+            )
+            let rms = Self.rmsLevel(samples: samples)
+            self.onLevel?(rms)
+            if rms > self.silenceThreshold {
+                self.lastLoudTime = Date()
+            }
+
+            try? file.write(from: convertedBuffer)
+            self.speechActivityLock.withLock {
+                self.speechActivity.observe(samples)
+            }
+            if streamPreviewEnabled, let streamCallback {
+                self.enqueueStreamingSamples(
+                    samples,
+                    outputURL: outputURL,
+                    onChunkReady: streamCallback
+                )
             }
         }
 
         do {
             try engine.start()
         } catch {
-            engine.inputNode.removeTap(onBus: 0)
+            // A failed start can leave the engine/aggregate device in a bad
+            // state; reset fully so the next recording begins with a clean
+            // engine rather than retrying on stale CoreAudio state.
+            teardown()
             throw error
         }
 
@@ -290,13 +301,11 @@ class AudioRecorder {
         }
     }
 
-    private static func rmsLevel(buffer: AVAudioPCMBuffer) -> Float {
-        guard let channel = buffer.floatChannelData?[0] else { return 0 }
-        let frames = Int(buffer.frameLength)
-        guard frames > 0 else { return 0 }
+    private static func rmsLevel(samples: [Float]) -> Float {
+        guard !samples.isEmpty else { return 0 }
         var sum: Float = 0
-        for i in 0..<frames { sum += channel[i] * channel[i] }
-        return sqrt(sum / Float(frames))
+        for sample in samples { sum += sample * sample }
+        return sqrt(sum / Float(samples.count))
     }
 
     func stopRecording() -> URL? {
@@ -363,7 +372,7 @@ struct AudioCaptureMetrics: Equatable {
     var containsLikelySpeech: Bool {
         guard totalFrames > 0 else { return false }
         if peakAmplitude < 0.0005, activeDuration < 0.05 { return false }
-        return peakAmplitude >= 0.006 || activeDuration >= 0.02
+        return peakAmplitude >= 0.003 || activeDuration >= 0.02
     }
 
     /// When the user held the hotkey long enough, always attempt STT even if
@@ -389,7 +398,7 @@ struct SpeechActivityAccumulator {
     init(
         sampleRate: Double = 16_000,
         rmsThreshold: Float = 0.004,
-        peakThreshold: Float = 0.006
+        peakThreshold: Float = 0.0025
     ) {
         self.sampleRate = sampleRate
         self.rmsThreshold = rmsThreshold

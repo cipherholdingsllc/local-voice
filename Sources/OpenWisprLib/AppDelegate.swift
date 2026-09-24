@@ -74,6 +74,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             uid: config.audioInputDeviceUID,
             legacyID: config.audioInputDeviceID
         )
+        recorder.inputGainBoost = Float(config.inputGainBoost ?? 1.0)
         if Config.effectiveMaxRecordings(config.maxRecordings) == 0 {
             RecordingStore.deleteAllRecordings()
         }
@@ -788,6 +789,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         )
         let deviceChanged = recorder.preferredDeviceID != newDeviceID
         config = newConfig
+        recorder.inputGainBoost = Float(config.inputGainBoost ?? 1.0)
         let saveHistory =
             config.saveTranscriptHistory?.value ?? true
         LocalVoiceStore.shared.setPersistenceEnabled(saveHistory)
