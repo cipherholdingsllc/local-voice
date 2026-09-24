@@ -29,3 +29,38 @@ enum HotkeyHoldReconcile {
         return .none
     }
 }
+
+/// Timing contract for Fn/globe `holdAndDoubleTapLock`.
+///
+/// A press is either a tap toward double-tap lock, or a dictation hold —
+/// never both. `onKeyDown` fires only after `holdThreshold` while the key is
+/// still down. From that moment, release always sends `onKeyUp` (finish the
+/// take). Presses released before the threshold never start recording and
+/// count as taps.
+///
+/// Do not add a later cancel window after `onKeyDown`. The old 0.22s start /
+/// 0.40s cancel band started a speculative take then aborted it, so
+/// short-to-medium holds felt like Fn did nothing.
+enum HoldAndDoubleTapLockPolicy {
+    static let holdThreshold: TimeInterval = 0.22
+    static let doubleTapWindow: TimeInterval = 0.55
+
+    enum ReleaseAction: Equatable {
+        case finishDictation
+        case countAsTap
+        case maybeUnlock
+    }
+
+    static func classifyPress(heldFor: TimeInterval) -> ReleaseAction {
+        heldFor >= holdThreshold ? .finishDictation : .countAsTap
+    }
+
+    static func releaseAction(
+        holdConfirmed: Bool,
+        lockEngaged: Bool
+    ) -> ReleaseAction {
+        if lockEngaged { return .maybeUnlock }
+        if holdConfirmed { return .finishDictation }
+        return .countAsTap
+    }
+}

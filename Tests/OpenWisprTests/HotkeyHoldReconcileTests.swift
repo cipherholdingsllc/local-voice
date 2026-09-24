@@ -54,3 +54,68 @@ final class HotkeyHoldReconcileTests: XCTestCase {
         )
     }
 }
+
+final class HoldAndDoubleTapLockPolicyTests: XCTestCase {
+    func testPressesShorterThanTheHoldThresholdAreTapsTowardLock() {
+        XCTAssertEqual(
+            HoldAndDoubleTapLockPolicy.classifyPress(heldFor: 0.10),
+            .countAsTap
+        )
+        XCTAssertEqual(
+            HoldAndDoubleTapLockPolicy.classifyPress(heldFor: 0.219),
+            .countAsTap
+        )
+    }
+
+    func testPressesAtOrPastTheHoldThresholdAreDictation() {
+        XCTAssertEqual(
+            HoldAndDoubleTapLockPolicy.classifyPress(heldFor: 0.22),
+            .finishDictation
+        )
+        XCTAssertEqual(
+            HoldAndDoubleTapLockPolicy.classifyPress(heldFor: 0.30),
+            .finishDictation
+        )
+        XCTAssertEqual(
+            HoldAndDoubleTapLockPolicy.classifyPress(heldFor: 0.40),
+            .finishDictation
+        )
+    }
+
+    func testConfirmedHoldReleaseAlwaysFinishesAndNeverCancels() {
+        XCTAssertEqual(
+            HoldAndDoubleTapLockPolicy.releaseAction(
+                holdConfirmed: true,
+                lockEngaged: false
+            ),
+            .finishDictation
+        )
+    }
+
+    func testUnconfirmedReleaseCountsAsATapTowardLock() {
+        XCTAssertEqual(
+            HoldAndDoubleTapLockPolicy.releaseAction(
+                holdConfirmed: false,
+                lockEngaged: false
+            ),
+            .countAsTap
+        )
+    }
+
+    func testLockedReleaseIsAnUnlockCheckNotACancel() {
+        XCTAssertEqual(
+            HoldAndDoubleTapLockPolicy.releaseAction(
+                holdConfirmed: true,
+                lockEngaged: true
+            ),
+            .maybeUnlock
+        )
+        XCTAssertEqual(
+            HoldAndDoubleTapLockPolicy.releaseAction(
+                holdConfirmed: false,
+                lockEngaged: true
+            ),
+            .maybeUnlock
+        )
+    }
+}
